@@ -1,0 +1,113 @@
+/* Mobile Filter System - Global Guest Flow */
+/* Applies horizontal swipe and search layout consistency to all guest pages */
+
+/* Default / Desktop Styles for new structure */
+.filters-wrapper {
+    margin-bottom: 24px;
+}
+
+.filter-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+}
+
+.filter-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    /* Desktop chips should wrap */
+}
+
+/* On Desktop, Search is PART OF the main row.
+   Constrain width so it doesn't stretch end-to-end. */
+.search-group {
+    flex: 0 1 520px;
+    /* Limit growth on desktop */
+    min-width: 280px;
+}
+
+.filter-results-count {
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+    white-space: nowrap;
+}
+
+
+@media (max-width: 768px) {
+
+    /* 1. Container Stack */
+    /* Only stack on mobile */
+    .filter-container {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 12px !important;
+    }
+
+    /* 2. Swipeable Strip */
+    /* Ensure no wrapping and horizontal scroll */
+    .filter-group {
+        width: calc(100% + 16px) !important;
+        /* Slight overflow for scroll hint */
+        margin-right: -16px !important;
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        gap: 8px !important;
+        padding-bottom: 8px !important;
+        /* Extra space for touch hint */
+        padding-right: 16px !important;
+
+        /* Mask/Fade Hint */
+        mask-image: linear-gradient(to right, black 85%, transparent 100%) !important;
+        -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%) !important;
+
+        scrollbar-width: none !important;
+    }
+
+    .filter-group::-webkit-scrollbar {
+        display: none !important;
+    }
+
+    /* Prevent chip text from wrapping on mobile */
+    .filter-group .modern-dropdown .trigger-label,
+    .filter-group .modern-dropdown .trigger-content span {
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        max-width: 220px !important;
+        display: block !important;
+    }
+
+    /* 3. Search Row */
+    /* Search takes full width on a new line on mobile */
+    .search-group {
+        width: 100% !important;
+        max-width: none !important;
+        flex: none !important;
+        margin-top: 4px !important;
+        margin-left: 0 !important;
+    }
+
+    /* 4. Reset Button Pinning (Keep visible at end of scroll) */
+    .filter-reset-btn {
+        flex-shrink: 0 !important;
+        margin-right: 16px !important;
+        /* End margin for scroll */
+    }
+
+    /* 5. Results Count */
+    .filter-results-count {
+        font-size: 0.75rem !important;
+        color: #666 !important;
+        margin-left: 4px !important;
+        margin-top: 4px !important;
+        width: 100%;
+        order: 99;
+        /* Ensure last */
+    }
+}

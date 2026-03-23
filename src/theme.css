@@ -1,0 +1,33 @@
+:root {
+    /* Brand Core */
+    --brand: #1B3AEC;
+    --brand-hover: #152dbb;
+
+    /* Brand Tints */
+    --brand-tint-hover: rgba(27, 58, 236, 0.08);
+    /* 0.06 - 0.10 */
+    --brand-tint-active: rgba(27, 58, 236, 0.12);
+    /* 0.10 - 0.16 */
+
+    /* Brand Borders */
+    --brand-border-hover: rgba(27, 58, 236, 0.30);
+    /* 0.25 - 0.35 */
+    --brand-border-focus: #1B3AEC;
+    /* Solid brand color */
+    --brand-ring-focus: rgba(27, 58, 236, 0.12);
+    /* Focus ring */
+
+    /* Badges */
+    --brand-badge-bg: rgba(27, 58, 236, 0.12);
+    /* 0.10 - 0.14 */
+    --brand-badge-text: #1B3AEC;
+
+    /* Upload Workspace v3 */
+    --fs-upload-title: var(--fs-xl);
+    /* 1.25rem */
+    --upload-close-bg: #000000;
+    --upload-close-color: #FFFFFF;
+    --upload-progress-gradient: linear-gradient(90deg, #8b5cf6 0%, #f97316 100%);
+    --upload-tile-overlay-scrim: linear-gradient(to bottom, rgba(0, 0, 0, 0.6) 0%, rgba(0, 0, 0, 0) 100%);
+    --upload-dropzone-bg: var(--color-bg);
+}
