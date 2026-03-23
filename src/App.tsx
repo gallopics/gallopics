@@ -33,6 +33,11 @@ const Photographers      = lazy(() => import('./pages/pg/Photographers').then(m 
 const OnboardingProfile  = lazy(() => import('./pages/pg/onboarding/OnboardingProfile').then(m => ({ default: m.OnboardingProfile })));
 const OnboardingReady    = lazy(() => import('./pages/pg/onboarding/OnboardingReady').then(m => ({ default: m.OnboardingReady })));
 
+const routerBase =
+  import.meta.env.BASE_URL === '/'
+    ? '/'
+    : import.meta.env.BASE_URL.replace(/\/$/, '');
+
 function App() {
   useEffect(() => {
     // Ensure app boot always lands clean: no search overlay/scroll-lock leftovers
@@ -44,7 +49,7 @@ function App() {
     <CartProvider>
       <AuthProvider>
         <PhotographerProvider>
-          <BrowserRouter>
+          <BrowserRouter basename={routerBase}>
             <WorkspaceProvider>
               <ScrollToTop />
               <Suspense fallback={null}>
