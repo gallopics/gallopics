@@ -21,6 +21,7 @@ import { ShareIconButton, ActionSeparator, ActionCluster } from '../components/H
 // Owner / Manage Logic
 import { usePhotographer } from '../context/PhotographerContext';
 import { ManageHighlightsModal } from '../components/ManageHighlightsModal';
+import { assetUrl } from '../lib/utils';
 
 export function PhotographerProfile() {
     const { id = 'hanna-bjork' } = useParams();
@@ -183,7 +184,7 @@ export function PhotographerProfile() {
         return <div>Photographer not found</div>;
     }
 
-    const photographerAvatar = `/images/${photographer.firstName} ${photographer.lastName}.jpg`;
+    const photographerAvatar = assetUrl(`images/${photographer.firstName} ${photographer.lastName}.jpg`);
 
     return (
         <div className="page-wrapper">

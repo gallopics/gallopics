@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext';
 import { ContactSupportModal } from './ContactSupportModal';
 import { createPortal } from 'react-dom';
 import { PgToast } from '../pages/pg/PgToast';
+import { assetUrl } from '../lib/utils';
 
 export const Header: React.FC = () => {
     const [scrolled, setScrolled] = useState(false);
@@ -131,7 +132,7 @@ export const Header: React.FC = () => {
                 <div className="flex items-center justify-between gap-3 md:gap-6 min-h-16 md:h-[72px] container-fluid">
                     {/* 1. Logo (Left) */}
                     <a href="/" className="flex items-center flex-shrink-0">
-                        <img src="/images/logo1-blue.svg" alt="GALLOPICS" className="h-6 min-[480px]:h-7 w-auto block" />
+                        <img src={assetUrl('images/logo1-blue.svg')} alt="GALLOPICS" className="h-6 min-[480px]:h-7 w-auto block" />
                     </a>
 
                     {/* 3. Utility Icons (Right) */}

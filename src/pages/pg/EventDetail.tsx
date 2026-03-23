@@ -16,6 +16,7 @@ import { InfoChip } from '../../components/InfoChip';
 import { PHOTOGRAPHERS } from '../../data/mockData';
 import { FilterChip } from '../../components/FilterChip';
 import { StickyActionBar } from '../../components/StickyActionBar';
+import { assetUrl } from '../../lib/utils';
 
 // Tab type
 type TabType = 'uploads' | 'published' | 'archive';
@@ -1160,7 +1161,7 @@ export const EventDetail: React.FC = () => {
                                         label="Photographer"
                                         name={`${eventPhotographer.firstName} ${eventPhotographer.lastName}`}
                                         variant="photographer"
-                                        avatarUrl={`/images/${eventPhotographer.firstName} ${eventPhotographer.lastName}.jpg`}
+                                        avatarUrl={assetUrl(`images/${eventPhotographer.firstName} ${eventPhotographer.lastName}.jpg`)}
                                     />
                                     <ActionSeparator />
                                 </>
@@ -1306,8 +1307,16 @@ export const EventDetail: React.FC = () => {
                                 <div>
                                     <label className="event-info-label">Photographer</label>
                                     <div className="event-info-person-chip">
-                                        <img src={`/images/John Doe.jpg`} alt="" className="w-6 h-6 rounded-full object-cover bg-[var(--color-border)]" />
-                                        <span className="event-info-person-name">John Doe</span>
+                                        <img
+                                            src={eventPhotographer
+                                                ? assetUrl(`images/${eventPhotographer.firstName} ${eventPhotographer.lastName}.jpg`)
+                                                : assetUrl('images/ida.jpg')}
+                                            alt=""
+                                            className="w-6 h-6 rounded-full object-cover bg-[var(--color-border)]"
+                                        />
+                                        <span className="event-info-person-name">
+                                            {eventPhotographer ? `${eventPhotographer.firstName} ${eventPhotographer.lastName}` : 'Unassigned'}
+                                        </span>
                                     </div>
                                 </div>
                             </div>

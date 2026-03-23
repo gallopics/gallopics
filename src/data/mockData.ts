@@ -1,4 +1,5 @@
 import type { Photo } from '../types';
+import { assetUrl } from '../lib/utils';
 
 // --- USER PROVIDED MOCK DATA (Synced 2026-01-17) ---
 
@@ -185,7 +186,7 @@ export const photos: Photo[] = Array.from({ length: 1000 }).map((_, i) => {
 
     return {
         id: `m-${i}-${generateId()}`,
-        src: `/images/${filename}`,
+        src: assetUrl(`images/${filename}`),
         rider: rider.firstName + ' ' + rider.lastName,
         horse: horse.name,
         event: comp.name,

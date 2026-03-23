@@ -1,4 +1,5 @@
 import React from 'react';
+import { assetUrl } from '../lib/utils';
 
 interface WatermarkedThumbnailProps extends React.ImgHTMLAttributes<HTMLImageElement> {
     photographer?: string;
@@ -23,7 +24,7 @@ export const WatermarkedThumbnail: React.FC<WatermarkedThumbnailProps> = ({
                 'pointer-events-none z-[2] opacity-40 w-full',
             ].join(' ')}>
                 <img
-                    src="/images/logo1.svg"
+                    src={assetUrl('images/logo1.svg')}
                     alt=""
                     className="w-[45%] max-w-[100px] h-auto brightness-0 invert mb-[6px]"
                 />

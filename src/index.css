@@ -2727,7 +2727,7 @@ textarea.auth-input {
   overflow: visible;
   border: none;
   color: white;
-  background-image: linear-gradient(to right, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.1) 60%, transparent 100%), url('/images/card1.jpg');
+  background-image: linear-gradient(to right, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.1) 60%, transparent 100%), url('../images/card1.jpg');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
@@ -2743,7 +2743,7 @@ textarea.auth-input {
   .hero-card {
     padding: 28px 24px;
     min-height: 260px;
-    background-image: linear-gradient(to right, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.1) 60%, transparent 100%), url('/images/card1_mobile.jpg');
+    background-image: linear-gradient(to right, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.1) 60%, transparent 100%), url('../images/card1_mobile.jpg');
   }
 }
 
@@ -2773,7 +2773,7 @@ textarea.auth-input {
   justify-content: space-between;
   overflow: visible;
   border: none;
-  background-image: linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.3)), url('/images/card2.jpg');
+  background-image: linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.3)), url('../images/card2.jpg');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;

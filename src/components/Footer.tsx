@@ -1,5 +1,6 @@
 import React from 'react';
 import { CopyrightBar } from './CopyrightBar';
+import { assetUrl } from '../lib/utils';
 
 interface FooterProps {
     minimal?: boolean;
@@ -19,7 +20,7 @@ export const Footer: React.FC<FooterProps> = ({ minimal = false, sidebar = false
                     <div className="flex justify-between items-start gap-10 flex-nowrap max-md:flex-col max-md:items-center max-md:text-center max-md:gap-8 max-md:flex-wrap md:items-center">
                         {/* Left Column: Brand */}
                         <div className="flex flex-col gap-4 flex-1 max-w-[440px] max-md:items-center max-md:max-w-full">
-                            <img src="/images/logo2.svg" alt="Gallopics" className="h-8 w-auto object-contain [filter:brightness(0)_invert(1)] opacity-90 self-start m-0 max-md:self-center" />
+                            <img src={assetUrl('images/logo2.svg')} alt="Gallopics" className="h-8 w-auto object-contain [filter:brightness(0)_invert(1)] opacity-90 self-start m-0 max-md:self-center" />
                             <p className="text-[0.875rem] leading-relaxed text-[var(--color-text-secondary)] m-0">
                                 We capture horse competitions across Sweden. Search your event, spot your photos, and purchase your favorites.
                             </p>

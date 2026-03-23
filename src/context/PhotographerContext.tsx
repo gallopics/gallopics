@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, type ReactNode } from 'react';
+import { assetUrl } from '../lib/utils';
 
 // --- Types ---
 
@@ -161,7 +162,7 @@ const MOCK_EVENTS: PgEvent[] = allMockEvents.map((e) => {
             mapped.assignedPhotographers = [{
                 id: PHOTOGRAPHERS[1].id,
                 name: `${PHOTOGRAPHERS[1].firstName} ${PHOTOGRAPHERS[1].lastName}`,
-                avatar: `/images/${PHOTOGRAPHERS[1].firstName} ${PHOTOGRAPHERS[1].lastName}.jpg`
+                avatar: assetUrl(`images/${PHOTOGRAPHERS[1].firstName} ${PHOTOGRAPHERS[1].lastName}.jpg`)
             }];
             mapped.applicationsWelcomed = true;
         } else if (e.id === 'd1' || e.id === 'd2') {
@@ -171,7 +172,7 @@ const MOCK_EVENTS: PgEvent[] = allMockEvents.map((e) => {
                 mapped.assignedPhotographers = [{
                     id: PHOTOGRAPHERS[0].id,
                     name: `${PHOTOGRAPHERS[0].firstName} ${PHOTOGRAPHERS[0].lastName}`,
-                    avatar: `/images/${PHOTOGRAPHERS[0].firstName} ${PHOTOGRAPHERS[0].lastName}.jpg`
+                    avatar: assetUrl(`images/${PHOTOGRAPHERS[0].firstName} ${PHOTOGRAPHERS[0].lastName}.jpg`)
                 }];
             }
         } else {
@@ -188,7 +189,7 @@ const MOCK_EVENTS: PgEvent[] = allMockEvents.map((e) => {
             mapped.assignedPhotographers = [{
                 id: PHOTOGRAPHERS[0].id,
                 name: `${PHOTOGRAPHERS[0].firstName} ${PHOTOGRAPHERS[0].lastName}`,
-                avatar: `/images/${PHOTOGRAPHERS[0].firstName} ${PHOTOGRAPHERS[0].lastName}.jpg`
+                avatar: assetUrl(`images/${PHOTOGRAPHERS[0].firstName} ${PHOTOGRAPHERS[0].lastName}.jpg`)
             }];
         }
     }

@@ -14,6 +14,7 @@ import { photos as basePhotos, RIDERS, HORSES, RIDER_PRIMARY_HORSE, PHOTOGRAPHER
 import { ShareIconButton, ActionSeparator, ActionCluster } from '../components/HeaderActions';
 import { ScopedSearchBar } from '../components/ScopedSearchBar';
 import type { Photo, ClassSection } from '../types';
+import { assetUrl } from '../lib/utils';
 
 // Helpers for randomization
 function pick<T>(arr: T[]): T {
@@ -228,7 +229,7 @@ export function EventProfile() {
                                     label="Photographer"
                                     name={`${eventPhotographer.firstName} ${eventPhotographer.lastName}`}
                                     variant="photographer"
-                                    avatarUrl={`/images/${eventPhotographer.firstName} ${eventPhotographer.lastName}.jpg`}
+                                    avatarUrl={assetUrl(`images/${eventPhotographer.firstName} ${eventPhotographer.lastName}.jpg`)}
                                     onClick={() => navigate(`/photographer/${eventPhotographer.id}?from=event&eventId=${eventId}`)}
                                 />
                                 <ActionSeparator />
