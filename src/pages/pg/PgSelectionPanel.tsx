@@ -430,7 +430,8 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
 
         setOriginalState({
             rider, horse, cls, isGeneric, title, description,
-            priceWeb: finalPrice.web, priceHigh: finalPrice.high, priceCommercial: finalPrice.commercial
+            priceWeb: finalPrice.web, priceHigh: finalPrice.high, priceCommercial: finalPrice.commercial,
+            priceBundle
         });
         setTouched(false);
 
