@@ -5,6 +5,7 @@ import { ScopedSearchBar, type ScopedSearchOption } from '../../components/Scope
 import { RotateCcw, Trash2, ChevronRight, ChevronDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import '../../styles/shared-filters.css';
+import { assetUrl } from '../../lib/utils';
 
 // Mock Data
 // Mock Data - Robust Generation
@@ -24,7 +25,7 @@ const MOCK_PHOTOGRAPHERS = [
     ...p,
     email: `${p.name.toLowerCase().replace(' ', '.')}@gallopics.se`,
     // Use the convention from EventsList: Name + .jpg
-    avatarUrl: `/images/${p.name}.jpg`,
+    avatarUrl: assetUrl(`images/${p.name}.jpg`),
     subEvents: [
         { id: `e${i}-1`, name: `${p.city} Horse Show`, published: Math.floor(p.published * 0.6), sold: `${Math.floor(p.sold * 0.6)}/${Math.floor(p.totalSold * 0.6)}`, revenue: Math.floor(p.revenue * 0.6) },
         ...(p.events > 1 ? [{ id: `e${i}-2`, name: `Summer Cup ${p.city}`, published: Math.floor(p.published * 0.4), sold: `${Math.floor(p.sold * 0.4)}/${Math.floor(p.totalSold * 0.4)}`, revenue: Math.floor(p.revenue * 0.4) }] : [])

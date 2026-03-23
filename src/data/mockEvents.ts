@@ -1,4 +1,5 @@
 import { COMPETITIONS, PHOTOGRAPHERS } from './mockData';
+import { assetUrl } from '../lib/utils';
 
 export interface EventData {
     id: string;
@@ -24,53 +25,53 @@ export interface EventData {
 // logo: Specific Event Image/Logo from file list
 const EVENT_ASSETS: Record<string, { cover: string; logo: string; count: number }> = {
     c1: {
-        cover: '/images/Abdel_Said_Arpege_du_RU5978.jpg',
-        logo: '/images/Sweden International Horse Show.jpg',
+        cover: assetUrl('images/Abdel_Said_Arpege_du_RU5978.jpg'),
+        logo: assetUrl('images/Sweden International Horse Show.jpg'),
         count: 820
     },
     c2: {
-        cover: '/images/Alice_Nilsson_Eunomia8286.jpg',
-        logo: '/images/Gothenburg Indoor Masters.jpg',
+        cover: assetUrl('images/Alice_Nilsson_Eunomia8286.jpg'),
+        logo: assetUrl('images/Gothenburg Indoor Masters.jpg'),
         count: 745
     },
     c3: {
-        cover: '/images/Falsterbo7800.jpg',
-        logo: '/images/Falsterbo Summer Classic.jpg',
+        cover: assetUrl('images/Falsterbo7800.jpg'),
+        logo: assetUrl('images/Falsterbo Summer Classic.jpg'),
         count: 920
     },
     c4: {
-        cover: '/images/Peder_Fredricson_Alcapone_des_Carmille8136.jpg',
-        logo: '/images/Strömsholm Spring Dressage.jpg',
+        cover: assetUrl('images/Peder_Fredricson_Alcapone_des_Carmille8136.jpg'),
+        logo: assetUrl('images/Strömsholm Spring Dressage.jpg'),
         count: 550
     },
     c5: {
-        cover: '/images/Anna_Svanberg_Vidar9116.jpg',
-        logo: '/images/Uppsala Arena Cup.jpg',
+        cover: assetUrl('images/Anna_Svanberg_Vidar9116.jpg'),
+        logo: assetUrl('images/Uppsala Arena Cup.jpg'),
         count: 480
     },
     c6: {
-        cover: '/images/Fredrik_Spetz_Galactee_de_Tivoli8292.jpg',
-        logo: '/images/Malmö City Jumping.jpg',
+        cover: assetUrl('images/Fredrik_Spetz_Galactee_de_Tivoli8292.jpg'),
+        logo: assetUrl('images/Malmö City Jumping.jpg'),
         count: 620
     },
     c7: {
-        cover: '/images/Alma_Nilsson_Sall_Kilimanjaro_WV7865.jpg',
-        logo: '/images/Linköping Eventing Weekend.jpg',
+        cover: assetUrl('images/Alma_Nilsson_Sall_Kilimanjaro_WV7865.jpg'),
+        logo: assetUrl('images/Linköping Eventing Weekend.jpg'),
         count: 410
     },
     c8: {
-        cover: '/images/Felicia_Hultberg_Bollerup_Chiquelle8407.jpg',
-        logo: '/images/Örebro Autumn Cup.jpg',
+        cover: assetUrl('images/Felicia_Hultberg_Bollerup_Chiquelle8407.jpg'),
+        logo: assetUrl('images/Örebro Autumn Cup.jpg'),
         count: 380
     },
     c9: {
-        cover: '/images/Amanda_Landeblad_Joelina6763.jpg',
-        logo: '/images/Umeå Northern Lights Dressage.jpg',
+        cover: assetUrl('images/Amanda_Landeblad_Joelina6763.jpg'),
+        logo: assetUrl('images/Umeå Northern Lights Dressage.jpg'),
         count: 590
     },
     c10: {
-        cover: '/images/Carl-Walter_Fox_Eka_First_Navy_Jack8998.jpg',
-        logo: '/images/Jönköping Lake District Classic.jpg',
+        cover: assetUrl('images/Carl-Walter_Fox_Eka_First_Navy_Jack8998.jpg'),
+        logo: assetUrl('images/Jönköping Lake District Classic.jpg'),
         count: 420
     },
 };
@@ -111,7 +112,7 @@ export const mockEvents: EventData[] = COMPETITIONS.map(comp => {
         photographer: {
             id: photographer.id,
             name: `${photographer.firstName} ${photographer.lastName}`,
-            avatar: `/images/${photographer.firstName} ${photographer.lastName}.jpg` // Maps to real files e.g. "Hanna Björk.jpg"
+            avatar: assetUrl(`images/${photographer.firstName} ${photographer.lastName}.jpg`) // Maps to real files e.g. "Hanna Björk.jpg"
         }
     };
 });
@@ -128,11 +129,11 @@ export const disabledEvents: EventData[] = [
         discipline: 'Dressage',
         country: 'Sweden',
         photoCount: 120,
-        logo: '/images/Uppsala Arena Cup.jpg', // Reusing existing mock logo
+        logo: assetUrl('images/Uppsala Arena Cup.jpg'), // Reusing existing mock logo
         photographer: {
             id: 'p1',
             name: 'Hanna Björk',
-            avatar: '/images/Hanna Björk.jpg'
+            avatar: assetUrl('images/Hanna Björk.jpg')
         },
         status: 'disabled'
     },
@@ -146,7 +147,7 @@ export const disabledEvents: EventData[] = [
         discipline: 'Show Jumping',
         country: 'Sweden',
         photoCount: 45,
-        logo: '/images/Malmö City Jumping.jpg', // Reusing existing mock logo
+        logo: assetUrl('images/Malmö City Jumping.jpg'), // Reusing existing mock logo
         photographer: null,
         status: 'disabled'
     }

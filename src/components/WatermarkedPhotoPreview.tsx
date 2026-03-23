@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { assetUrl } from '../lib/utils';
 
 interface WatermarkedPhotoPreviewProps extends React.ImgHTMLAttributes<HTMLImageElement> {
     photographer?: string;
@@ -47,7 +48,7 @@ export const WatermarkedPhotoPreview: React.FC<WatermarkedPhotoPreviewProps> = (
                 'z-[11] pointer-events-none flex flex-col items-center opacity-50',
             ].join(' ')}>
                 <img
-                    src="/images/logo1.svg"
+                    src={assetUrl('images/logo1.svg')}
                     alt=""
                     className="w-40 h-auto brightness-0 invert mb-[6px]"
                 />

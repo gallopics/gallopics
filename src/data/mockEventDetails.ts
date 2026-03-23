@@ -1,6 +1,7 @@
 import { COMPETITIONS } from './mockData';
 import { mockEvents } from './mockEvents';
 import type { EventDetail, DailySchedule, Arena, ClassSection, Meeting } from '../types';
+import { assetUrl } from '../lib/utils';
 
 // Helper to pick random int range
 const randomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
@@ -18,7 +19,7 @@ const VENUES = [
 export const eventDetails: EventDetail[] = COMPETITIONS.map((comp) => {
     // 1. Get enriched data from mockEvents (cover image etc)
     const enriched = mockEvents.find(e => e.id === comp.id);
-    const coverImage = enriched?.coverImage || '/images/events/default.jpg';
+    const coverImage = enriched?.coverImage || assetUrl('images/events/default.png');
 
     // 2. Generate Meeting Info
     // Randomize venue info if not specific

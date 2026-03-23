@@ -14,6 +14,7 @@ import { ApplyEventModal } from './components/ApplyEventModal';
 import { AddEventModal } from './components/AddEventModal';
 import { PgToast } from './PgToast';
 import { PHOTOGRAPHERS } from '../../data/mockData';
+import { assetUrl } from '../../lib/utils';
 import '../../styles/shared-filters.css';
 
 export const EventsList: React.FC = () => {
@@ -365,7 +366,7 @@ export const EventsList: React.FC = () => {
                                                         {PHOTOGRAPHERS.slice(0, 2).map((p) => (
                                                             <img
                                                                 key={p.id}
-                                                                src={`/images/${p.firstName} ${p.lastName}.jpg`}
+                                                                src={assetUrl(`images/${p.firstName} ${p.lastName}.jpg`)}
                                                                 alt={`${p.firstName} ${p.lastName}`}
                                                                 title={`${p.firstName} ${p.lastName}`}
                                                             />
@@ -407,7 +408,7 @@ export const EventsList: React.FC = () => {
                                                                 {isThird && (
                                                                     <div className="pg-avatar-stack solo">
                                                                         <img
-                                                                            src={`/images/${PHOTOGRAPHERS[2].firstName} ${PHOTOGRAPHERS[2].lastName}.jpg`}
+                                                                            src={assetUrl(`images/${PHOTOGRAPHERS[2].firstName} ${PHOTOGRAPHERS[2].lastName}.jpg`)}
                                                                             alt={`${PHOTOGRAPHERS[2].firstName} ${PHOTOGRAPHERS[2].lastName}`}
                                                                             title={`${PHOTOGRAPHERS[2].firstName} ${PHOTOGRAPHERS[2].lastName}`}
                                                                         />

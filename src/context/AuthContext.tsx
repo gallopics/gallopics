@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { assetUrl } from '../lib/utils';
 
 // For prototype, we'll store basic user info
 interface UserProfile {
@@ -26,7 +27,7 @@ export const PROTOTYPE_USER = {
     displayName: 'Klara Fors',
     country: 'Sweden',
     city: 'Stockholm',
-    avatarUrl: '/images/Klara Fors.jpg',
+    avatarUrl: assetUrl('images/Klara Fors.jpg'),
     role: 'pg' as const
 };
 
@@ -35,7 +36,7 @@ export const ADMIN_USER = {
     displayName: 'Ida Lindemann',
     country: 'Germany',
     city: 'Admin',
-    avatarUrl: '/images/ida.jpg',
+    avatarUrl: assetUrl('images/ida.jpg'),
     role: 'admin' as const
 };
 

@@ -13,6 +13,7 @@ import { useCart } from '../context/CartContext';
 import { CheckoutPanel } from '../components/CheckoutPanel';
 import { WatermarkedPhotoPreview } from '../components/WatermarkedPhotoPreview';
 import { ContactSupportModal } from '../components/ContactSupportModal';
+import { assetUrl } from '../lib/utils';
 
 import { QUALITY_TIERS, getPriceByTierId } from '../constants/qualityTiers';
 
@@ -189,7 +190,7 @@ export function ImageProfile() {
                                             label="Photographer"
                                             name={`${photographer.firstName} ${photographer.lastName}`}
                                             variant="photographer"
-                                            avatarUrl={`/images/${photographer.firstName} ${photographer.lastName}.jpg`}
+                                            avatarUrl={assetUrl(`images/${photographer.firstName} ${photographer.lastName}.jpg`)}
                                             onClick={() => navigate(`/photographer/${photographer.id}?from=ipro&eventId=${photo.eventId}`)}
                                         />
                                     </div>
