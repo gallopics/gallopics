@@ -8,7 +8,7 @@ import {
   FileText,
   ChevronLeft,
   ChevronRight,
-  Palette,
+  // Palette,
   Users,
 } from "lucide-react";
 import { Header } from "../../components/Header";
@@ -29,13 +29,7 @@ interface NavItemProps {
 }
 
 // Defined OUTSIDE layout — stable identity, never remounts on state change
-const SidebarNavItem: React.FC<NavItemProps> = ({
-  to,
-  icon,
-  label,
-  collapsed,
-  onNavigate,
-}) => (
+const SidebarNavItem: React.FC<NavItemProps> = ({ to, icon, label, collapsed, onNavigate }) => (
   <NavLink
     to={to}
     title={collapsed ? label : ""}
@@ -49,9 +43,7 @@ const SidebarNavItem: React.FC<NavItemProps> = ({
     }
   >
     {/* Icon: fixed 42px — center always at nav_padding(15) + 21 = 36px. Never moves. */}
-    <span className="flex-shrink-0 flex items-center justify-center w-[42px] h-[42px]">
-      {icon}
-    </span>
+    <span className="flex-shrink-0 flex items-center justify-center w-[42px] h-[42px]">{icon}</span>
     {/* Label: opacity only — zero reflow, zero position change */}
     <span
       className="text-[0.875rem] whitespace-nowrap pr-2 transition-opacity duration-200"
@@ -104,11 +96,7 @@ export const PhotographerLayout: React.FC = () => {
               title={collapsed ? "Expand" : "Collapse"}
               className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full text-[var(--ui-icon-muted)] transition-colors duration-150 hover:bg-[var(--ui-bg-subtle)] hover:text-primary border-none bg-transparent cursor-pointer"
             >
-              {collapsed ? (
-                <ChevronRight size={15} />
-              ) : (
-                <ChevronLeft size={15} />
-              )}
+              {collapsed ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
             </button>
           </div>
 
