@@ -6,9 +6,7 @@ import path from 'path';
 
 // https://vite.dev/config/
 export default defineConfig(() => {
-  const base =
-    process.env.VITE_BASE_PATH ??
-    (process.env.GITHUB_ACTIONS === 'true' ? '/gallopics/' : '/');
+  const base = process.env.VITE_BASE_PATH ?? '/';
 
   return {
     base,
