@@ -42,7 +42,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
         if (isOpen && user) {
             setAvatarUrl(user.avatarUrl || null);
             setDisplayName(user.displayName || '');
-            setCountry('Sweden');
+            setCountry(user.country || 'Sweden');
             setCity(user.city || '');
             setErrors({});
         }
@@ -68,7 +68,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
         setAvatarUrl('https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80');
     };
 
-    const handleSave = () => {
+    const handleSave = async () => {
         const newErrors: { [key: string]: string } = {};
         if (!displayName.trim()) newErrors.displayName = 'Display Name is required';
         if (!country.trim()) newErrors.country = 'Country is required';
@@ -79,7 +79,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ isOpen, onCl
             return;
         }
 
-        updateProfile({ avatarUrl: avatarUrl || undefined, displayName, city });
+        await updateProfile({ avatarUrl: avatarUrl || undefined, displayName, country, city });
         onClose();
     };
 

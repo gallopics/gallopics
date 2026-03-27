@@ -31,7 +31,7 @@ export const Header: React.FC = () => {
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
   const { cart } = useCart();
-  const { isAuthenticated, user, logout } = useAuth();
+  const { isLoaded, isAuthenticated, user, logout } = useAuth();
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -148,7 +148,7 @@ export const Header: React.FC = () => {
             <div className="flex items-center gap-1.5 min-[480px]:gap-3 md:gap-3 ml-auto relative flex-wrap justify-end">
               <ModernSearchBar collapsible />
 
-              {isAuthenticated ? (
+              {!isLoaded ? null : isAuthenticated ? (
                 <>
                   <button
                     className="flex items-center justify-center w-11 h-11 rounded-full text-[var(--color-text-primary)] transition-[background-color,scale,box-shadow,border-color] duration-200 ease-in-out bg-white border border-[var(--color-border)] shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-[var(--ui-bg-subtle)] hover:border-[var(--color-border)] hover:scale-105 hover:shadow-[0_2px_4px_rgba(0,0,0,0.05)] relative"
@@ -231,8 +231,8 @@ export const Header: React.FC = () => {
                         <div className="dropdown-divider" />
                         <button
                           className="dropdown-item dropdown-item-danger"
-                          onClick={() => {
-                            logout();
+                          onClick={async () => {
+                            await logout();
                             setIsUserMenuOpen(false);
                             navigate("/");
                           }}
