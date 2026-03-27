@@ -145,7 +145,7 @@ export const TitleHeader: React.FC<TitleHeaderProps> = ({
     avatarMobileRow = false,
     className = ''
 }) => {
-    const { user, isAuthenticated } = useAuth();
+    const { user, isAuthenticated, isLoaded } = useAuth();
 
     // Ehome Hero Variant
     if (variant === 'ehome') {
@@ -159,7 +159,7 @@ export const TitleHeader: React.FC<TitleHeaderProps> = ({
         return (
             <section className="py-10 pb-6 bg-transparent max-md:pt-4">
                 <div className="container">
-                    {isAuthenticated ? (
+                    {isLoaded && isAuthenticated ? (
                         <div className="grid grid-cols-[1fr_280px] gap-6 items-stretch max-lg:grid-cols-[1fr_240px] max-md:grid-cols-1">
                             <HeroCard title={title} description={description} />
 
@@ -177,9 +177,9 @@ export const TitleHeader: React.FC<TitleHeaderProps> = ({
                                 </a>
                             </div>
                         </div>
-                    ) : (
+                    ) : isLoaded ? (
                         <GuestHeroCarousel title={title} description={description} />
-                    )}
+                    ) : null}
                 </div>
             </section>
         );

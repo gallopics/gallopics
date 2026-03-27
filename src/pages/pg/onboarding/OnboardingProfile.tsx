@@ -6,13 +6,13 @@ import { useAuth, PROTOTYPE_USER } from '../../../context/AuthContext';
 
 export const OnboardingProfile: React.FC = () => {
     const navigate = useNavigate();
-    const { updateProfile } = useAuth();
+    const { updateProfile, user } = useAuth();
 
     // State
-    const [avatarUrl, setAvatarUrl] = useState<string | null>(PROTOTYPE_USER.avatarUrl);
-    const [displayName, setDisplayName] = useState(PROTOTYPE_USER.displayName); // Prefilled from PROTOTYPE_USER
-    const [country, setCountry] = useState(PROTOTYPE_USER.country);
-    const [city, setCity] = useState(PROTOTYPE_USER.city);
+    const [avatarUrl, setAvatarUrl] = useState<string | null>(user?.avatarUrl ?? PROTOTYPE_USER.avatarUrl);
+    const [displayName, setDisplayName] = useState(user?.displayName ?? PROTOTYPE_USER.displayName);
+    const [country, setCountry] = useState(user?.country ?? PROTOTYPE_USER.country);
+    const [city, setCity] = useState(user?.city ?? PROTOTYPE_USER.city);
     const [phoneCode, setPhoneCode] = useState('+46');
     const [phoneNumber, setPhoneNumber] = useState('');
 
@@ -29,7 +29,7 @@ export const OnboardingProfile: React.FC = () => {
         setAvatarUrl(null);
     };
 
-    const handleContinue = () => {
+    const handleContinue = async () => {
         const newErrors: { [key: string]: string } = {};
 
         if (!displayName.trim()) newErrors.displayName = 'Display Name is required';
@@ -42,9 +42,10 @@ export const OnboardingProfile: React.FC = () => {
         }
 
         // Save to Global Store
-        updateProfile({
+        await updateProfile({
             avatarUrl: avatarUrl || undefined, // undefined to ignore if null, or null is valid
             displayName,
+            country,
             city,
             hasCompletedOnboarding: true
         });
@@ -52,11 +53,12 @@ export const OnboardingProfile: React.FC = () => {
         navigate('/pg/onboarding/ready');
     };
 
-    const handleSkip = () => {
+    const handleSkip = async () => {
         // Save Defaults for Skipped Values to Global Store
-        updateProfile({
+        await updateProfile({
             avatarUrl: avatarUrl || PROTOTYPE_USER.avatarUrl,
             displayName: displayName.trim() || PROTOTYPE_USER.displayName,
+            country: country.trim() || PROTOTYPE_USER.country,
             city: city.trim() || PROTOTYPE_USER.city,
             hasCompletedOnboarding: true
         });

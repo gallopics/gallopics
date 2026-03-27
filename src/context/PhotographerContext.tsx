@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, type ReactNode } from 'react';
 import { assetUrl } from '../lib/utils';
+import { useAuth } from './AuthContext';
 
 // --- Types ---
 
@@ -464,7 +465,8 @@ const MOCK_PHOTOS: Photo[] = [
 const PhotographerContext = createContext<PhotographerContextType | undefined>(undefined);
 
 export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const [photographerId] = useState('klara-fors'); // Klara Fors (Logged in User)
+    const { user } = useAuth();
+    const photographerId = user?.id || 'klara-fors';
     const [events, setEvents] = useState<PgEvent[]>(MOCK_EVENTS);
     const [photos, setPhotos] = useState<Photo[]>(MOCK_PHOTOS);
 

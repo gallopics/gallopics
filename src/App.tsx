@@ -1,3 +1,4 @@
+import { AuthenticateWithRedirectCallback } from "@clerk/clerk-react";
 import { lazy, Suspense, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import ScrollToTop from "./components/ScrollToTop";
@@ -81,6 +82,7 @@ function App() {
                   <Route path="/photo/:id" element={<ImageProfile />} />
                   <Route path="/cart" element={<Cart />} />
                   <Route path="/photographerprofile" element={<PhotographerProfile />} />
+                  <Route path="/auth/callback" element={<AuthenticateWithRedirectCallback />} />
 
                   {/* Photographer Workspace (Layout-wrapped) */}
                   <Route
