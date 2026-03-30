@@ -9,6 +9,8 @@ interface ContactSupportModalProps {
 
 type UserRole = 'Photo buyer' | 'Photographer' | 'Event organiser';
 
+const contactFormEndpoint = import.meta.env.VITE_CONTACT_FORM_ENDPOINT;
+
 export const ContactSupportModal: React.FC<ContactSupportModalProps> = ({
     isOpen,
     onClose,
@@ -81,26 +83,45 @@ export const ContactSupportModal: React.FC<ContactSupportModalProps> = ({
 
         const composedPhone = phone ? `${countryCode}${phone.replace(/\s+/g, '')}` : '';
 
-        const payload = { role, email, phone: composedPhone, subject, message };
-        console.log('Sending contact support message:', payload);
-
-        // Mock API call
         try {
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            if (!contactFormEndpoint) {
+                throw new Error('Missing VITE_CONTACT_FORM_ENDPOINT');
+            }
+
+            const payload = {
+                role,
+                email,
+                phone: composedPhone,
+                subject,
+                message,
+                source: 'gallopics-contact-form',
+            };
+
+            const response = await fetch(contactFormEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                },
+                body: JSON.stringify(payload),
+            });
+
+            if (!response.ok) {
+                throw new Error(`Contact request failed with status ${response.status}`);
+            }
+
             setStatus('success');
 
-            // Dispatch success toast event
             window.dispatchEvent(new CustomEvent('show-toast', {
                 detail: { type: 'success', message: 'Message sent successfully! We will get back to you soon.' }
             }));
 
-            // Close after a short delay to let user see success state if we didn't use toast
-            // But prompt says "show success toast and close the modal"
             setTimeout(() => {
                 onClose();
             }, 500);
 
-        } catch {
+        } catch (error) {
+            console.error('Contact form submission failed', error);
             setStatus('error');
             window.dispatchEvent(new CustomEvent('show-toast', {
                 detail: { type: 'danger', message: 'Failed to send message. Please try again.' }
