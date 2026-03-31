@@ -278,8 +278,8 @@ export const Header: React.FC = () => {
                             }}
                           >
                             {user?.role === 'admin'
-                              ? 'Admin dashboard'
-                              : 'My public profile'}
+                              ? 'My Console'
+                              : 'My Studio'}
                           </button>
                         )}
                         {/* <div className="dropdown-divider" /> */}
