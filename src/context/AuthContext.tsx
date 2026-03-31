@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useMemo } from 'react';
+import React, { createContext, useContext } from 'react';
 import { useAuth as useClerkAuth, useClerk, useUser } from '@clerk/clerk-react';
 import { assetUrl } from '../lib/utils';
 import { PHOTOGRAPHERS } from '../data/mockData';
@@ -11,6 +11,7 @@ export interface UserProfile {
   avatarUrl?: string | null;
   hasCompletedOnboarding?: boolean;
   role?: 'pg' | 'admin';
+  approvalStatus?: 'pending' | 'approved';
 }
 
 interface AuthContextType {
@@ -28,6 +29,7 @@ type AuthMetadata = {
   hasCompletedOnboarding?: boolean;
   role?: 'pg' | 'admin';
   photographerProfileId?: string;
+  approvalStatus?: 'pending' | 'approved';
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -113,7 +115,18 @@ const resolvePhotographerProfileId = (
   return DEFAULT_PHOTOGRAPHER_PROFILE_ID;
 };
 
-const readMetadata = (metadata: unknown): AuthMetadata => {
+const shouldReplacePrototypeProfileId = (
+  photographerProfileId: string | undefined,
+  username: string | null | undefined,
+) => {
+  if (photographerProfileId !== DEFAULT_PHOTOGRAPHER_PROFILE_ID || !username) {
+    return false;
+  }
+
+  return normalizeIdentifier(username) !== DEFAULT_PHOTOGRAPHER_PROFILE_ID;
+};
+
+const readMetadataObject = (metadata: unknown): AuthMetadata => {
   if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
     return {};
   }
@@ -136,8 +149,22 @@ const readMetadata = (metadata: unknown): AuthMetadata => {
       typeof raw.photographerProfileId === 'string'
         ? raw.photographerProfileId
         : undefined,
+    approvalStatus:
+      raw.approvalStatus === 'approved'
+        ? 'approved'
+        : raw.approvalStatus === 'pending'
+          ? 'pending'
+          : undefined,
   };
 };
+
+const readMetadata = (
+  publicMetadata: unknown,
+  unsafeMetadata: unknown,
+): AuthMetadata => ({
+  ...readMetadataObject(unsafeMetadata),
+  ...readMetadataObject(publicMetadata),
+});
 
 const splitDisplayName = (displayName: string) => {
   const parts = displayName.trim().split(/\s+/).filter(Boolean);
@@ -163,12 +190,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const { isLoaded, isSignedIn } = useClerkAuth();
   const { user: clerkUser } = useUser();
 
-  const user = useMemo<UserProfile | null>(() => {
+  const user: UserProfile | null = (() => {
     if (!clerkUser) {
       return null;
     }
 
-    const metadata = readMetadata(clerkUser.unsafeMetadata);
+    const metadata = readMetadata(
+      clerkUser.publicMetadata,
+      clerkUser.unsafeMetadata,
+    );
     const displayName = resolveDisplayName([
       [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' '),
       clerkUser.fullName,
@@ -183,12 +213,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         displayName,
       ]);
     const photographerProfileId =
-      metadata.photographerProfileId ??
-      resolvePhotographerProfileId([
+      shouldReplacePrototypeProfileId(
+        metadata.photographerProfileId,
         clerkUser.username,
-        clerkUser.primaryEmailAddress?.emailAddress?.split('@')[0],
-        displayName,
-      ]);
+      )
+        ? normalizeIdentifier(clerkUser.username || '')
+        : metadata.photographerProfileId ??
+          resolvePhotographerProfileId([
+            clerkUser.username,
+            clerkUser.primaryEmailAddress?.emailAddress?.split('@')[0],
+            displayName,
+          ]);
 
     return {
       id: photographerProfileId,
@@ -201,15 +236,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           : metadata.avatarUrl,
       hasCompletedOnboarding: metadata.hasCompletedOnboarding ?? false,
       role: resolvedRole,
+      approvalStatus: metadata.approvalStatus ?? 'pending',
     };
-  }, [clerkUser]);
+  })();
 
   const updateProfile = async (updates: Partial<UserProfile>) => {
     if (!clerkUser) {
       return;
     }
 
-    const metadata = readMetadata(clerkUser.unsafeMetadata);
+    const metadata = readMetadata(
+      clerkUser.publicMetadata,
+      clerkUser.unsafeMetadata,
+    );
     const nextDisplayName =
       updates.displayName ?? user?.displayName ?? PROTOTYPE_USER.displayName;
     const { firstName, lastName } = splitDisplayName(nextDisplayName);
@@ -246,6 +285,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           metadata.hasCompletedOnboarding ??
           false,
         role: resolvedRole,
+        approvalStatus:
+          updates.approvalStatus ?? metadata.approvalStatus ?? 'pending',
       },
     });
   };

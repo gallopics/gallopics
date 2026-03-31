@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { useUser } from '@clerk/clerk-react';
 import { Camera, LayoutDashboard } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { ModernSearchBar } from './ModernSearchBar';
@@ -179,10 +180,23 @@ export const TitleHeader: React.FC<TitleHeaderProps> = ({
   className = '',
 }) => {
   const { user, isAuthenticated, isLoaded } = useAuth();
+  const { user: clerkUser } = useUser();
 
   // Ehome Hero Variant
   if (variant === 'ehome') {
     const isAdmin = user?.role === 'admin';
+    const publicApprovalStatus =
+      typeof clerkUser?.publicMetadata?.approvalStatus === 'string'
+        ? clerkUser.publicMetadata.approvalStatus
+        : undefined;
+    const unsafeApprovalStatus =
+      typeof clerkUser?.unsafeMetadata?.approvalStatus === 'string'
+        ? clerkUser.unsafeMetadata.approvalStatus
+        : undefined;
+    const effectiveApprovalStatus =
+      publicApprovalStatus ?? unsafeApprovalStatus ?? user?.approvalStatus;
+    const isPendingPhotographer =
+      !isAdmin && effectiveApprovalStatus !== 'approved';
     const fullName = user?.displayName ?? 'Photographer';
     const consoleIcon = isAdmin ? (
       <LayoutDashboard size={18} />
@@ -191,7 +205,19 @@ export const TitleHeader: React.FC<TitleHeaderProps> = ({
     );
     const consoleDescription = isAdmin
       ? 'Approve photographers, manage events, monitor platform activity, and keep everything running smoothly.'
-      : 'Manage your events, upload galleries, track your sales, and grow your photography business — all in one place.';
+      : isPendingPhotographer
+        ? 'Your photographer account is waiting for approval. We will unlock studio access as soon as an admin approves it in Clerk.'
+        : 'Manage your events, upload galleries, track your sales, and grow your photography business — all in one place.';
+    const consoleHref = isAdmin
+      ? '/admin'
+      : isPendingPhotographer
+        ? '/pg/pending-approval'
+        : '/pg';
+    const consoleLabel = isAdmin
+      ? 'My Console'
+      : isPendingPhotographer
+        ? 'Approval pending'
+        : 'My Studio';
 
     return (
       <section className="py-10 pb-6 bg-transparent max-md:pt-4">
@@ -213,11 +239,11 @@ export const TitleHeader: React.FC<TitleHeaderProps> = ({
                   </p>
                 </div>
                 <a
-                  href="/pg"
+                  href={consoleHref}
                   className="mt-8 self-start inline-flex items-center gap-2 bg-black text-white h-12 px-6 rounded-[99px] font-bold text-[0.875rem] no-underline transition-all duration-200 hover:bg-[var(--color-text-primary)]"
                 >
                   {consoleIcon}
-                  {isAdmin ? 'My Console' : 'My Studio'}
+                  {consoleLabel}
                 </a>
               </div>
             </div>
