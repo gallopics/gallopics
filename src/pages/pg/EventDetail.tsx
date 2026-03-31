@@ -24,7 +24,7 @@ import {
 import { ScopedSearchBar } from '../../components/ScopedSearchBar';
 import {
   ActionCluster,
-  MoreMenu,
+  //   MoreMenu,
   ActionSeparator,
 } from '../../components/HeaderActions';
 import { InfoChip } from '../../components/InfoChip';
@@ -120,9 +120,9 @@ export const EventDetail: React.FC = () => {
           'processing',
           'needsReview',
           'uploadedUnpublished',
-        ].includes(p.status),
+        ].includes(p.status)
       ),
-    [allPhotos],
+    [allPhotos]
   );
 
   const publishedPhotosRaw = useMemo(() => {
@@ -164,7 +164,7 @@ export const EventDetail: React.FC = () => {
           p =>
             p.priceStandard === 499 &&
             p.priceHigh === 999 &&
-            p.priceCommercial === 1500,
+            p.priceCommercial === 1500
         ).length,
         filterFn: (p: Photo) =>
           p.priceStandard === 499 &&
@@ -179,7 +179,7 @@ export const EventDetail: React.FC = () => {
           p =>
             p.priceStandard === 499 &&
             p.priceHigh === 999 &&
-            p.priceCommercial === 1500,
+            p.priceCommercial === 1500
         ).length,
         filterFn: (p: Photo) =>
           p.priceStandard === 499 &&
@@ -194,7 +194,7 @@ export const EventDetail: React.FC = () => {
           p =>
             p.priceStandard === 499 &&
             p.priceHigh === 999 &&
-            p.priceCommercial === 1500,
+            p.priceCommercial === 1500
         ).length,
         filterFn: (p: Photo) =>
           p.priceStandard === 499 &&
@@ -268,7 +268,7 @@ export const EventDetail: React.FC = () => {
           p =>
             p.priceStandard === 499 &&
             p.priceHigh === 999 &&
-            p.priceCommercial === 1500,
+            p.priceCommercial === 1500
         ).length,
         filterFn: (p: Photo) =>
           p.priceStandard === 499 &&
@@ -283,7 +283,7 @@ export const EventDetail: React.FC = () => {
           p =>
             p.priceStandard === 499 &&
             p.priceHigh === 999 &&
-            p.priceCommercial === 1500,
+            p.priceCommercial === 1500
         ).length,
         filterFn: (p: Photo) =>
           p.priceStandard === 499 &&
@@ -298,7 +298,7 @@ export const EventDetail: React.FC = () => {
           p =>
             p.priceStandard === 499 &&
             p.priceHigh === 999 &&
-            p.priceCommercial === 1500,
+            p.priceCommercial === 1500
         ).length,
         filterFn: (p: Photo) =>
           p.priceStandard === 499 &&
@@ -321,7 +321,7 @@ export const EventDetail: React.FC = () => {
           p.photoCode?.toLowerCase().includes(term) ||
           p.id?.toLowerCase().includes(term) ||
           p.rider?.toLowerCase().includes(term) ||
-          p.horse?.toLowerCase().includes(term),
+          p.horse?.toLowerCase().includes(term)
       );
     }
 
@@ -365,11 +365,11 @@ export const EventDetail: React.FC = () => {
       random: uploadPhotos.filter(p => p.batch === 'Random').length,
       misc: uploadPhotos.filter(p => p.batch === 'Misc').length,
       uncategorised: uploadPhotos.filter(
-        p => !p.batch || p.batch === '' || p.batch === 'Uncategorised',
+        p => !p.batch || p.batch === '' || p.batch === 'Uncategorised'
       ).length,
       duplicates: validDuplicateIds.size,
     }),
-    [uploadPhotos, validDuplicateIds],
+    [uploadPhotos, validDuplicateIds]
   );
 
   // Photos in current folder
@@ -384,7 +384,7 @@ export const EventDetail: React.FC = () => {
         break;
       case 'uncategorised':
         photos = uploadPhotos.filter(
-          p => !p.batch || p.batch === '' || p.batch === 'Uncategorised',
+          p => !p.batch || p.batch === '' || p.batch === 'Uncategorised'
         );
         break;
       case 'duplicates':
@@ -402,7 +402,7 @@ export const EventDetail: React.FC = () => {
         p =>
           p.fileName?.toLowerCase().includes(term) ||
           p.photoCode?.toLowerCase().includes(term) ||
-          p.id?.toLowerCase().includes(term),
+          p.id?.toLowerCase().includes(term)
       );
     }
 
@@ -418,13 +418,13 @@ export const EventDetail: React.FC = () => {
 
     // Dynamically extract unique tags from currently displayed folder photos
     const uniqueClasses = Array.from(
-      new Set(folderPhotos.map(p => p.className).filter(Boolean)),
+      new Set(folderPhotos.map(p => p.className).filter(Boolean))
     ) as string[];
     const uniqueRiders = Array.from(
-      new Set(folderPhotos.map(p => p.rider).filter(r => r && r !== 'None')),
+      new Set(folderPhotos.map(p => p.rider).filter(r => r && r !== 'None'))
     ) as string[];
     const uniqueHorses = Array.from(
-      new Set(folderPhotos.map(p => p.horse).filter(h => h && h !== 'None')),
+      new Set(folderPhotos.map(p => p.horse).filter(h => h && h !== 'None'))
     ) as string[];
 
     const allChips: any[] = [
@@ -475,7 +475,7 @@ export const EventDetail: React.FC = () => {
           (!p.rider || p.rider === 'None') &&
           (!p.horse || p.horse === 'None') &&
           (!p.className || p.className === 'None') &&
-          (!p.isGeneric || !p.title),
+          (!p.isGeneric || !p.title)
       ).length,
       filterFn: (p: Photo) =>
         (!p.rider || p.rider === 'None') &&
@@ -541,7 +541,7 @@ export const EventDetail: React.FC = () => {
           (p.rider && p.rider.toLowerCase().includes(lower)) ||
           (p.horse && p.horse.toLowerCase().includes(lower)) ||
           (p.fileName && p.fileName.toLowerCase().includes(lower)) ||
-          (p.id && p.id.toLowerCase().includes(lower)),
+          (p.id && p.id.toLowerCase().includes(lower))
       );
     }
 
@@ -716,7 +716,7 @@ export const EventDetail: React.FC = () => {
     isOpen: boolean;
   }>({ type: 'delete', isOpen: false });
   const [activePanelTab, setActivePanelTab] = useState<'tags' | 'price'>(
-    'tags',
+    'tags'
   );
 
   const undoSelectionRef = useRef<Set<string>>(new Set());
@@ -729,7 +729,7 @@ export const EventDetail: React.FC = () => {
         const height = Math.max((entry.target as HTMLElement).offsetHeight, 64);
         document.documentElement.style.setProperty(
           '--bucketBarH',
-          `${height}px`,
+          `${height}px`
         );
       }
     });
@@ -894,8 +894,8 @@ export const EventDetail: React.FC = () => {
                       {(activeTab === 'uploads'
                         ? folderChips
                         : activeTab === 'published'
-                          ? publishedChips
-                          : archivedChips
+                        ? publishedChips
+                        : archivedChips
                       ).map((chip: any, index) => (
                         <FilterChip
                           key={chip.id}
@@ -1068,7 +1068,7 @@ export const EventDetail: React.FC = () => {
                                     {photos.map(photo => {
                                       const uiPhoto = mapToUiPhoto(photo);
                                       const isSelected = selectedIds.has(
-                                        photo.id,
+                                        photo.id
                                       );
 
                                       return (
@@ -1087,7 +1087,7 @@ export const EventDetail: React.FC = () => {
                                                 photo,
                                                 e.shiftKey ||
                                                   e.metaKey ||
-                                                  e.ctrlKey,
+                                                  e.ctrlKey
                                               )
                                             }
                                           >
@@ -1145,7 +1145,7 @@ export const EventDetail: React.FC = () => {
                                   </div>
                                 </div>
                               );
-                            },
+                            }
                           )}
                           {duplicateGroups.size === 0 && (
                             <div className="py-16 text-center text-[var(--color-text-secondary)] text-[0.875rem]">
@@ -1188,7 +1188,7 @@ export const EventDetail: React.FC = () => {
                                 onClick={e =>
                                   handleToggleSelect(
                                     photo,
-                                    e.shiftKey || e.metaKey || e.ctrlKey,
+                                    e.shiftKey || e.metaKey || e.ctrlKey
                                   )
                                 }
                               >
@@ -1250,7 +1250,7 @@ export const EventDetail: React.FC = () => {
                                   }}
                                   onManageDuplicate={() =>
                                     handleManageDuplicate(
-                                      photo.duplicateGroupId,
+                                      photo.duplicateGroupId
                                     )
                                   }
                                   onEdit={() => handleEditPhotoOverride(photo)}
@@ -1356,8 +1356,8 @@ export const EventDetail: React.FC = () => {
                         activeTab === 'published'
                           ? 'published'
                           : activeTab === 'archive'
-                            ? 'archive'
-                            : 'uploads'
+                          ? 'archive'
+                          : 'uploads'
                       }
                       onClose={() => setIsPanelOpen(false)}
                     />
@@ -1396,30 +1396,30 @@ export const EventDetail: React.FC = () => {
                   },
                 ]
               : activeTab === 'published' || activeTab === 'archive'
-                ? [
-                    {
-                      id: 'selling_photos',
-                      label: activeTab === 'archive' ? 'Sold' : 'Selling',
-                      count:
-                        activeTab === 'published'
-                          ? publishedFolderCounts.selling_photos
-                          : archivedFolderCounts.selling_photos,
-                      badgeLabel:
-                        activeTab === 'published'
-                          ? `${publishedFolderCounts.selling_photos}/${publishedFolderCounts.totalSales}`
-                          : `${archivedFolderCounts.selling_photos}/${archivedFolderCounts.totalSales}`,
-                      title: 'Photos/total sales',
-                    },
-                    {
-                      id: 'unsold',
-                      label: 'Unsold',
-                      count:
-                        activeTab === 'published'
-                          ? publishedFolderCounts.unsold
-                          : archivedFolderCounts.unsold,
-                    },
-                  ]
-                : []
+              ? [
+                  {
+                    id: 'selling_photos',
+                    label: activeTab === 'archive' ? 'Sold' : 'Selling',
+                    count:
+                      activeTab === 'published'
+                        ? publishedFolderCounts.selling_photos
+                        : archivedFolderCounts.selling_photos,
+                    badgeLabel:
+                      activeTab === 'published'
+                        ? `${publishedFolderCounts.selling_photos}/${publishedFolderCounts.totalSales}`
+                        : `${archivedFolderCounts.selling_photos}/${archivedFolderCounts.totalSales}`,
+                    title: 'Photos/total sales',
+                  },
+                  {
+                    id: 'unsold',
+                    label: 'Unsold',
+                    count:
+                      activeTab === 'published'
+                        ? publishedFolderCounts.unsold
+                        : archivedFolderCounts.unsold,
+                  },
+                ]
+              : []
           }
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}
@@ -1561,7 +1561,7 @@ export const EventDetail: React.FC = () => {
                     name={`${eventPhotographer.firstName} ${eventPhotographer.lastName}`}
                     variant="photographer"
                     avatarUrl={assetUrl(
-                      `images/${eventPhotographer.firstName} ${eventPhotographer.lastName}.jpg`,
+                      `images/${eventPhotographer.firstName} ${eventPhotographer.lastName}.jpg`
                     )}
                   />
                   {/* <ActionSeparator /> */}
@@ -1627,23 +1627,23 @@ export const EventDetail: React.FC = () => {
                   {confirmModal.type === 'delete'
                     ? `Delete photo${selectedIds.size > 1 ? 's' : ''}?`
                     : confirmModal.type === 'unpublish'
-                      ? `Unpublish photo${selectedIds.size > 1 ? 's' : ''}?`
-                      : 'Publish photos?'}
+                    ? `Unpublish photo${selectedIds.size > 1 ? 's' : ''}?`
+                    : 'Publish photos?'}
                 </h3>
                 <p className="m-0 text-secondary text-[0.875rem] leading-[1.5]">
                   {confirmModal.type === 'delete'
                     ? 'This will remove the selected photo(s) from the event. This action cannot be undone.'
                     : confirmModal.type === 'unpublish'
-                      ? 'This will move photos to the Archive tab.'
-                      : Array.from(selectedIds).some(id =>
-                            validDuplicateIds.has(id),
-                          )
-                        ? `Warning: ${
-                            Array.from(selectedIds).filter(id =>
-                              validDuplicateIds.has(id),
-                            ).length
-                          } duplicates found. Fix duplicates before publishing.`
-                        : 'This will move photos to Published.'}
+                    ? 'This will move photos to the Archive tab.'
+                    : Array.from(selectedIds).some(id =>
+                        validDuplicateIds.has(id)
+                      )
+                    ? `Warning: ${
+                        Array.from(selectedIds).filter(id =>
+                          validDuplicateIds.has(id)
+                        ).length
+                      } duplicates found. Fix duplicates before publishing.`
+                    : 'This will move photos to Published.'}
                 </p>
                 <div className="modal-footer-actions">
                   <button
@@ -1665,15 +1665,15 @@ export const EventDetail: React.FC = () => {
                     disabled={
                       confirmModal.type === 'publish' &&
                       Array.from(selectedIds).some(id =>
-                        validDuplicateIds.has(id),
+                        validDuplicateIds.has(id)
                       )
                     }
                   >
                     {confirmModal.type === 'delete'
                       ? 'Delete'
                       : confirmModal.type === 'unpublish'
-                        ? 'Unpublish'
-                        : 'Publish'}
+                      ? 'Unpublish'
+                      : 'Publish'}
                   </button>
                 </div>
               </div>
@@ -1778,7 +1778,7 @@ export const EventDetail: React.FC = () => {
                       src={
                         eventPhotographer
                           ? assetUrl(
-                              `images/${eventPhotographer.firstName} ${eventPhotographer.lastName}.jpg`,
+                              `images/${eventPhotographer.firstName} ${eventPhotographer.lastName}.jpg`
                             )
                           : assetUrl('images/ida.jpg')
                       }
@@ -1819,7 +1819,7 @@ export const EventDetail: React.FC = () => {
               className="!pointer-events-auto !relative !transform-none !bottom-auto !left-auto !right-auto"
             />
           </div>,
-          document.body,
+          document.body
         )}
     </div>
   );
