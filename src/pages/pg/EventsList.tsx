@@ -341,13 +341,13 @@ export const EventsList: React.FC = () => {
                                     {event.publishedCount ?? 0}
                                   </span>
                                 </div>
-                                <div className="pg-badge-item sales stacked">
+                                {/* <div className="pg-badge-item sales stacked">
                                   <span className="label">Sales</span>
                                   <span className="count">
                                     {event.soldCount ?? 0}/
                                     {event.photosCount ?? 40}
                                   </span>
-                                </div>
+                                </div> */}
                                 {/* <div className="pg-badge-item earnings stacked">
                                                                     <span className="label">PG Earnings</span>
                                                                     <span className="value">SEK {((event.soldCount ?? 0) * 450).toLocaleString().replace(/,/g, ' ')}</span>
