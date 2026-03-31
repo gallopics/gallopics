@@ -355,10 +355,10 @@ export const SoldPhotos: React.FC = () => {
                       <span className="label">Published</span>
                       <span className="value">596</span>
                     </div>
-                    <div className="pg-badge-item sales stacked">
+                    {/* <div className="pg-badge-item sales stacked">
                       <span className="label">Sales</span>
                       <span className="value">74/745</span>
-                    </div>
+                    </div> */}
                     {isAdmin ? (
                       <>
                         <div className="pg-badge-item earnings stacked">
