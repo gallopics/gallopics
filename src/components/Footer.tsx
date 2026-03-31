@@ -1,11 +1,11 @@
-import React from 'react'
-import { CopyrightBar } from './CopyrightBar'
+import React from 'react';
+import { CopyrightBar } from './CopyrightBar';
 
 interface FooterProps {
-  minimal?: boolean
-  sidebar?: boolean
-  isAdmin?: boolean
-  noLinks?: boolean
+  minimal?: boolean;
+  sidebar?: boolean;
+  isAdmin?: boolean;
+  noLinks?: boolean;
 }
 
 export const Footer: React.FC<FooterProps> = ({
@@ -22,7 +22,7 @@ export const Footer: React.FC<FooterProps> = ({
         isAdmin={isAdmin}
         noLinks={noLinks}
       />
-    )
+    );
   }
 
   return (
@@ -73,8 +73,8 @@ export const Footer: React.FC<FooterProps> = ({
                   href="#"
                   className="bg-white text-black px-5 py-2 rounded-[99px] text-[0.875rem] font-semibold no-underline transition-all duration-200 ease-in-out inline-block hover:bg-[var(--color-border)] hover:-translate-y-0.5 max-md:px-4 max-md:py-1.5 max-md:text-[0.8125rem] whitespace-nowrap"
                   onClick={e => {
-                    e.preventDefault()
-                    window.dispatchEvent(new Event('open-contact-support'))
+                    e.preventDefault();
+                    window.dispatchEvent(new Event('open-contact-support'));
                   }}
                 >
                   Contact support
@@ -86,5 +86,5 @@ export const Footer: React.FC<FooterProps> = ({
       </footer>
       <CopyrightBar minimal={false} />
     </>
-  )
-}
+  );
+};

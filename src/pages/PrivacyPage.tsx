@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react'
-import { InfoPageLayout } from '../components/InfoPageLayout'
-import { TitleHeader } from '../components/TitleHeader'
+import React, { useState, useEffect, useRef } from 'react';
+import { InfoPageLayout } from '../components/InfoPageLayout';
+import { TitleHeader } from '../components/TitleHeader';
 
 const SECTIONS = [
   { id: 'what-we-do', label: 'What we do' },
@@ -14,13 +14,13 @@ const SECTIONS = [
   { id: 'third-party', label: 'Third-party links' },
   { id: 'changes', label: 'Changes' },
   { id: 'contact', label: 'Contact' },
-]
+];
 
 const P: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <p className="text-sm text-[var(--color-text-secondary)] leading-[1.75] mt-0 mb-0">
     {children}
   </p>
-)
+);
 
 const BulletList: React.FC<{ items: string[] }> = ({ items }) => (
   <ul className="mt-2 space-y-1.5">
@@ -34,13 +34,13 @@ const BulletList: React.FC<{ items: string[] }> = ({ items }) => (
       </li>
     ))}
   </ul>
-)
+);
 
 const SectionBlock: React.FC<{
-  id: string
-  number: string
-  title: string
-  children: React.ReactNode
+  id: string;
+  number: string;
+  title: string;
+  children: React.ReactNode;
 }> = ({ id, number, title, children }) => (
   <div id={id} className="info-section scroll-mt-28 mt-7 first:mt-0">
     <span className="info-section-num">{number}</span>
@@ -50,7 +50,7 @@ const SectionBlock: React.FC<{
     <div className="space-y-2">{children}</div>
     <hr className="border-[var(--color-border)] mt-7 mb-0" />
   </div>
-)
+);
 
 const InfoGrid: React.FC<{ items: { label: string; entries: string[] }[] }> = ({
   items,
@@ -70,7 +70,7 @@ const InfoGrid: React.FC<{ items: { label: string; entries: string[] }[] }> = ({
       </div>
     ))}
   </div>
-)
+);
 
 const RightChip: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <span className="inline-flex items-center gap-1.5 bg-[var(--color-bg)] border border-[var(--color-border)] text-sm text-[var(--color-text-primary)] rounded-full px-3 py-1.5">
@@ -79,27 +79,27 @@ const RightChip: React.FC<{ children: React.ReactNode }> = ({ children }) => (
     </span>
     {children}
   </span>
-)
+);
 
 export const PrivacyPage: React.FC = () => {
-  const [activeSection, setActiveSection] = useState(SECTIONS[0].id)
-  const observerRef = useRef<IntersectionObserver | null>(null)
+  const [activeSection, setActiveSection] = useState(SECTIONS[0].id);
+  const observerRef = useRef<IntersectionObserver | null>(null);
 
   useEffect(() => {
     observerRef.current = new IntersectionObserver(
       entries => {
         entries.forEach(entry => {
-          if (entry.isIntersecting) setActiveSection(entry.target.id)
-        })
+          if (entry.isIntersecting) setActiveSection(entry.target.id);
+        });
       },
-      { rootMargin: '-10% 0px -75% 0px', threshold: 0 }
-    )
+      { rootMargin: '-10% 0px -75% 0px', threshold: 0 },
+    );
     SECTIONS.forEach(s => {
-      const el = document.getElementById(s.id)
-      if (el) observerRef.current?.observe(el)
-    })
-    return () => observerRef.current?.disconnect()
-  }, [])
+      const el = document.getElementById(s.id);
+      if (el) observerRef.current?.observe(el);
+    });
+    return () => observerRef.current?.disconnect();
+  }, []);
 
   return (
     <InfoPageLayout>
@@ -341,5 +341,5 @@ export const PrivacyPage: React.FC = () => {
         </div>
       </section>
     </InfoPageLayout>
-  )
-}
+  );
+};

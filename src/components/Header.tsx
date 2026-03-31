@@ -1,33 +1,40 @@
-import React, { useState, useEffect, useRef } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
-import { ShoppingBag, User, Camera, LayoutDashboard } from "lucide-react";
-import { ModernSearchBar } from "./ModernSearchBar";
-import { useCart } from "../context/CartContext";
-import { AuthModal } from "./AuthModal";
-import { EditProfileModal } from "./EditProfileModal";
-import { DesktopRecommendationModal } from "./DesktopRecommendationModal";
-import { useAuth } from "../context/AuthContext";
-import { ContactSupportModal } from "./ContactSupportModal";
-import { createPortal } from "react-dom";
-import { PgToast } from "../pages/pg/PgToast";
-import { assetUrl } from "../lib/utils";
-import { Link } from "react-router-dom";
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { ShoppingBag, User, Camera, LayoutDashboard } from 'lucide-react';
+import { ModernSearchBar } from './ModernSearchBar';
+import { useCart } from '../context/CartContext';
+import { AuthModal } from './AuthModal';
+import { EditProfileModal } from './EditProfileModal';
+import { DesktopRecommendationModal } from './DesktopRecommendationModal';
+import { useAuth } from '../context/AuthContext';
+import { ContactSupportModal } from './ContactSupportModal';
+import { createPortal } from 'react-dom';
+import { PgToast } from '../pages/pg/PgToast';
+import { assetUrl } from '../lib/utils';
+import { Link } from 'react-router-dom';
 
 export const Header: React.FC = () => {
   const [scrolled, setScrolled] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isEditProfileModalOpen, setIsEditProfileModalOpen] = useState(false);
-  const [isDesktopRecommendationModalOpen, setIsDesktopRecommendationModalOpen] = useState(false);
+  const [
+    isDesktopRecommendationModalOpen,
+    setIsDesktopRecommendationModalOpen,
+  ] = useState(false);
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
-  const [isContactPhotographerOnly, setIsContactPhotographerOnly] = useState(false);
-  const [toast, setToast] = useState<{ type: "success" | "info" | "danger"; message: string } | null>(null);
+  const [isContactPhotographerOnly, setIsContactPhotographerOnly] =
+    useState(false);
+  const [toast, setToast] = useState<{
+    type: 'success' | 'info' | 'danger';
+    message: string;
+  } | null>(null);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isGuestMenuOpen, setIsGuestMenuOpen] = useState(false);
   const guestMenuRef = useRef<HTMLDivElement>(null);
   const [authModalConfig, setAuthModalConfig] = useState<{
-    tab: "signin" | "register";
-    type: "photographer" | "buyer";
-  }>({ tab: "signin", type: "photographer" });
+    tab: 'signin' | 'register';
+    type: 'photographer' | 'buyer';
+  }>({ tab: 'signin', type: 'photographer' });
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
   const { cart } = useCart();
@@ -38,14 +45,15 @@ export const Header: React.FC = () => {
   const menuRef = useRef<HTMLDivElement>(null);
 
   const currentPath = encodeURIComponent(location.pathname + location.search);
-  const isOnboarding = location.pathname.startsWith("/pg/onboarding");
+  const isOnboarding = location.pathname.startsWith('/pg/onboarding');
+  const isHomePage = location.pathname === '/';
   const isMobile = windowWidth < 768;
 
   // Window Resize Effect
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   // Initial Scroll Effect
@@ -55,7 +63,7 @@ export const Header: React.FC = () => {
       if (!ticking) {
         window.requestAnimationFrame(() => {
           const isScrolled = window.scrollY > 20;
-          setScrolled((prev) => {
+          setScrolled(prev => {
             if (prev !== isScrolled) return isScrolled;
             return prev;
           });
@@ -64,13 +72,13 @@ export const Header: React.FC = () => {
         ticking = true;
       }
     };
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
   useEffect(() => {
     const handleOpenAuth = (e: any) => {
-      const { tab, type } = e.detail || { tab: "signin", type: "photographer" };
+      const { tab, type } = e.detail || { tab: 'signin', type: 'photographer' };
       setAuthModalConfig({ tab, type });
       setIsContactModalOpen(false); // Close other modals if open
       setIsAuthModalOpen(true);
@@ -92,16 +100,22 @@ export const Header: React.FC = () => {
       setTimeout(() => setToast(null), 4000);
     };
 
-    window.addEventListener("open-auth-modal", handleOpenAuth);
-    window.addEventListener("open-mobile-recommendation", handleOpenMobileRecommendation);
-    window.addEventListener("open-contact-support", handleOpenContact);
-    window.addEventListener("show-toast", handleShowToast);
+    window.addEventListener('open-auth-modal', handleOpenAuth);
+    window.addEventListener(
+      'open-mobile-recommendation',
+      handleOpenMobileRecommendation,
+    );
+    window.addEventListener('open-contact-support', handleOpenContact);
+    window.addEventListener('show-toast', handleShowToast);
 
     return () => {
-      window.removeEventListener("open-auth-modal", handleOpenAuth);
-      window.removeEventListener("open-mobile-recommendation", handleOpenMobileRecommendation);
-      window.removeEventListener("open-contact-support", handleOpenContact);
-      window.removeEventListener("show-toast", handleShowToast);
+      window.removeEventListener('open-auth-modal', handleOpenAuth);
+      window.removeEventListener(
+        'open-mobile-recommendation',
+        handleOpenMobileRecommendation,
+      );
+      window.removeEventListener('open-contact-support', handleOpenContact);
+      window.removeEventListener('show-toast', handleShowToast);
     };
   }, []);
 
@@ -111,19 +125,30 @@ export const Header: React.FC = () => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setIsUserMenuOpen(false);
       }
-      if (guestMenuRef.current && !guestMenuRef.current.contains(event.target as Node)) {
+      if (
+        guestMenuRef.current &&
+        !guestMenuRef.current.contains(event.target as Node)
+      ) {
         setIsGuestMenuOpen(false);
       }
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   // Helper: Generate stable random color based on name
   const getAvatarColor = (name: string) => {
-    const colors = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899"];
+    const colors = [
+      '#3b82f6',
+      '#10b981',
+      '#f59e0b',
+      '#ef4444',
+      '#8b5cf6',
+      '#ec4899',
+    ];
     let hash = 0;
-    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    for (let i = 0; i < name.length; i++)
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
     return colors[Math.abs(hash) % colors.length];
   };
 
@@ -131,16 +156,20 @@ export const Header: React.FC = () => {
     <>
       <header
         className={[
-          "bg-white border border-black/[0.04] sticky top-0 z-[1000] overflow-visible transition-[background-color,box-shadow] duration-[400ms] ease-[cubic-bezier(0.2,0,0.2,1)]",
+          'bg-white border border-black/[0.04] sticky top-0 z-[1000] overflow-visible transition-[background-color,box-shadow] duration-[400ms] ease-[cubic-bezier(0.2,0,0.2,1)]',
           scrolled
-            ? "bg-white/85 backdrop-blur-[12px] [-webkit-backdrop-filter:blur(12px)] border-b border-black/5 shadow-[0_4px_12px_rgba(0,0,0,0.03)]"
-            : "",
-        ].join(" ")}
+            ? 'bg-white/85 backdrop-blur-[12px] [-webkit-backdrop-filter:blur(12px)] border-b border-black/5 shadow-[0_4px_12px_rgba(0,0,0,0.03)]'
+            : '',
+        ].join(' ')}
       >
         <div className="flex items-center justify-between gap-3 md:gap-6 min-h-16 md:h-[72px] container-fluid">
           {/* 1. Logo (Left) */}
           <Link to="/" className="flex items-center flex-shrink-0">
-            <img src={assetUrl("images/logo1-blue.svg")} alt="GALLOPICS" className="h-6 min-[480px]:h-7 w-auto block" />
+            <img
+              src={assetUrl('images/logo1-blue.svg')}
+              alt="GALLOPICS"
+              className="h-6 min-[480px]:h-7 w-auto block"
+            />
           </Link>
 
           {/* 3. Utility Icons (Right) */}
@@ -150,7 +179,7 @@ export const Header: React.FC = () => {
 
               {!isLoaded ? null : isAuthenticated ? (
                 <>
-                  <button
+                  {/* <button
                     className="flex items-center justify-center w-11 h-11 rounded-full text-[var(--color-text-primary)] transition-[background-color,scale,box-shadow,border-color] duration-200 ease-in-out bg-white border border-[var(--color-border)] shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-[var(--ui-bg-subtle)] hover:border-[var(--color-border)] hover:scale-105 hover:shadow-[0_2px_4px_rgba(0,0,0,0.05)] relative"
                     aria-label="Cart"
                     onClick={() => navigate(`/cart?from=${currentPath}`)}
@@ -161,7 +190,7 @@ export const Header: React.FC = () => {
                         {cart.length}
                       </span>
                     )}
-                  </button>
+                  </button> */}
 
                   {/* Signed In: Workspace Button (Hidden on Mobile) */}
                   {!isMobile && (
@@ -170,10 +199,20 @@ export const Header: React.FC = () => {
                       <button
                         className="flex items-center justify-center w-11 h-11 rounded-full text-[var(--color-text-primary)] transition-[background-color,scale,box-shadow,border-color] duration-200 ease-in-out bg-white border border-[var(--color-border)] shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-[var(--ui-bg-subtle)] hover:border-[var(--color-border)] hover:scale-105 hover:shadow-[0_2px_4px_rgba(0,0,0,0.05)]"
                         aria-label="Workspace"
-                        onClick={() => navigate(user?.role === "admin" ? "/admin" : "/pg")}
-                        title={user?.role === "admin" ? "Go to My Console" : "Go to My Studio"}
+                        onClick={() =>
+                          navigate(user?.role === 'admin' ? '/admin' : '/pg')
+                        }
+                        title={
+                          user?.role === 'admin'
+                            ? 'Go to My Console'
+                            : 'Go to My Studio'
+                        }
                       >
-                        {user?.role === "admin" ? <LayoutDashboard size={20} /> : <Camera size={20} />}
+                        {user?.role === 'admin' ? (
+                          <LayoutDashboard size={20} />
+                        ) : (
+                          <Camera size={20} />
+                        )}
                       </button>
                     </>
                   )}
@@ -187,54 +226,68 @@ export const Header: React.FC = () => {
                       <div
                         className="w-9 h-9 rounded-full text-white font-semibold text-[0.875rem] flex items-center justify-center uppercase flex-shrink-0"
                         style={{
-                          backgroundColor: user?.avatarUrl ? "transparent" : getAvatarColor(user?.displayName || "U"),
+                          backgroundColor: user?.avatarUrl
+                            ? 'transparent'
+                            : getAvatarColor(user?.displayName || 'U'),
                         }}
                       >
                         {user?.avatarUrl ? (
-                          <img src={user.avatarUrl} alt="Avatar" className="w-full h-full rounded-full object-cover" />
+                          <img
+                            src={user.avatarUrl}
+                            alt="Avatar"
+                            className="w-full h-full rounded-full object-cover"
+                          />
                         ) : (
-                          (user?.displayName || "U").charAt(0)
+                          (user?.displayName || 'U').charAt(0)
                         )}
                       </div>
                       <div className="flex flex-col text-left leading-[1.2] max-md:hidden">
                         <span className="text-[0.875rem] font-semibold text-[var(--color-text-primary)]">
-                          {user?.displayName || "Klara Fors"}
+                          {user?.displayName || 'Klara Fors'}
                         </span>
                         <span className="text-[9px] text-[var(--color-text-secondary)] uppercase tracking-[0.5px] font-medium">
-                          {user?.role === "admin" ? "Admin" : user?.city || "Stockholm"}
+                          {user?.role === 'admin'
+                            ? 'Admin'
+                            : user?.city || 'Stockholm'}
                         </span>
                       </div>
                     </button>
 
                     {isUserMenuOpen && (
                       <div className="dropdown-menu absolute top-[120%] right-0 w-44 z-[1010] animate-[fadeInDropdown_0.15s_ease-out]">
-                        <button
+                        {/* <button
                           className="dropdown-item"
                           onClick={() => {
-                            setIsEditProfileModalOpen(true);
-                            setIsUserMenuOpen(false);
+                            setIsEditProfileModalOpen(true)
+                            setIsUserMenuOpen(false)
                           }}
                         >
                           Edit contact
-                        </button>
-                        <button
-                          className="dropdown-item"
-                          onClick={() => {
-                            navigate(
-                              user?.role === "admin" ? "/admin/events" : `/photographer/${user?.id || "klara-fors"}`,
-                            );
-                            setIsUserMenuOpen(false);
-                          }}
-                        >
-                          {user?.role === "admin" ? "Admin dashboard" : "My public profile"}
-                        </button>
-                        <div className="dropdown-divider" />
+                        </button> */}
+                        {(user?.role !== 'admin' || isHomePage) && (
+                          <button
+                            className="dropdown-item"
+                            onClick={() => {
+                              navigate(
+                                user?.role === 'admin'
+                                  ? '/admin/events'
+                                  : `/photographer/${user?.id || 'klara-fors'}`,
+                              );
+                              setIsUserMenuOpen(false);
+                            }}
+                          >
+                            {user?.role === 'admin'
+                              ? 'Admin dashboard'
+                              : 'My public profile'}
+                          </button>
+                        )}
+                        {/* <div className="dropdown-divider" /> */}
                         <button
                           className="dropdown-item dropdown-item-danger"
                           onClick={async () => {
                             await logout();
                             setIsUserMenuOpen(false);
-                            navigate("/");
+                            navigate('/');
                           }}
                         >
                           Log out
@@ -246,7 +299,7 @@ export const Header: React.FC = () => {
               ) : (
                 <>
                   {/* Guest: Cart & Auth Icon */}
-                  <button
+                  {/* <button
                     className="flex items-center justify-center w-11 h-11 rounded-full text-[var(--color-text-primary)] transition-[background-color,scale,box-shadow,border-color] duration-200 ease-in-out bg-white border border-[var(--color-border)] shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-[var(--ui-bg-subtle)] hover:border-[var(--color-border)] hover:scale-105 hover:shadow-[0_2px_4px_rgba(0,0,0,0.05)] relative"
                     aria-label="Cart"
                     onClick={() => navigate(`/cart?from=${currentPath}`)}
@@ -257,7 +310,7 @@ export const Header: React.FC = () => {
                         {cart.length}
                       </span>
                     )}
-                  </button>
+                  </button> */}
 
                   <div className="w-px h-6 bg-[var(--color-border)] mx-1 max-md:hidden" />
 
@@ -269,7 +322,7 @@ export const Header: React.FC = () => {
                         if (isMobile) {
                           setIsDesktopRecommendationModalOpen(true);
                         } else {
-                          setIsGuestMenuOpen((v) => !v);
+                          setIsGuestMenuOpen(v => !v);
                         }
                       }}
                     >
@@ -281,7 +334,10 @@ export const Header: React.FC = () => {
                         <button
                           className="dropdown-item"
                           onClick={() => {
-                            setAuthModalConfig({ tab: "signin", type: "photographer" });
+                            setAuthModalConfig({
+                              tab: 'signin',
+                              type: 'photographer',
+                            });
                             setIsAuthModalOpen(true);
                             setIsGuestMenuOpen(false);
                           }}
@@ -291,7 +347,10 @@ export const Header: React.FC = () => {
                         <button
                           className="dropdown-item"
                           onClick={() => {
-                            setAuthModalConfig({ tab: "register", type: "photographer" });
+                            setAuthModalConfig({
+                              tab: 'register',
+                              type: 'photographer',
+                            });
                             setIsAuthModalOpen(true);
                             setIsGuestMenuOpen(false);
                           }}
@@ -316,14 +375,17 @@ export const Header: React.FC = () => {
         initialTab={authModalConfig.tab}
         initialAccountType={authModalConfig.type}
         onSwitchTab={() =>
-          setAuthModalConfig((prev) => ({
+          setAuthModalConfig(prev => ({
             ...prev,
-            tab: prev.tab === "signin" ? "register" : "signin",
+            tab: prev.tab === 'signin' ? 'register' : 'signin',
           }))
         }
       />
 
-      <EditProfileModal isOpen={isEditProfileModalOpen} onClose={() => setIsEditProfileModalOpen(false)} />
+      <EditProfileModal
+        isOpen={isEditProfileModalOpen}
+        onClose={() => setIsEditProfileModalOpen(false)}
+      />
 
       <DesktopRecommendationModal
         isOpen={isDesktopRecommendationModalOpen}
@@ -339,7 +401,11 @@ export const Header: React.FC = () => {
       {toast &&
         createPortal(
           <div className="fixed bottom-8 left-0 w-full pointer-events-none flex justify-center z-[10000]">
-            <PgToast type={toast.type} message={toast.message} style={{ pointerEvents: "auto" }} />
+            <PgToast
+              type={toast.type}
+              message={toast.message}
+              style={{ pointerEvents: 'auto' }}
+            />
           </div>,
           document.body,
         )}

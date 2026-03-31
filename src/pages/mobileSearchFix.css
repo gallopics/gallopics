@@ -1,22 +1,21 @@
 /* Fix iOS Safari Zoom on Focus by enforcing 16px font size on inputs */
 @media (max-width: 768px) {
+  /* Target all known search inputs in guest flow */
+  input[type='text'].search-input,
+  input[type='search'],
+  .modern-search-bar input,
+  .hero-actions input {
+    font-size: 16px !important;
+    line-height: normal;
+    /* Better vertical centering on some devices */
+  }
 
-    /* Target all known search inputs in guest flow */
-    input[type="text"].search-input,
-    input[type="search"],
-    .modern-search-bar input,
-    .hero-actions input {
-        font-size: 16px !important;
-        line-height: normal;
-        /* Better vertical centering on some devices */
-    }
-
-    /* Prevent card zoom animation on focus */
-    .hero-card,
-    .hero-card:focus-within {
-        transform: none !important;
-        /* Disable scale animation */
-        transition: none !important;
-        /* Disable transition */
-    }
+  /* Prevent card zoom animation on focus */
+  .hero-card,
+  .hero-card:focus-within {
+    transform: none !important;
+    /* Disable scale animation */
+    transition: none !important;
+    /* Disable transition */
+  }
 }

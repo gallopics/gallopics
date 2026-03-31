@@ -1,13 +1,13 @@
-import React from 'react'
-import { Instagram } from 'lucide-react'
-import { TikTokIcon } from './TikTokIcon'
-import { FacebookIcon } from './FacebookIcon'
+import React from 'react';
+import { Instagram } from 'lucide-react';
+import { TikTokIcon } from './TikTokIcon';
+import { FacebookIcon } from './FacebookIcon';
 
 export interface CopyrightBarProps {
-  minimal?: boolean // If true, white bg, no social icons (standalone, no full footer above)
-  sidebar?: boolean // If true, remove fluid container for sidebar use
-  isAdmin?: boolean // If true, hide Support link (admin context)
-  noLinks?: boolean // If true, hide all nav links (info pages)
+  minimal?: boolean; // If true, white bg, no social icons (standalone, no full footer above)
+  sidebar?: boolean; // If true, remove fluid container for sidebar use
+  isAdmin?: boolean; // If true, hide Support link (admin context)
+  noLinks?: boolean; // If true, hide all nav links (info pages)
 }
 
 export const CopyrightBar: React.FC<CopyrightBarProps> = ({
@@ -34,12 +34,12 @@ export const CopyrightBar: React.FC<CopyrightBarProps> = ({
               href="#"
               className="text-[0.75rem] text-[var(--color-text-secondary)] no-underline hover:text-[var(--color-brand-primary)]"
               onClick={e => {
-                e.preventDefault()
+                e.preventDefault();
                 window.dispatchEvent(
                   new CustomEvent('open-contact-support', {
                     detail: { photographerOnly: true },
-                  })
-                )
+                  }),
+                );
               }}
             >
               Support
@@ -66,7 +66,7 @@ export const CopyrightBar: React.FC<CopyrightBarProps> = ({
           © {new Date().getFullYear()} Gallopics
         </span>
       </div>
-    )
+    );
   }
 
   // Minimal = transparent bar with no social icons (used standalone, e.g. Cart, pg pages)
@@ -109,7 +109,7 @@ export const CopyrightBar: React.FC<CopyrightBarProps> = ({
           </div>
         </div>
       </div>
-    )
+    );
   }
 
   // Full dark bar (used after the dark full footer)
@@ -180,11 +180,11 @@ export const CopyrightBar: React.FC<CopyrightBarProps> = ({
         </a>
       </div>
     </div>
-  )
+  );
 
   return (
     <div className="bg-[var(--footer-bg)] border-t border-white/[0.05] py-7 lg:py-3.5">
       <div className="container">{content}</div>
     </div>
-  )
-}
+  );
+};

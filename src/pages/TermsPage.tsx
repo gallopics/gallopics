@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react'
-import { InfoPageLayout } from '../components/InfoPageLayout'
-import { TitleHeader } from '../components/TitleHeader'
+import React, { useState, useEffect, useRef } from 'react';
+import { InfoPageLayout } from '../components/InfoPageLayout';
+import { TitleHeader } from '../components/TitleHeader';
 
 const SECTIONS = [
   { id: 'about', label: 'About the Service' },
@@ -16,13 +16,13 @@ const SECTIONS = [
   { id: 'changes-terms', label: 'Changes to Terms' },
   { id: 'governing-law', label: 'Governing Law' },
   { id: 'contact', label: 'Contact' },
-]
+];
 
 const P: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <p className="text-sm text-[var(--color-text-secondary)] leading-[1.75] mt-0 mb-0">
     {children}
   </p>
-)
+);
 
 const BulletList: React.FC<{ items: string[] }> = ({ items }) => (
   <ul className="mt-2 space-y-1.5">
@@ -36,14 +36,14 @@ const BulletList: React.FC<{ items: string[] }> = ({ items }) => (
       </li>
     ))}
   </ul>
-)
+);
 
 const SectionBlock: React.FC<{
-  id: string
-  number: string
-  title: string
-  children: React.ReactNode
-  last?: boolean
+  id: string;
+  number: string;
+  title: string;
+  children: React.ReactNode;
+  last?: boolean;
 }> = ({ id, number, title, children, last }) => (
   <div id={id} className="info-section scroll-mt-28 mt-7 first:mt-0">
     <span className="info-section-num">{number}</span>
@@ -53,7 +53,7 @@ const SectionBlock: React.FC<{
     <div className="space-y-2">{children}</div>
     {!last && <hr className="border-[var(--color-border)] mt-7 mb-0" />}
   </div>
-)
+);
 
 const UserTypeCard: React.FC<{ role: string; items: string[] }> = ({
   role,
@@ -63,7 +63,7 @@ const UserTypeCard: React.FC<{ role: string; items: string[] }> = ({
     <p className="info-box-label">{role}</p>
     <BulletList items={items} />
   </div>
-)
+);
 
 const IPCard: React.FC<{ role: string; items: string[] }> = ({
   role,
@@ -73,27 +73,27 @@ const IPCard: React.FC<{ role: string; items: string[] }> = ({
     <p className="info-box-label">{role}</p>
     <BulletList items={items} />
   </div>
-)
+);
 
 export const TermsPage: React.FC = () => {
-  const [activeSection, setActiveSection] = useState(SECTIONS[0].id)
-  const observerRef = useRef<IntersectionObserver | null>(null)
+  const [activeSection, setActiveSection] = useState(SECTIONS[0].id);
+  const observerRef = useRef<IntersectionObserver | null>(null);
 
   useEffect(() => {
     observerRef.current = new IntersectionObserver(
       entries => {
         entries.forEach(entry => {
-          if (entry.isIntersecting) setActiveSection(entry.target.id)
-        })
+          if (entry.isIntersecting) setActiveSection(entry.target.id);
+        });
       },
-      { rootMargin: '-10% 0px -75% 0px', threshold: 0 }
-    )
+      { rootMargin: '-10% 0px -75% 0px', threshold: 0 },
+    );
     SECTIONS.forEach(s => {
-      const el = document.getElementById(s.id)
-      if (el) observerRef.current?.observe(el)
-    })
-    return () => observerRef.current?.disconnect()
-  }, [])
+      const el = document.getElementById(s.id);
+      if (el) observerRef.current?.observe(el);
+    });
+    return () => observerRef.current?.disconnect();
+  }, []);
 
   return (
     <InfoPageLayout>
@@ -341,5 +341,5 @@ export const TermsPage: React.FC = () => {
         </div>
       </section>
     </InfoPageLayout>
-  )
-}
+  );
+};
