@@ -37,7 +37,9 @@ export const PgEventCard: React.FC<PgEventCardProps> = ({
               'https://images.unsplash.com/photo-1551884831-bbf3cdc6469e?auto=format&fit=crop&q=80&w=800'
             }
             alt={event.title}
-            className={`w-full h-full object-cover will-change-transform transition-[scale] duration-500 ease-[cubic-bezier(0.2,0,0.2,1)] group-hover:scale-[1.04] ${!hasCover ? 'grayscale opacity-10' : ''}`}
+            className={`w-full h-full object-cover will-change-transform transition-[scale] duration-500 ease-[cubic-bezier(0.2,0,0.2,1)] group-hover:scale-[1.04] ${
+              !hasCover ? 'grayscale opacity-10' : ''
+            }`}
           />
 
           {!hasCover && (
@@ -51,7 +53,11 @@ export const PgEventCard: React.FC<PgEventCardProps> = ({
           {/* Edit Overlay (Top-Right Circle) */}
           <div className="absolute top-3 right-3 z-30 opacity-0 -translate-y-1 transition-[translate,opacity] duration-[250ms] ease-in-out pointer-events-none group-hover:opacity-100 group-hover:translate-y-0">
             <button
-              className={`w-9 h-9 rounded-full bg-white/95 text-[var(--color-text-primary)] flex items-center justify-center border-none cursor-pointer shadow-[0_1px_2px_rgba(0,0,0,0.05)] pointer-events-auto transition-[scale,background-color,box-shadow] duration-200 ease-in-out hover:scale-[1.05] hover:text-black hover:shadow-[0_4px_12px_rgba(0,0,0,0.1)] ${!hasCover ? '!opacity-30 cursor-default bg-[rgba(243,244,246,0.8)] text-[var(--color-text-secondary)] !shadow-none hover:!scale-100' : ''}`}
+              className={`w-9 h-9 rounded-full bg-white/95 text-[var(--color-text-primary)] flex items-center justify-center border-none cursor-pointer shadow-[0_1px_2px_rgba(0,0,0,0.05)] pointer-events-auto transition-[scale,background-color,box-shadow] duration-200 ease-in-out hover:scale-[1.05] hover:text-black hover:shadow-[0_4px_12px_rgba(0,0,0,0.1)] ${
+                !hasCover
+                  ? '!opacity-30 cursor-default bg-[rgba(243,244,246,0.8)] text-[var(--color-text-secondary)] !shadow-none hover:!scale-100'
+                  : ''
+              }`}
               onClick={e => {
                 e.stopPropagation();
                 if (hasCover) onCoverChange(event.id);
@@ -150,17 +156,17 @@ export const PgEventCard: React.FC<PgEventCardProps> = ({
                   {event.publishedCount ?? 0}
                 </span>
               </div>
-              <div className="inline-flex flex-col items-start justify-center gap-0 px-3.5 py-1.5 rounded-lg bg-[var(--color-success-tint)] text-[var(--color-success)] text-[0.75rem] font-semibold whitespace-nowrap text-left">
+              {/* <div className="inline-flex flex-col items-start justify-center gap-0 px-3.5 py-1.5 rounded-lg bg-[var(--color-success-tint)] text-[var(--color-success)] text-[0.75rem] font-semibold whitespace-nowrap text-left">
                 <span className="text-[0.625rem] font-semibold leading-[1.2] opacity-80">
                   Sales
                 </span>
                 <span className="text-[0.8125rem] font-bold leading-[1.2]">
                   {event.soldCount ?? 0}/{event.photosCount ?? 40}
                 </span>
-              </div>
-              <div className="inline-flex flex-col items-start justify-center gap-0 px-3.5 py-1.5 rounded-lg bg-[var(--color-revenue-bg)] text-[var(--color-revenue-text)] text-[0.75rem] font-semibold whitespace-nowrap text-left">
+              </div> */}
+              {/* <div className="inline-flex flex-col items-start justify-center gap-0 px-3.5 py-1.5 rounded-lg bg-[var(--color-revenue-bg)] text-[var(--color-revenue-text)] text-[0.75rem] font-semibold whitespace-nowrap text-left">
                 <span className="text-[0.625rem] font-semibold leading-[1.2] opacity-80">
-                  Earnings
+                  Earnngs
                 </span>
                 <span className="text-[0.8125rem] font-bold leading-[1.2] text-[var(--color-revenue-value)]">
                   SEK{' '}
@@ -168,7 +174,7 @@ export const PgEventCard: React.FC<PgEventCardProps> = ({
                     .toLocaleString()
                     .replace(/,/g, ' ')}
                 </span>
-              </div>
+              </div> */}
             </div>
           </div>
         </div>

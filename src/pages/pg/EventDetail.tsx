@@ -1538,21 +1538,22 @@ export const EventDetail: React.FC = () => {
                                         </div> */}
                   </>
                 ) : (
-                  <div className="inline-flex flex-col items-start justify-center gap-0 px-4 py-2 rounded-xl bg-[var(--color-revenue-bg)] text-[var(--color-revenue-text)] whitespace-nowrap text-left">
-                    <span className="text-[0.6875rem] font-semibold leading-[1.2] opacity-80">
-                      Earnings
-                    </span>
-                    <span className="text-[0.875rem] font-bold leading-[1.2] text-[var(--color-revenue-value)]">
-                      SEK{' '}
-                      {((event.soldCount ?? 0) * 450)
-                        .toLocaleString()
-                        .replace(/,/g, ' ')}
-                    </span>
-                  </div>
+                  <></>
+                  //   <div className="inline-flex flex-col items-start justify-center gap-0 px-4 py-2 rounded-xl bg-[var(--color-revenue-bg)] text-[var(--color-revenue-text)] whitespace-nowrap text-left">
+                  //     <span className="text-[0.6875rem] font-semibold leading-[1.2] opacity-80">
+                  //       Earning
+                  //     </span>
+                  //     <span className="text-[0.875rem] font-bold leading-[1.2] text-[var(--color-revenue-value)]">
+                  //       SEK{' '}
+                  //       {((event.soldCount ?? 0) * 450)
+                  //         .toLocaleString()
+                  //         .replace(/,/g, ' ')}
+                  //     </span>
+                  //   </div>
                 )}
               </div>
 
-              <ActionSeparator />
+              {/* <ActionSeparator /> */}
 
               {isAdmin && eventPhotographer && (
                 <>
