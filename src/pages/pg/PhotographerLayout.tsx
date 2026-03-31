@@ -2,10 +2,10 @@ import React, { useState, useCallback } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import {
   LayoutGrid,
-  CreditCard,
-  Settings,
-  DollarSign,
-  FileText,
+  // CreditCard,
+  // Settings,
+  // DollarSign,
+  // FileText,
   ChevronLeft,
   ChevronRight,
   // Palette,

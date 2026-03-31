@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ShoppingBag, User, Camera, LayoutDashboard } from 'lucide-react';
+import { User, Camera, LayoutDashboard } from 'lucide-react';
+// import { ShoppingBag } from 'lucide-react';
 import { ModernSearchBar } from './ModernSearchBar';
-import { useCart } from '../context/CartContext';
+// import { useCart } from '../context/CartContext';
 import { AuthModal } from './AuthModal';
 import { EditProfileModal } from './EditProfileModal';
 import { DesktopRecommendationModal } from './DesktopRecommendationModal';
@@ -37,14 +38,14 @@ export const Header: React.FC = () => {
   }>({ tab: 'signin', type: 'photographer' });
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
-  const { cart } = useCart();
+  // const { cart } = useCart();
   const { isLoaded, isAuthenticated, user, logout } = useAuth();
 
   const navigate = useNavigate();
   const location = useLocation();
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const currentPath = encodeURIComponent(location.pathname + location.search);
+  // const currentPath = encodeURIComponent(location.pathname + location.search);
   const isOnboarding = location.pathname.startsWith('/pg/onboarding');
   const isHomePage = location.pathname === '/';
   const isMobile = windowWidth < 768;
@@ -103,7 +104,7 @@ export const Header: React.FC = () => {
     window.addEventListener('open-auth-modal', handleOpenAuth);
     window.addEventListener(
       'open-mobile-recommendation',
-      handleOpenMobileRecommendation,
+      handleOpenMobileRecommendation
     );
     window.addEventListener('open-contact-support', handleOpenContact);
     window.addEventListener('show-toast', handleShowToast);
@@ -112,7 +113,7 @@ export const Header: React.FC = () => {
       window.removeEventListener('open-auth-modal', handleOpenAuth);
       window.removeEventListener(
         'open-mobile-recommendation',
-        handleOpenMobileRecommendation,
+        handleOpenMobileRecommendation
       );
       window.removeEventListener('open-contact-support', handleOpenContact);
       window.removeEventListener('show-toast', handleShowToast);
@@ -271,7 +272,7 @@ export const Header: React.FC = () => {
                               navigate(
                                 user?.role === 'admin'
                                   ? '/admin/events'
-                                  : `/photographer/${user?.id || 'klara-fors'}`,
+                                  : `/photographer/${user?.id || 'klara-fors'}`
                               );
                               setIsUserMenuOpen(false);
                             }}
@@ -407,7 +408,7 @@ export const Header: React.FC = () => {
               style={{ pointerEvents: 'auto' }}
             />
           </div>,
-          document.body,
+          document.body
         )}
     </>
   );
