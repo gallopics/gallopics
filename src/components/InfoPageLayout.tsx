@@ -1,21 +1,21 @@
-import React, { useState, useEffect } from 'react'
-import { PageHeader } from './PageHeader'
-import { Footer } from './Footer'
-import { ContactSupportModal } from './ContactSupportModal'
+import React, { useState, useEffect } from 'react';
+import { PageHeader } from './PageHeader';
+import { Footer } from './Footer';
+import { ContactSupportModal } from './ContactSupportModal';
 
 interface InfoPageLayoutProps {
-  children: React.ReactNode
+  children: React.ReactNode;
 }
 
 export const InfoPageLayout: React.FC<InfoPageLayoutProps> = ({ children }) => {
-  const [isContactOpen, setIsContactOpen] = useState(false)
+  const [isContactOpen, setIsContactOpen] = useState(false);
 
   useEffect(() => {
-    const handleContact = () => setIsContactOpen(true)
-    window.addEventListener('open-contact-support', handleContact)
+    const handleContact = () => setIsContactOpen(true);
+    window.addEventListener('open-contact-support', handleContact);
     return () =>
-      window.removeEventListener('open-contact-support', handleContact)
-  }, [])
+      window.removeEventListener('open-contact-support', handleContact);
+  }, []);
 
   return (
     <div className="page-wrapper ehome-page info-page">
@@ -27,5 +27,5 @@ export const InfoPageLayout: React.FC<InfoPageLayoutProps> = ({ children }) => {
         onClose={() => setIsContactOpen(false)}
       />
     </div>
-  )
-}
+  );
+};

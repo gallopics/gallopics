@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react'
-import { InfoPageLayout } from '../components/InfoPageLayout'
-import { TitleHeader } from '../components/TitleHeader'
+import React, { useState, useEffect, useRef } from 'react';
+import { InfoPageLayout } from '../components/InfoPageLayout';
+import { TitleHeader } from '../components/TitleHeader';
 
 const SECTIONS = [
   { id: 'finding-photos', label: 'Finding Photos' },
@@ -9,13 +9,13 @@ const SECTIONS = [
   { id: 'privacy-respect', label: 'Privacy & Respect' },
   { id: 'photographers', label: 'For Photographers' },
   { id: 'other', label: 'Other Questions' },
-]
+];
 
 const P: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <p className="text-sm text-[var(--color-text-secondary)] leading-[1.75] mt-0 mb-0">
     {children}
   </p>
-)
+);
 
 const BulletList: React.FC<{ items: string[] }> = ({ items }) => (
   <ul className="mt-2 space-y-1.5">
@@ -29,12 +29,12 @@ const BulletList: React.FC<{ items: string[] }> = ({ items }) => (
       </li>
     ))}
   </ul>
-)
+);
 
 interface FAQItemProps {
-  question: string
-  children: React.ReactNode
-  last?: boolean
+  question: string;
+  children: React.ReactNode;
+  last?: boolean;
 }
 
 const FAQItem: React.FC<FAQItemProps> = ({ question, children, last }) => (
@@ -46,13 +46,13 @@ const FAQItem: React.FC<FAQItemProps> = ({ question, children, last }) => (
     </p>
     {children}
   </div>
-)
+);
 
 const SectionBlock: React.FC<{
-  id: string
-  number: string
-  title: string
-  children: React.ReactNode
+  id: string;
+  number: string;
+  title: string;
+  children: React.ReactNode;
 }> = ({ id, number, title, children }) => (
   <div id={id} className="info-section scroll-mt-28 mt-7 first:mt-0">
     <span className="info-section-num">{number}</span>
@@ -62,27 +62,27 @@ const SectionBlock: React.FC<{
     <div>{children}</div>
     <hr className="border-[var(--color-border)] mt-7 mb-0" />
   </div>
-)
+);
 
 export const FAQPage: React.FC = () => {
-  const [activeSection, setActiveSection] = useState(SECTIONS[0].id)
-  const observerRef = useRef<IntersectionObserver | null>(null)
+  const [activeSection, setActiveSection] = useState(SECTIONS[0].id);
+  const observerRef = useRef<IntersectionObserver | null>(null);
 
   useEffect(() => {
     observerRef.current = new IntersectionObserver(
       entries => {
         entries.forEach(entry => {
-          if (entry.isIntersecting) setActiveSection(entry.target.id)
-        })
+          if (entry.isIntersecting) setActiveSection(entry.target.id);
+        });
       },
-      { rootMargin: '-10% 0px -75% 0px', threshold: 0 }
-    )
+      { rootMargin: '-10% 0px -75% 0px', threshold: 0 },
+    );
     SECTIONS.forEach(s => {
-      const el = document.getElementById(s.id)
-      if (el) observerRef.current?.observe(el)
-    })
-    return () => observerRef.current?.disconnect()
-  }, [])
+      const el = document.getElementById(s.id);
+      if (el) observerRef.current?.observe(el);
+    });
+    return () => observerRef.current?.disconnect();
+  }, []);
 
   return (
     <InfoPageLayout>
@@ -334,5 +334,5 @@ export const FAQPage: React.FC = () => {
         </div>
       </section>
     </InfoPageLayout>
-  )
-}
+  );
+};

@@ -1,5 +1,5 @@
-import React, { useState, useCallback } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import React, { useState, useCallback } from 'react';
+import { NavLink, Outlet } from 'react-router-dom';
 import {
   LayoutGrid,
   CreditCard,
@@ -10,11 +10,11 @@ import {
   ChevronRight,
   // Palette,
   Users,
-} from "lucide-react";
-import { Header } from "../../components/Header";
-import { ErrorBoundary } from "../../components/ErrorBoundary";
-import { Footer } from "../../components/Footer";
-import { useWorkspace } from "../../context/WorkspaceContext";
+} from 'lucide-react';
+import { Header } from '../../components/Header';
+import { ErrorBoundary } from '../../components/ErrorBoundary';
+import { Footer } from '../../components/Footer';
+import { useWorkspace } from '../../context/WorkspaceContext';
 
 // Sidebar widths as constants so NavItem can use them without prop drilling
 const W_COLLAPSED = 72;
@@ -29,21 +29,29 @@ interface NavItemProps {
 }
 
 // Defined OUTSIDE layout — stable identity, never remounts on state change
-const SidebarNavItem: React.FC<NavItemProps> = ({ to, icon, label, collapsed, onNavigate }) => (
+const SidebarNavItem: React.FC<NavItemProps> = ({
+  to,
+  icon,
+  label,
+  collapsed,
+  onNavigate,
+}) => (
   <NavLink
     to={to}
-    title={collapsed ? label : ""}
+    title={collapsed ? label : ''}
     onClick={onNavigate}
     className={({ isActive }) =>
       `w-full flex items-center h-[42px] rounded-full no-underline font-medium overflow-hidden transition-colors duration-150 ${
         isActive
-          ? "bg-[rgba(27,58,236,0.08)] text-brand"
-          : "text-secondary hover:bg-[var(--ui-bg-subtle)] hover:text-primary"
+          ? 'bg-[rgba(27,58,236,0.08)] text-brand'
+          : 'text-secondary hover:bg-[var(--ui-bg-subtle)] hover:text-primary'
       }`
     }
   >
     {/* Icon: fixed 42px — center always at nav_padding(15) + 21 = 36px. Never moves. */}
-    <span className="flex-shrink-0 flex items-center justify-center w-[42px] h-[42px]">{icon}</span>
+    <span className="flex-shrink-0 flex items-center justify-center w-[42px] h-[42px]">
+      {icon}
+    </span>
     {/* Label: opacity only — zero reflow, zero position change */}
     <span
       className="text-[0.875rem] whitespace-nowrap pr-2 transition-opacity duration-200"
@@ -57,10 +65,10 @@ const SidebarNavItem: React.FC<NavItemProps> = ({ to, icon, label, collapsed, on
 export const PhotographerLayout: React.FC = () => {
   const { basePath, isAdmin } = useWorkspace();
   const [collapsed, setCollapsed] = useState(true);
-  const sidebarTitle = isAdmin ? "My Console" : "My Studio";
+  const sidebarTitle = isAdmin ? 'My Console' : 'My Studio';
 
   const handleNavClick = useCallback(() => setCollapsed(true), []);
-  const toggle = useCallback(() => setCollapsed((v) => !v), []);
+  const toggle = useCallback(() => setCollapsed(v => !v), []);
 
   return (
     <div className="flex flex-col min-h-screen pg-layout-shell">
@@ -77,15 +85,15 @@ export const PhotographerLayout: React.FC = () => {
             className="flex items-center flex-shrink-0 mt-3 mb-5"
             style={{
               height: 36,
-              justifyContent: collapsed ? "center" : "space-between",
-              padding: collapsed ? 0 : "0 8px 0 16px",
+              justifyContent: collapsed ? 'center' : 'space-between',
+              padding: collapsed ? 0 : '0 8px 0 16px',
             }}
           >
             <span
               className="text-[0.75rem] uppercase tracking-[1px] font-bold text-tertiary whitespace-nowrap overflow-hidden transition-opacity duration-200"
               style={{
                 opacity: collapsed ? 0 : 1,
-                width: collapsed ? 0 : "auto",
+                width: collapsed ? 0 : 'auto',
               }}
             >
               {sidebarTitle}
@@ -93,10 +101,14 @@ export const PhotographerLayout: React.FC = () => {
 
             <button
               onClick={toggle}
-              title={collapsed ? "Expand" : "Collapse"}
+              title={collapsed ? 'Expand' : 'Collapse'}
               className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full text-[var(--ui-icon-muted)] transition-colors duration-150 hover:bg-[var(--ui-bg-subtle)] hover:text-primary border-none bg-transparent cursor-pointer"
             >
-              {collapsed ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
+              {collapsed ? (
+                <ChevronRight size={15} />
+              ) : (
+                <ChevronLeft size={15} />
+              )}
             </button>
           </div>
 
@@ -119,38 +131,38 @@ export const PhotographerLayout: React.FC = () => {
               />
             )}
 
-            <SidebarNavItem
+            {/* <SidebarNavItem
               to={`${basePath}/sold`}
               icon={<DollarSign size={18} />}
               label="Sales"
               collapsed={collapsed}
               onNavigate={handleNavClick}
-            />
-            <SidebarNavItem
+            /> */}
+            {/* <SidebarNavItem
               to={`${basePath}/receipts`}
               icon={<FileText size={18} />}
               label="Receipts"
               collapsed={collapsed}
               onNavigate={handleNavClick}
-            />
+            /> */}
 
             {/* Divider */}
             <div className="h-px bg-[var(--color-border)] mx-3 my-3" />
 
-            <SidebarNavItem
+            {/* <SidebarNavItem
               to={`${basePath}/billing`}
               icon={<CreditCard size={18} />}
               label="Billing details"
               collapsed={collapsed}
               onNavigate={handleNavClick}
-            />
-            <SidebarNavItem
+            /> */}
+            {/* <SidebarNavItem
               to={`${basePath}/settings`}
               icon={<Settings size={18} />}
               label="Settings"
               collapsed={collapsed}
               onNavigate={handleNavClick}
-            />
+            /> */}
             {/* <SidebarNavItem to={`${basePath}/tokens`} icon={<Palette size={18} />} label="Tokens" collapsed={collapsed} onNavigate={handleNavClick} /> */}
           </nav>
 
@@ -160,8 +172,8 @@ export const PhotographerLayout: React.FC = () => {
             style={{
               opacity: collapsed ? 0 : 1,
               maxHeight: collapsed ? 0 : 140,
-              padding: collapsed ? 0 : "12px 20px 24px",
-              pointerEvents: collapsed ? "none" : "auto",
+              padding: collapsed ? 0 : '12px 20px 24px',
+              pointerEvents: collapsed ? 'none' : 'auto',
             }}
           >
             <Footer minimal={true} sidebar={true} isAdmin={isAdmin} />
