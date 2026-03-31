@@ -25,7 +25,7 @@ import { ScopedSearchBar } from '../../components/ScopedSearchBar';
 import {
   ActionCluster,
   //   MoreMenu,
-  ActionSeparator,
+  //   ActionSeparator,
 } from '../../components/HeaderActions';
 import { InfoChip } from '../../components/InfoChip';
 import { PHOTOGRAPHERS } from '../../data/mockData';
