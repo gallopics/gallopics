@@ -29,10 +29,12 @@ import {
 import { usePhotographer } from '../context/PhotographerContext';
 import { ManageHighlightsModal } from '../components/ManageHighlightsModal';
 import { assetUrl } from '../lib/utils';
+import { useAuth } from '../context/AuthContext';
 
 export function PhotographerProfile() {
   const { id = 'hanna-bjork' } = useParams();
   const navigate = useNavigate();
+  const { user: authUser } = useAuth();
 
   // Params
   const [searchParams] = useSearchParams();
@@ -46,10 +48,49 @@ export function PhotographerProfile() {
     'highlights',
   );
 
-  const activeProfile = getActivePhotographerProfile(id);
+  // Breadcrumbs
+  const {
+    photographerId: loggedInId,
+    updateHighlights,
+    highlights: contextHighlights,
+    allPhotos: contextPhotos,
+    events: contextEvents,
+    availableToHire,
+    toggleAvailableToHire,
+  } = usePhotographer();
+  const isOwner = id === loggedInId;
+  const [isHighlightsModalOpen, setIsHighlightsModalOpen] = useState(false);
+
+  const activeProfile = useMemo(() => {
+    const baseProfile = getActivePhotographerProfile(id);
+    const isKnownPhotographer = baseProfile.photographer.id === id;
+
+    if (isKnownPhotographer || !isOwner || !authUser) {
+      return baseProfile;
+    }
+
+    const [firstName = authUser.displayName, ...lastNameParts] =
+      authUser.displayName.split(' ');
+
+    return {
+      ...baseProfile,
+      photographer: {
+        ...baseProfile.photographer,
+        id,
+        firstName,
+        lastName: lastNameParts.join(' '),
+        city: authUser.city,
+        countryCode:
+          authUser.country || baseProfile.photographer.countryCode,
+        avatarUrl: authUser.avatarUrl || null,
+        highlights: [],
+        isAvailableToHire: availableToHire,
+      },
+      dummyEvents: [],
+    };
+  }, [id, isOwner, authUser, availableToHire]);
   const photographer = activeProfile?.photographer;
 
-  // Breadcrumbs
   const breadcrumbs = useMemo<BreadcrumbItem[]>(() => {
     const items: BreadcrumbItem[] = [
       { label: 'Events', onClick: () => navigate('/') },
@@ -172,19 +213,6 @@ export function PhotographerProfile() {
     { label: '1.20m', value: '120' },
     { label: '1.30m', value: '130' },
   ];
-
-  // Owner Logic
-  const {
-    photographerId: loggedInId,
-    updateHighlights,
-    highlights: contextHighlights,
-    allPhotos: contextPhotos,
-    events: contextEvents,
-    availableToHire,
-    toggleAvailableToHire,
-  } = usePhotographer();
-  const isOwner = id === loggedInId;
-  const [isHighlightsModalOpen, setIsHighlightsModalOpen] = useState(false);
 
   const totalEvents = activeProfile.dummyEvents.length + 1;
   const totalPhotosCount = photos.length;

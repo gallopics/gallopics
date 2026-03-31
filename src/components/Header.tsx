@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useUser } from '@clerk/clerk-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { User, Camera, LayoutDashboard } from 'lucide-react';
 // import { ShoppingBag } from 'lucide-react';
@@ -40,6 +41,7 @@ export const Header: React.FC = () => {
 
   // const { cart } = useCart();
   const { isLoaded, isAuthenticated, user, logout } = useAuth();
+  const { user: clerkUser } = useUser();
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -49,6 +51,30 @@ export const Header: React.FC = () => {
   const isOnboarding = location.pathname.startsWith('/pg/onboarding');
   const isHomePage = location.pathname === '/';
   const isMobile = windowWidth < 768;
+  const publicApprovalStatus =
+    typeof clerkUser?.publicMetadata?.approvalStatus === 'string'
+      ? clerkUser.publicMetadata.approvalStatus
+      : undefined;
+  const unsafeApprovalStatus =
+    typeof clerkUser?.unsafeMetadata?.approvalStatus === 'string'
+      ? clerkUser.unsafeMetadata.approvalStatus
+      : undefined;
+  const effectiveApprovalStatus =
+    publicApprovalStatus ?? unsafeApprovalStatus ?? user?.approvalStatus;
+  const isPendingPhotographer =
+    user?.role !== 'admin' && effectiveApprovalStatus !== 'approved';
+  const workspacePath =
+    user?.role === 'admin'
+      ? '/admin'
+      : isPendingPhotographer
+        ? '/pg/pending-approval'
+        : '/pg';
+  const accountShortcutLabel =
+    user?.role === 'admin'
+      ? 'My Console'
+      : isPendingPhotographer
+        ? 'Approval pending'
+        : 'My Studio';
 
   // Window Resize Effect
   useEffect(() => {
@@ -200,14 +226,8 @@ export const Header: React.FC = () => {
                       <button
                         className="flex items-center justify-center w-11 h-11 rounded-full text-[var(--color-text-primary)] transition-[background-color,scale,box-shadow,border-color] duration-200 ease-in-out bg-white border border-[var(--color-border)] shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-[var(--ui-bg-subtle)] hover:border-[var(--color-border)] hover:scale-105 hover:shadow-[0_2px_4px_rgba(0,0,0,0.05)]"
                         aria-label="Workspace"
-                        onClick={() =>
-                          navigate(user?.role === 'admin' ? '/admin' : '/pg')
-                        }
-                        title={
-                          user?.role === 'admin'
-                            ? 'Go to My Console'
-                            : 'Go to My Studio'
-                        }
+                        onClick={() => navigate(workspacePath)}
+                        title={`Go to ${accountShortcutLabel}`}
                       >
                         {user?.role === 'admin' ? (
                           <LayoutDashboard size={20} />
@@ -272,14 +292,14 @@ export const Header: React.FC = () => {
                               navigate(
                                 user?.role === 'admin'
                                   ? '/admin/events'
-                                  : `/photographer/${user?.id || 'klara-fors'}`
+                                  : isPendingPhotographer
+                                    ? '/pg/pending-approval'
+                                    : `/photographer/${user?.id || 'klara-fors'}`
                               );
                               setIsUserMenuOpen(false);
                             }}
                           >
-                            {user?.role === 'admin'
-                              ? 'My Console'
-                              : 'My Studio'}
+                            {accountShortcutLabel}
                           </button>
                         )}
                         {/* <div className="dropdown-divider" /> */}

@@ -73,6 +73,11 @@ const UploadPage = lazy(() =>
 const Photographers = lazy(() =>
   import('./pages/pg/Photographers').then(m => ({ default: m.Photographers })),
 );
+const PendingApproval = lazy(() =>
+  import('./pages/pg/PendingApproval').then(m => ({
+    default: m.PendingApproval,
+  })),
+);
 const OnboardingProfile = lazy(() =>
   import('./pages/pg/onboarding/OnboardingProfile').then(m => ({
     default: m.OnboardingProfile,
@@ -194,6 +199,14 @@ function App() {
                     element={
                       <ProtectedRoute>
                         <OnboardingProfile />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/pg/pending-approval"
+                    element={
+                      <ProtectedRoute>
+                        <PendingApproval />
                       </ProtectedRoute>
                     }
                   />
