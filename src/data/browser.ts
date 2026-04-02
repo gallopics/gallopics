@@ -6,9 +6,8 @@ export const worker = setupWorker(...handlers);
 export async function startWorker() {
   return worker.start({
     serviceWorker: {
-      url: import.meta.env.DEV
-        ? '/mockServiceWorker.js'
-        : '/gallopics/mockServiceWorker.js',
+      url: '/mockServiceWorker.js', // works for localhost and gallopics.com
     },
+    onUnhandledRequest: 'bypass',
   });
 }
