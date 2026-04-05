@@ -15,7 +15,7 @@ import {
   photos as mockPhotos,
   getActivePhotographerProfile,
 } from '../data/mockData';
-import { mockEvents } from '../data/mockEvents';
+import { mockEvents, SHOW_EVENTS } from '../data/mockEvents';
 
 import { ScopedSearchBar } from '../components/ScopedSearchBar';
 import { Highlights } from '../components/Highlights';
@@ -80,8 +80,7 @@ export function PhotographerProfile() {
         firstName,
         lastName: lastNameParts.join(' '),
         city: authUser.city,
-        countryCode:
-          authUser.country || baseProfile.photographer.countryCode,
+        countryCode: authUser.country || baseProfile.photographer.countryCode,
         avatarUrl: authUser.avatarUrl || null,
         highlights: [],
         isAvailableToHire: availableToHire,
@@ -117,7 +116,9 @@ export function PhotographerProfile() {
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      setPhotos(mockPhotos.filter(p => p.photographerId === id));
+      setPhotos(
+        SHOW_EVENTS ? mockPhotos.filter(p => p.photographerId === id) : [],
+      );
       setIsLoading(false);
     }, 1500);
 

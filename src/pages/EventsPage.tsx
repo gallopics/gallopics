@@ -4,7 +4,7 @@ import { TitleHeader } from '../components/TitleHeader';
 import { Footer } from '../components/Footer';
 import { EventBrowseFilter } from '../components/EventBrowseFilter';
 import { FolderEventCard } from '../components/FolderEventCard';
-import { allMockEvents } from '../data/mockEvents';
+import { allMockEvents, SHOW_EVENTS } from '../data/mockEvents';
 import { useNavigate } from 'react-router-dom';
 
 import './guestHome.mobile.css';
@@ -180,16 +180,22 @@ export function EventsPage() {
             />
           </div>
 
-          <div className="events-folders-grid">
-            {filteredEvents.map(event => (
-              <FolderEventCard
-                key={event.id}
-                event={event}
-                onClick={id => navigate(`/event/${id}`)}
-                forceDisabled={period === 'Scheduled'}
-              />
-            ))}
-          </div>
+          {SHOW_EVENTS ? (
+            <div className="events-folders-grid">
+              {filteredEvents.map(event => (
+                <FolderEventCard
+                  key={event.id}
+                  event={event}
+                  onClick={id => navigate(`/event/${id}`)}
+                  forceDisabled={period === 'Scheduled'}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="pg-empty-state">
+              <h3>No events available</h3>
+            </div>
+          )}
         </div>
       </section>
       <Footer minimal={false} />

@@ -1,6 +1,8 @@
 import { COMPETITIONS, PHOTOGRAPHERS } from './mockData';
 import { assetUrl } from '../lib/utils';
 
+export const SHOW_EVENTS = false;
+
 export interface EventData {
   id: string;
   name: string;
@@ -166,4 +168,8 @@ export const disabledEvents: EventData[] = [
   },
 ];
 
-export const allMockEvents = [...mockEvents, ...disabledEvents];
+// export const allMockEvents = [...mockEvents, ...disabledEvents];
+
+export const allMockEvents = SHOW_EVENTS
+  ? [...mockEvents, ...disabledEvents]
+  : [];
