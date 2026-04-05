@@ -128,7 +128,7 @@ interface PhotographerContextType {
   toggleAvailableToHire: (val: boolean) => void;
 }
 
-import { allMockEvents, type EventData } from '../data/mockEvents';
+import { allMockEvents, type EventData, SHOW_EVENTS } from '../data/mockEvents';
 import {
   photos as basePhotos,
   RIDERS,
@@ -538,7 +538,9 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
 }) => {
   const { user } = useAuth();
   const photographerId = user?.id || 'klara-fors';
-  const [events, setEvents] = useState<PgEvent[]>(MOCK_EVENTS);
+  const [events, setEvents] = useState<PgEvent[]>(
+    SHOW_EVENTS ? MOCK_EVENTS : [],
+  );
   const [photos, setPhotos] = useState<Photo[]>(MOCK_PHOTOS);
 
   // Upload State
