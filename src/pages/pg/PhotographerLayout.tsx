@@ -9,12 +9,14 @@ import {
   ChevronLeft,
   ChevronRight,
   // Palette,
+  Camera,
   Users,
 } from 'lucide-react';
 import { Header } from '../../components/Header';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { Footer } from '../../components/Footer';
 import { useWorkspace } from '../../context/WorkspaceContext';
+import { useAuth } from '../../context/AuthContext';
 
 // Sidebar widths as constants so NavItem can use them without prop drilling
 const W_COLLAPSED = 72;
@@ -65,6 +67,8 @@ const SidebarNavItem: React.FC<NavItemProps> = ({
 export const PhotographerLayout: React.FC = () => {
   const { basePath, isAdmin } = useWorkspace();
   const [collapsed, setCollapsed] = useState(true);
+
+  const { user } = useAuth();
   const sidebarTitle = isAdmin ? 'My Console' : 'My Studio';
 
   const handleNavClick = useCallback(() => setCollapsed(true), []);
@@ -121,6 +125,18 @@ export const PhotographerLayout: React.FC = () => {
               collapsed={collapsed}
               onNavigate={handleNavClick}
             />
+
+            {/* My Studio - only for photographers */}
+            {!isAdmin && (
+              <SidebarNavItem
+                to={`/photographer/${user.id}`} // adjust route based on your photographer profile route
+                icon={<Camera size={18} />} // use appropriate icon
+                label="My Studio"
+                collapsed={collapsed}
+                onNavigate={handleNavClick}
+              />
+            )}
+
             {isAdmin && (
               <SidebarNavItem
                 to={`${basePath}/photographers`}

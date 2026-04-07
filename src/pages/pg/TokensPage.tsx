@@ -772,7 +772,7 @@ export const TokensPage: React.FC = () => {
                   <TokenShowcase label="Empty State Message">
                     <div className="text-center p-6">
                       <div className="text-[1.2rem] font-semibold mb-2">
-                        No photos found
+                        No events available – yet
                       </div>
                       <div className="text-secondary text-[0.875rem]">
                         Try adjusting your filters
