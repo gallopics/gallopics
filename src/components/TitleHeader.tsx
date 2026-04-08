@@ -208,11 +208,14 @@ export const TitleHeader: React.FC<TitleHeaderProps> = ({
       : isPendingPhotographer
         ? 'Your photographer account is waiting for approval. We will unlock studio access as soon as an admin approves it in Clerk.'
         : 'Manage your events, upload galleries, track your sales, and grow your photography business — all in one place.';
+
     const consoleHref = isAdmin
       ? '/admin'
       : isPendingPhotographer
         ? '/pg/pending-approval'
-        : '/pg';
+        : user?.id
+          ? `/photographer/${user.id}`
+          : '/pg';
     const consoleLabel = isAdmin
       ? 'My Console'
       : isPendingPhotographer

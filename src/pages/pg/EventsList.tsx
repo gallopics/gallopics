@@ -285,7 +285,7 @@ export const EventsList: React.FC = () => {
               <div className="pg-empty-icon">
                 <CalendarX2 size={24} />
               </div>
-              <h3>No events found</h3>
+              <h3>No events available – yet</h3>
               <p>
                 Try adjusting your filters or search to find matching events.
               </p>
