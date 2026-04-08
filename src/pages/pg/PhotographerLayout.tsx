@@ -126,11 +126,10 @@ export const PhotographerLayout: React.FC = () => {
               onNavigate={handleNavClick}
             />
 
-            {/* My Studio - only for photographers */}
             {!isAdmin && (
               <SidebarNavItem
-                to={`/photographer/${user.id}`} // adjust route based on your photographer profile route
-                icon={<Camera size={18} />} // use appropriate icon
+                to={`/photographer/${user.id}`}
+                icon={<Camera size={18} />}
                 label="My Studio"
                 collapsed={collapsed}
                 onNavigate={handleNavClick}
