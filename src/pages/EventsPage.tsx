@@ -193,7 +193,7 @@ export function EventsPage() {
             </div>
           ) : (
             <div className="pg-empty-state">
-              <h3>No events available</h3>
+              <h3>No events available – yet</h3>
             </div>
           )}
         </div>
