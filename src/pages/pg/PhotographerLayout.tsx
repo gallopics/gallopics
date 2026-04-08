@@ -126,7 +126,7 @@ export const PhotographerLayout: React.FC = () => {
               onNavigate={handleNavClick}
             />
 
-            {!isAdmin && (
+            {!isAdmin && user?.id && (
               <SidebarNavItem
                 to={`/photographer/${user.id}`}
                 icon={<Camera size={18} />}
