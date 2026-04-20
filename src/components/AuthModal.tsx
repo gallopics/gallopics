@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useClerk, useSignIn, useSignUp } from '@clerk/clerk-react';
-import { X, Camera, Lock, Monitor, Link, Check } from 'lucide-react';
+import { X, Camera, Monitor, Link, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PROTOTYPE_USER } from '../context/AuthContext';
 
