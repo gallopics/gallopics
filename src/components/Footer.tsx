@@ -60,13 +60,6 @@ export const Footer: React.FC<FooterProps> = ({
                 <span className="text-[0.4rem] text-[var(--color-text-primary)] max-md:hidden">
                   •
                 </span>
-                <a
-                  href="#"
-                  className="text-[var(--color-text-secondary)] no-underline text-[0.875rem] font-medium transition-[color] duration-150 ease-in-out hover:text-white max-md:hidden"
-                  onClick={e => e.preventDefault()}
-                >
-                  Photographers login
-                </a>
               </div>
               <div className="flex items-center">
                 <a

@@ -80,7 +80,7 @@ const stringifyClerkDebug = (value: unknown) => {
 
         return currentValue;
       },
-      2,
+      2
     );
   } catch {
     return String(value);
@@ -141,7 +141,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 }) => {
   const activeTab = initialTab;
   const [accountType, setAccountType] = useState<'photographer' | 'buyer'>(
-    initialAccountType,
+    initialAccountType
   );
   const [isLoading, setIsLoading] = useState(false);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
@@ -188,8 +188,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         ? 'Signing in...'
         : 'Sign in'
       : isLoading
-        ? 'Creating account...'
-        : 'Create account';
+      ? 'Creating account...'
+      : 'Create account';
 
   return (
     <div className="auth-modal-overlay" onClick={onClose}>
@@ -234,7 +234,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     Got it
                   </button>
                   <button
-                    className={`auth-btn-oauth m-0 gap-1 ${copied ? 'text-success' : ''}`}
+                    className={`auth-btn-oauth m-0 gap-1 ${
+                      copied ? 'text-success' : ''
+                    }`}
                     onClick={() => {
                       navigator.clipboard.writeText(window.location.href);
                       setCopied(true);
@@ -263,20 +265,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 {activeTab === 'register' && (
                   <div className="auth-account-type-wrapper">
                     <button
-                      className={`auth-type-btn ${accountType === 'photographer' ? 'active' : ''}`}
+                      className={`auth-type-btn ${
+                        accountType === 'photographer' ? 'active' : ''
+                      }`}
                       onClick={() => setAccountType('photographer')}
                     >
                       <Camera size={16} />
                       <span>I'm a photographer</span>
-                    </button>
-                    <button
-                      className={`auth-type-btn ${accountType === 'buyer' ? 'active' : ''} disabled`}
-                      onClick={() => {}}
-                      disabled
-                      title="Buyer accounts coming soon"
-                    >
-                      <Lock size={14} />
-                      <span>I'm a buyer</span>
                     </button>
                   </div>
                 )}
@@ -431,7 +426,7 @@ const SignInForm: React.FC<FormProps> = ({
       setErrors({
         form: getClerkErrorMessage(
           error,
-          'Unable to sign in with those credentials.',
+          'Unable to sign in with those credentials.'
         ),
       });
     } finally {
@@ -653,15 +648,14 @@ const RegisterForm: React.FC<FormProps> = ({
       }
 
       setErrors({
-        form:
-          'Clerk requires additional sign-up steps for this instance. Update Clerk sign-up settings if username-only sign-up is intended.',
+        form: 'Clerk requires additional sign-up steps for this instance. Update Clerk sign-up settings if username-only sign-up is intended.',
       });
     } catch (error) {
       console.error('Clerk sign-up error', error);
       setErrors({
         form: getClerkErrorMessage(
           error,
-          'Unable to create your account right now.',
+          'Unable to create your account right now.'
         ),
       });
     } finally {
