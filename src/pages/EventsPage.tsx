@@ -1,10 +1,11 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Header } from '../components/Header';
 import { TitleHeader } from '../components/TitleHeader';
 import { Footer } from '../components/Footer';
 import { EventBrowseFilter } from '../components/EventBrowseFilter';
 import { FolderEventCard } from '../components/FolderEventCard';
-import { allMockEvents, SHOW_EVENTS } from '../data/mockEvents';
+import type { EventData } from '../data/mockEvents';
+import { fetchEventsFromApi } from '../data/eventsApi';
 import { useNavigate } from 'react-router-dom';
 
 import './guestHome.mobile.css';
@@ -16,18 +17,54 @@ export function EventsPage() {
   // Filters States
   const [country, setCountry] = useState('Sweden');
   const [city, setCity] = useState('All');
-  const [period, setPeriod] = useState('Recent');
+  const [period, setPeriod] = useState('Scheduled');
+  const [events, setEvents] = useState<EventData[]>([]);
+  const [isLoadingEvents, setIsLoadingEvents] = useState(true);
+  const [eventsError, setEventsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadEvents() {
+      try {
+        setIsLoadingEvents(true);
+        setEventsError(null);
+        const apiEvents = await fetchEventsFromApi();
+        if (isMounted) setEvents(apiEvents);
+      } catch (error) {
+        if (isMounted) {
+          setEventsError(
+            error instanceof Error ? error.message : 'Failed to load events',
+          );
+        }
+      } finally {
+        if (isMounted) setIsLoadingEvents(false);
+      }
+    }
+
+    void loadEvents();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Filter Logic
   const filteredEvents = useMemo(() => {
-    const source = allMockEvents;
+    const source = events;
 
     // Date Parsing Helper (Mock specific)
-    const parseEventDates = (periodStr: string) => {
+    const parseEventDates = (event: EventData) => {
       try {
-        const todayMock = new Date('2026-01-21T00:00:00');
-        const currentYear = todayMock.getFullYear();
-        const parts = periodStr.split('–').map(s => s.trim());
+        if (event.startDate) {
+          const start = new Date(`${event.startDate}T00:00:00`);
+          const end = new Date(`${event.endDate || event.startDate}T00:00:00`);
+          end.setHours(23, 59, 59, 999);
+          return { start, end };
+        }
+
+        const currentYear = new Date().getFullYear();
+        const parts = event.period.split('–').map(s => s.trim());
 
         let start, end;
         if (parts.length === 2) {
@@ -57,7 +94,7 @@ export function EventsPage() {
       }
     };
 
-    const TODAY = new Date('2026-01-21T00:00:00');
+    const TODAY = new Date();
     TODAY.setHours(0, 0, 0, 0);
 
     const results = source.filter(event => {
@@ -66,7 +103,7 @@ export function EventsPage() {
 
       // Period Logic
       let matchPeriod = true;
-      const { start, end } = parseEventDates(event.period);
+      const { start, end } = parseEventDates(event);
 
       // Is Live? (Today is within range)
       const isLive =
@@ -95,8 +132,8 @@ export function EventsPage() {
 
     // Sorting & Limiting for Recent
     let finalResults = results.sort((a, b) => {
-      const datesA = parseEventDates(a.period);
-      const datesB = parseEventDates(b.period);
+      const datesA = parseEventDates(a);
+      const datesB = parseEventDates(b);
 
       if (period === 'Recent') {
         // Most recent first (Descending by start date)
@@ -111,14 +148,14 @@ export function EventsPage() {
     if (period === 'Recent') {
       // Separate Live vs Others
       const liveEvents = finalResults.filter(e => {
-        const { start, end } = parseEventDates(e.period);
+        const { start, end } = parseEventDates(e);
         return (
           TODAY.getTime() >= start.getTime() && TODAY.getTime() <= end.getTime()
         );
       });
 
       const otherEvents = finalResults.filter(e => {
-        const { start, end } = parseEventDates(e.period);
+        const { start, end } = parseEventDates(e);
         return !(
           TODAY.getTime() >= start.getTime() && TODAY.getTime() <= end.getTime()
         );
@@ -131,19 +168,14 @@ export function EventsPage() {
       // But prompt says "Recent should have only live and other 10 cards" "Sort by period"
       // So we re-sort the combined list.
       finalResults.sort((a, b) => {
-        const datesA = parseEventDates(a.period);
-        const datesB = parseEventDates(b.period);
+        const datesA = parseEventDates(a);
+        const datesB = parseEventDates(b);
         return datesB.start.getTime() - datesA.start.getTime();
       });
     }
 
-    if (period === 'Scheduled') {
-      // Limit to 3 items as per prototype request
-      finalResults = finalResults.slice(0, 3);
-    }
-
     return finalResults;
-  }, [country, city, period]);
+  }, [country, city, period, events]);
 
   const handleFilterChange = (
     key: 'country' | 'city' | 'period',
@@ -180,14 +212,22 @@ export function EventsPage() {
             />
           </div>
 
-          {SHOW_EVENTS ? (
+          {isLoadingEvents ? (
+            <div className="pg-empty-state">
+              <h3>Loading events...</h3>
+            </div>
+          ) : eventsError ? (
+            <div className="pg-empty-state">
+              <h3>Events could not be loaded</h3>
+              <p>{eventsError}</p>
+            </div>
+          ) : filteredEvents.length > 0 ? (
             <div className="events-folders-grid">
               {filteredEvents.map(event => (
                 <FolderEventCard
                   key={event.id}
                   event={event}
                   onClick={id => navigate(`/event/${id}`)}
-                  forceDisabled={period === 'Scheduled'}
                 />
               ))}
             </div>

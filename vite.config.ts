@@ -30,6 +30,13 @@ export default defineConfig(() => {
       host: true,
       port: 5173,
       strictPort: true,
+      proxy: {
+        '/api': {
+          target: 'https://gallopics-api.onrender.com',
+          changeOrigin: true,
+          secure: true,
+        },
+      },
     },
   };
 });

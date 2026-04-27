@@ -20,8 +20,20 @@ export const FolderEventCard: React.FC<FolderEventCardProps> = ({
   // Live Logic: Check if today is within event.period
   const isLive = (() => {
     try {
-      const todayMock = new Date('2026-01-21T00:00:00');
-      const currentYear = todayMock.getFullYear();
+      if (event.startDate) {
+        const start = new Date(`${event.startDate}T00:00:00`);
+        const end = new Date(`${event.endDate || event.startDate}T00:00:00`);
+        const today = new Date();
+
+        today.setHours(0, 0, 0, 0);
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+
+        return today >= start && today <= end;
+      }
+
+      const today = new Date();
+      const currentYear = today.getFullYear();
       const parts = event.period.split('–').map(s => s.trim());
 
       let start, end;
@@ -41,7 +53,7 @@ export const FolderEventCard: React.FC<FolderEventCardProps> = ({
       }
 
       // Normalize times
-      const TODAY = new Date(todayMock);
+      const TODAY = new Date(today);
       TODAY.setHours(0, 0, 0, 0);
       start.setHours(0, 0, 0, 0);
       end.setHours(23, 59, 59, 999);
