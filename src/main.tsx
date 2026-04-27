@@ -8,12 +8,25 @@ import './index.css';
 const clerkPublishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
 async function prepareApp() {
+  if (!import.meta.env.DEV) {
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(
+        registrations
+          .filter(registration =>
+            registration.active?.scriptURL.includes('mockServiceWorker.js'),
+          )
+          .map(registration => registration.unregister()),
+      );
+    }
+
+    return;
+  }
+
   const { startWorker } = await import('./data/browser.ts');
   await startWorker();
 }
 prepareApp().then(() => {
-  console.log('Mock Service Worker started');
-
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
       {clerkPublishableKey ? (
