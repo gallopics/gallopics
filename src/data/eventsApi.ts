@@ -2,7 +2,15 @@ import type { EventData } from './mockEvents';
 import { mockEvents } from './mockEvents';
 import { assetUrl } from '../lib/utils';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+const RENDER_API_BASE_URL = 'https://gallopics-api.onrender.com';
+
+function getApiBaseUrl() {
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL;
+  }
+
+  return import.meta.env.DEV ? window.location.origin : RENDER_API_BASE_URL;
+}
 
 export interface ApiEvent {
   id: string;
@@ -117,7 +125,7 @@ export function mapApiEventToEventData(
 export async function fetchEventsFromApi(): Promise<EventData[]> {
   const url = new URL(
     '/api/v1/events',
-    API_BASE_URL || window.location.origin,
+    getApiBaseUrl(),
   );
   url.searchParams.set('page_size', '100');
 
@@ -134,7 +142,7 @@ export async function fetchEventsFromApi(): Promise<EventData[]> {
 export async function fetchEventFromApi(eventId: string): Promise<ApiEvent> {
   const url = new URL(
     `/api/v1/events/${eventId}`,
-    API_BASE_URL || window.location.origin,
+    getApiBaseUrl(),
   );
   const response = await fetch(url);
 
