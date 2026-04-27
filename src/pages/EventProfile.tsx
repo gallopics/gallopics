@@ -10,6 +10,7 @@ import { PhotoCard } from '../components/PhotoCard';
 import { ModernDropdown } from '../components/ModernDropdown';
 import { InfoChip } from '../components/InfoChip';
 import { eventDetails } from '../data/mockEventDetails';
+import { fetchEventFromApi, type ApiEvent } from '../data/eventsApi';
 import {
   photos as basePhotos,
   RIDERS,
@@ -23,7 +24,7 @@ import {
   ActionCluster,
 } from '../components/HeaderActions';
 import { ScopedSearchBar } from '../components/ScopedSearchBar';
-import type { Photo, ClassSection } from '../types';
+import type { Photo, ClassSection, EventDetail, Meeting } from '../types';
 import { assetUrl } from '../lib/utils';
 
 // Helpers for randomization
@@ -38,9 +39,11 @@ const generateEventPhotos = (
   eventId: string,
   count: number,
   discipline?: string,
+  meetingOverride?: Meeting,
 ): Photo[] => {
   const srcPool = Array.from(new Set(basePhotos.map(p => p.src)));
-  const comp = eventDetails.find(e => e.meetingId === eventId)?.meeting;
+  const comp =
+    meetingOverride || eventDetails.find(e => e.meetingId === eventId)?.meeting;
   const eventName = comp?.name || 'Gallopics Event';
   const eventDate = comp?.period.startDate || '2026-01-01';
 
@@ -89,11 +92,66 @@ const generateEventPhotos = (
   });
 };
 
+function buildApiEventDetail(event: ApiEvent): EventDetail {
+  const endDate = event.end_date || event.start_date;
+  const discipline = event.discipline || 'Equestrian';
+  const meeting: Meeting = {
+    id: event.id,
+    name: event.name,
+    country: {
+      name: event.country,
+      code: event.country === 'Sweden' ? 'SE' : event.country.slice(0, 2),
+    },
+    city: event.city || event.venue_name || 'Unknown city',
+    venueName: event.venue_name || event.city || 'Venue',
+    clubName: event.organizer_name || 'Gallopics',
+    period: { startDate: event.start_date, endDate },
+    disciplines: [discipline],
+    timezone: 'Europe/Stockholm',
+    photoCount: 0,
+    coverImage: assetUrl('images/Abdel_Said_Arpege_du_RU5978.jpg'),
+    logo: assetUrl('images/logo1.svg'),
+  };
+
+  return {
+    meetingId: event.id,
+    meeting,
+    schedule: [
+      {
+        date: event.start_date,
+        arenas: [
+          {
+            id: `${event.id}-arena`,
+            name: meeting.venueName,
+            position: 1,
+            competitions: [
+              {
+                classSectionId: `${event.id}-class`,
+                name: discipline,
+                startTime: '09:00',
+                position: 1,
+                discipline,
+                entriesCount: 0,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
 export function EventProfile() {
   const { eventId } = useParams();
   const navigate = useNavigate();
 
-  const eventDetail = eventDetails.find(e => e.meetingId === eventId);
+  const localEventDetail = eventDetails.find(e => e.meetingId === eventId);
+  const [apiEventDetail, setApiEventDetail] = useState<EventDetail | null>(
+    null,
+  );
+  const [isLoadingEvent, setIsLoadingEvent] = useState(!localEventDetail);
+  const [eventLoadError, setEventLoadError] = useState<string | null>(null);
+  const eventDetail = localEventDetail || apiEventDetail;
   const eventPhotographer = useMemo(
     () => PHOTOGRAPHERS.find(p => p.primaryEventId === eventId),
     [eventId],
@@ -106,6 +164,39 @@ export function EventProfile() {
   const [eventClass, setEventClass] = useState('All');
 
   useEffect(() => {
+    if (localEventDetail || !eventId) {
+      setIsLoadingEvent(false);
+      return;
+    }
+
+    const apiEventId = eventId;
+    let isMounted = true;
+
+    async function loadEvent() {
+      try {
+        setIsLoadingEvent(true);
+        setEventLoadError(null);
+        const apiEvent = await fetchEventFromApi(apiEventId);
+        if (isMounted) setApiEventDetail(buildApiEventDetail(apiEvent));
+      } catch (error) {
+        if (isMounted) {
+          setEventLoadError(
+            error instanceof Error ? error.message : 'Failed to load event',
+          );
+        }
+      } finally {
+        if (isMounted) setIsLoadingEvent(false);
+      }
+    }
+
+    void loadEvent();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [eventId, localEventDetail]);
+
+  useEffect(() => {
     if (eventDetail) {
       setLoading(true);
       setTimeout(() => {
@@ -113,6 +204,7 @@ export function EventProfile() {
           eventDetail.meetingId,
           eventDetail.meeting.photoCount,
           eventDetail.meeting.disciplines[0],
+          eventDetail.meeting,
         );
         setPhotos(generated);
         setLoading(false);
@@ -198,12 +290,19 @@ export function EventProfile() {
     });
   }, [photos, searchQuery, eventClass]);
 
+  if (isLoadingEvent)
+    return <div className="container pt-[120px]">Loading event...</div>;
+
   if (!eventDetail)
-    return <div className="container pt-[120px]">Event not found</div>;
+    return (
+      <div className="container pt-[120px]">
+        {eventLoadError || 'Event not found'}
+      </div>
+    );
 
   const { meeting } = eventDetail;
 
-  const TODAY = new Date('2026-01-21T00:00:00');
+  const TODAY = new Date();
   TODAY.setHours(0, 0, 0, 0);
   const eventStart = new Date(meeting.period.startDate);
   const eventEnd = new Date(meeting.period.endDate);

@@ -8,6 +8,8 @@ export interface EventData {
   name: string;
   coverImage: string;
   period: string; // e.g., "12 Jun – 14 Jun 2026"
+  startDate?: string;
+  endDate?: string;
   flag: string; // Emoji
   city: string;
   discipline: string;
@@ -116,6 +118,8 @@ export const mockEvents: EventData[] = COMPETITIONS.map(comp => {
     name: comp.name,
     coverImage: assets.cover,
     period: formatPeriod(comp.date, comp.endDate),
+    startDate: comp.date,
+    endDate: comp.endDate,
     flag: '🇸🇪', // Everyone is Sweden per request
     city: comp.city,
     discipline: comp.discipline || 'Show Jumping',
