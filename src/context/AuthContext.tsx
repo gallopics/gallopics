@@ -1,7 +1,24 @@
-import React, { createContext, useContext } from 'react';
-import { useAuth as useClerkAuth, useClerk, useUser } from '@clerk/clerk-react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+import {
+  useAuth as useClerkAuth,
+  useClerk,
+  useUser,
+} from '@clerk/clerk-react';
 import { assetUrl } from '../lib/utils';
-import { PHOTOGRAPHERS } from '../data/mockData';
+import {
+  api,
+  ApiError,
+  resolveApiAssetUrl,
+  type ApiPhotographer,
+  type ApiUser,
+} from '../data/apiClient';
 
 export interface UserProfile {
   id?: string;
@@ -9,6 +26,7 @@ export interface UserProfile {
   city: string;
   country?: string;
   avatarUrl?: string | null;
+  phone?: string | null;
   hasCompletedOnboarding?: boolean;
   role?: 'pg' | 'admin';
   approvalStatus?: 'pending' | 'approved';
@@ -20,6 +38,7 @@ interface AuthContextType {
   user: UserProfile | null;
   logout: () => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
+  uploadAvatar: (file: File) => Promise<string>;
 }
 
 type AuthMetadata = {
@@ -28,7 +47,6 @@ type AuthMetadata = {
   country?: string;
   hasCompletedOnboarding?: boolean;
   role?: 'pg' | 'admin';
-  photographerProfileId?: string;
   approvalStatus?: 'pending' | 'approved';
 };
 
@@ -43,8 +61,6 @@ export const PROTOTYPE_USER = {
   role: 'pg' as const,
 };
 
-const DEFAULT_PHOTOGRAPHER_PROFILE_ID = PROTOTYPE_USER.id;
-
 const slugify = (value: string) =>
   value
     .normalize('NFD')
@@ -58,72 +74,6 @@ const normalizeIdentifier = (value: string) => {
   const trimmed = value.trim();
   const localPart = trimmed.includes('@') ? trimmed.split('@')[0] : trimmed;
   return slugify(localPart);
-};
-
-const resolveRole = (candidates: Array<string | null | undefined>) => {
-  for (const candidate of candidates) {
-    if (!candidate) {
-      continue;
-    }
-
-    const normalized = normalizeIdentifier(candidate);
-    if (normalized === 'admin' || normalized.startsWith('admin-')) {
-      return 'admin' as const;
-    }
-  }
-
-  return 'pg' as const;
-};
-
-const resolvePhotographerProfileId = (
-  candidates: Array<string | null | undefined>,
-) => {
-  const photographerIds = new Set(
-    PHOTOGRAPHERS.map(photographer => photographer.id),
-  );
-  const photographerNameMap = new Map(
-    PHOTOGRAPHERS.map(photographer => [
-      slugify(`${photographer.firstName} ${photographer.lastName}`),
-      photographer.id,
-    ]),
-  );
-
-  for (const candidate of candidates) {
-    if (!candidate) {
-      continue;
-    }
-
-    const normalized = slugify(candidate);
-    if (!normalized) {
-      continue;
-    }
-
-    if (normalized === 'member') {
-      return DEFAULT_PHOTOGRAPHER_PROFILE_ID;
-    }
-
-    if (photographerIds.has(normalized)) {
-      return normalized;
-    }
-
-    const matchedPhotographerId = photographerNameMap.get(normalized);
-    if (matchedPhotographerId) {
-      return matchedPhotographerId;
-    }
-  }
-
-  return DEFAULT_PHOTOGRAPHER_PROFILE_ID;
-};
-
-const shouldReplacePrototypeProfileId = (
-  photographerProfileId: string | undefined,
-  username: string | null | undefined,
-) => {
-  if (photographerProfileId !== DEFAULT_PHOTOGRAPHER_PROFILE_ID || !username) {
-    return false;
-  }
-
-  return normalizeIdentifier(username) !== DEFAULT_PHOTOGRAPHER_PROFILE_ID;
 };
 
 const readMetadataObject = (metadata: unknown): AuthMetadata => {
@@ -145,10 +95,6 @@ const readMetadataObject = (metadata: unknown): AuthMetadata => {
         ? raw.hasCompletedOnboarding
         : undefined,
     role: raw.role === 'admin' ? 'admin' : raw.role === 'pg' ? 'pg' : undefined,
-    photographerProfileId:
-      typeof raw.photographerProfileId === 'string'
-        ? raw.photographerProfileId
-        : undefined,
     approvalStatus:
       raw.approvalStatus === 'approved'
         ? 'approved'
@@ -181,114 +127,202 @@ const splitDisplayName = (displayName: string) => {
 const resolveDisplayName = (values: Array<string | null | undefined>) =>
   values
     .find(value => typeof value === 'string' && value.trim().length > 0)
-    ?.trim() ?? PROTOTYPE_USER.displayName;
+    ?.trim() ?? 'Photographer';
+
+const mapRole = (
+  apiUser: ApiUser | null,
+  metadata: AuthMetadata,
+): UserProfile['role'] => {
+  if (apiUser?.role === 'admin' || metadata.role === 'admin') {
+    return 'admin';
+  }
+
+  return 'pg';
+};
+
+const mapApprovalStatus = (
+  photographer: ApiPhotographer | null,
+  metadata: AuthMetadata,
+): UserProfile['approvalStatus'] => {
+  if (photographer?.status === 'approved') {
+    return 'approved';
+  }
+
+  return metadata.approvalStatus ?? 'pending';
+};
+
+const wait = (ms: number) =>
+  new Promise(resolve => {
+    window.setTimeout(resolve, ms);
+  });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const clerk = useClerk();
-  const { isLoaded, isSignedIn } = useClerkAuth();
+  const {
+    isLoaded: isClerkLoaded,
+    isSignedIn,
+    getToken,
+  } = useClerkAuth();
   const { user: clerkUser } = useUser();
+  const [apiUser, setApiUser] = useState<ApiUser | null>(null);
+  const [apiPhotographer, setApiPhotographer] =
+    useState<ApiPhotographer | null>(null);
+  const [isProfileLoaded, setIsProfileLoaded] = useState(false);
 
-  const user: UserProfile | null = (() => {
+  const metadata = useMemo(
+    () =>
+      readMetadata(clerkUser?.publicMetadata, clerkUser?.unsafeMetadata),
+    [clerkUser?.publicMetadata, clerkUser?.unsafeMetadata],
+  );
+
+  const getApiToken = useCallback(async () => {
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const token = await getToken({ skipCache: attempt > 0 });
+      if (token) {
+        return token;
+      }
+      await wait(250);
+    }
+
+    return null;
+  }, [getToken]);
+
+  const loadApiProfile = useCallback(async () => {
+    if (!clerkUser) {
+      setApiUser(null);
+      setApiPhotographer(null);
+      setIsProfileLoaded(true);
+      return;
+    }
+
+    setIsProfileLoaded(false);
+    try {
+      const nextApiUser = await api.getMe(getApiToken);
+      setApiUser(nextApiUser);
+
+      try {
+        const nextPhotographer = await api.getMyPhotographer(getApiToken);
+        setApiPhotographer(nextPhotographer);
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404) {
+          setApiPhotographer(null);
+        } else {
+          throw error;
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load Gallopics API profile', error);
+      setApiUser(null);
+      setApiPhotographer(null);
+    } finally {
+      setIsProfileLoaded(true);
+    }
+  }, [clerkUser, getApiToken]);
+
+  useEffect(() => {
+    if (!isClerkLoaded) {
+      return;
+    }
+
+    void loadApiProfile();
+  }, [isClerkLoaded, loadApiProfile]);
+
+  const user: UserProfile | null = useMemo(() => {
     if (!clerkUser) {
       return null;
     }
 
-    const metadata = readMetadata(
-      clerkUser.publicMetadata,
-      clerkUser.unsafeMetadata,
-    );
     const displayName = resolveDisplayName([
+      apiPhotographer?.display_name,
       [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' '),
       clerkUser.fullName,
       clerkUser.username,
       clerkUser.primaryEmailAddress?.emailAddress?.split('@')[0],
     ]);
-    const resolvedRole =
-      metadata.role ??
-      resolveRole([
-        clerkUser.username,
-        clerkUser.primaryEmailAddress?.emailAddress,
+    const fallbackSlug = normalizeIdentifier(
+      clerkUser.username ||
+        clerkUser.primaryEmailAddress?.emailAddress ||
         displayName,
-      ]);
-    const photographerProfileId =
-      shouldReplacePrototypeProfileId(
-        metadata.photographerProfileId,
-        clerkUser.username,
-      )
-        ? normalizeIdentifier(clerkUser.username || '')
-        : metadata.photographerProfileId ??
-          resolvePhotographerProfileId([
-            clerkUser.username,
-            clerkUser.primaryEmailAddress?.emailAddress?.split('@')[0],
-            displayName,
-          ]);
+    );
 
     return {
-      id: photographerProfileId,
+      id: apiPhotographer?.slug || fallbackSlug,
       displayName,
-      city: metadata.city ?? PROTOTYPE_USER.city,
-      country: metadata.country ?? PROTOTYPE_USER.country,
+      city:
+        apiPhotographer?.city ||
+        metadata.city ||
+        '',
+      country:
+        apiPhotographer?.country ||
+        metadata.country ||
+        undefined,
       avatarUrl:
-        metadata.avatarUrl === undefined
-          ? clerkUser.imageUrl
-          : metadata.avatarUrl,
-      hasCompletedOnboarding: metadata.hasCompletedOnboarding ?? false,
-      role: resolvedRole,
-      approvalStatus: metadata.approvalStatus ?? 'pending',
+        resolveApiAssetUrl(apiPhotographer?.avatar_url) ??
+        resolveApiAssetUrl(metadata.avatarUrl) ??
+        clerkUser.imageUrl ??
+        null,
+      phone: apiPhotographer?.phone ?? null,
+      hasCompletedOnboarding:
+        metadata.hasCompletedOnboarding ?? Boolean(apiPhotographer),
+      role: mapRole(apiUser, metadata),
+      approvalStatus: mapApprovalStatus(apiPhotographer, metadata),
     };
-  })();
+  }, [apiPhotographer, apiUser, clerkUser, metadata]);
 
   const updateProfile = async (updates: Partial<UserProfile>) => {
     if (!clerkUser) {
       return;
     }
 
-    const metadata = readMetadata(
-      clerkUser.publicMetadata,
-      clerkUser.unsafeMetadata,
-    );
     const nextDisplayName =
-      updates.displayName ?? user?.displayName ?? PROTOTYPE_USER.displayName;
+      updates.displayName ?? user?.displayName ?? 'Photographer';
     const { firstName, lastName } = splitDisplayName(nextDisplayName);
-    const resolvedRole =
-      updates.role ??
-      metadata.role ??
-      resolveRole([
-        clerkUser.username,
-        clerkUser.primaryEmailAddress?.emailAddress,
-        nextDisplayName,
-      ]);
+    const nextProfile = await api.upsertMyPhotographer(getApiToken, {
+      slug: updates.id ?? user?.id,
+      display_name: nextDisplayName,
+      city: updates.city ?? user?.city ?? null,
+      country: updates.country ?? user?.country ?? null,
+      avatar_url:
+        updates.avatarUrl === undefined
+          ? user?.avatarUrl ?? null
+          : updates.avatarUrl,
+      phone: updates.phone === undefined ? user?.phone ?? null : updates.phone,
+      is_available_to_hire: true,
+    });
+
+    setApiPhotographer(nextProfile);
+    setApiUser(current =>
+      current ? { ...current, role: 'photographer' } : current,
+    );
 
     await clerkUser.update({
       firstName: firstName || null,
       lastName: lastName || null,
       unsafeMetadata: {
         ...metadata,
-        photographerProfileId:
-          updates.id ??
-          metadata.photographerProfileId ??
-          resolvePhotographerProfileId([
-            clerkUser.username,
-            clerkUser.primaryEmailAddress?.emailAddress?.split('@')[0],
-            nextDisplayName,
-          ]),
         avatarUrl:
           updates.avatarUrl === undefined
             ? metadata.avatarUrl
             : updates.avatarUrl,
-        city: updates.city ?? metadata.city ?? PROTOTYPE_USER.city,
-        country: updates.country ?? metadata.country ?? PROTOTYPE_USER.country,
+        city: updates.city ?? metadata.city,
+        country: updates.country ?? metadata.country,
         hasCompletedOnboarding:
           updates.hasCompletedOnboarding ??
           metadata.hasCompletedOnboarding ??
           false,
-        role: resolvedRole,
+        role: updates.role ?? metadata.role ?? 'pg',
         approvalStatus:
           updates.approvalStatus ?? metadata.approvalStatus ?? 'pending',
       },
     });
+  };
+
+  const uploadAvatar = async (file: File) => {
+    const nextProfile = await api.uploadMyAvatar(getApiToken, file);
+    setApiPhotographer(nextProfile);
+    return nextProfile.avatar_url ?? '';
   };
 
   const logout = async () => {
@@ -298,11 +332,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   return (
     <AuthContext.Provider
       value={{
-        isLoaded,
-        isAuthenticated: isLoaded && !!isSignedIn,
+        isLoaded: isClerkLoaded && isProfileLoaded,
+        isAuthenticated: isClerkLoaded && !!isSignedIn,
         user,
         logout,
         updateProfile,
+        uploadAvatar,
       }}
     >
       {children}

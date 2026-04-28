@@ -37,9 +37,6 @@ const buildAbsoluteUrl = (path: string) =>
   new URL(`${routerBase}${path}`, window.location.origin).toString();
 
 const buildClerkMetadata = (overrides?: Record<string, unknown>) => ({
-  avatarUrl: PROTOTYPE_USER.avatarUrl,
-  city: PROTOTYPE_USER.city,
-  country: PROTOTYPE_USER.country,
   approvalStatus: 'pending',
   hasCompletedOnboarding: false,
   role: 'pg',
@@ -116,7 +113,7 @@ const getOAuthCallbackUrl = () => buildAbsoluteUrl('/auth/callback');
 
 const getPostSignInUrl = () => buildAbsoluteUrl('/pg');
 
-const getPostSignUpUrl = () => buildAbsoluteUrl('/pg/pending-approval');
+const getPostSignUpUrl = () => buildAbsoluteUrl('/pg/onboarding/profile');
 
 const getPostSignInRoute = (identifier: string) => {
   const normalized = identifier.trim().toLowerCase();
@@ -633,9 +630,7 @@ const RegisterForm: React.FC<FormProps> = ({
         lastName: formData.lastName,
         username: formData.username.trim(),
         password: formData.password,
-        unsafeMetadata: buildClerkMetadata({
-          photographerProfileId: formData.username.trim().toLowerCase(),
-        }),
+        unsafeMetadata: buildClerkMetadata(),
       });
 
       console.error('Clerk sign-up result', result);
@@ -643,7 +638,7 @@ const RegisterForm: React.FC<FormProps> = ({
       if (result.status === 'complete' && result.createdSessionId) {
         await clerk.setActive({ session: result.createdSessionId });
         onClose();
-        navigate('/pg/pending-approval');
+        navigate('/pg/onboarding/profile');
         return;
       }
 
@@ -681,9 +676,7 @@ const RegisterForm: React.FC<FormProps> = ({
         strategy,
         redirectUrl: getOAuthCallbackUrl(),
         redirectUrlComplete: getPostSignUpUrl(),
-        unsafeMetadata: buildClerkMetadata({
-          photographerProfileId: formData.username.trim().toLowerCase(),
-        }),
+        unsafeMetadata: buildClerkMetadata(),
       });
     } catch (error) {
       console.error('Clerk OAuth sign-up error', error);

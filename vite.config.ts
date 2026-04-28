@@ -7,6 +7,8 @@ import path from 'path';
 // https://vite.dev/config/
 export default defineConfig(() => {
   const base = process.env.VITE_BASE_PATH ?? '/';
+  const apiProxyTarget =
+    process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8000';
 
   return {
     base,
@@ -32,7 +34,12 @@ export default defineConfig(() => {
       strictPort: true,
       proxy: {
         '/api': {
-          target: 'https://gallopics-api.onrender.com',
+          target: apiProxyTarget,
+          changeOrigin: true,
+          secure: true,
+        },
+        '/uploads': {
+          target: apiProxyTarget,
           changeOrigin: true,
           secure: true,
         },
