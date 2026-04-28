@@ -7,24 +7,17 @@ import './index.css';
 
 const clerkPublishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
-async function prepareApp() {
-  if (!import.meta.env.DEV) {
-    if ('serviceWorker' in navigator) {
-      const registrations = await navigator.serviceWorker.getRegistrations();
-      await Promise.all(
-        registrations
-          .filter(registration =>
-            registration.active?.scriptURL.includes('mockServiceWorker.js'),
-          )
-          .map(registration => registration.unregister()),
-      );
-    }
-
+async function unregisterServiceWorkers() {
+  if (!('serviceWorker' in navigator)) {
     return;
   }
 
-  const { startWorker } = await import('./data/browser.ts');
-  await startWorker();
+  const registrations = await navigator.serviceWorker.getRegistrations();
+  await Promise.all(registrations.map(registration => registration.unregister()));
+}
+
+async function prepareApp() {
+  await unregisterServiceWorkers();
 }
 prepareApp().then(() => {
   ReactDOM.createRoot(document.getElementById('root')!).render(

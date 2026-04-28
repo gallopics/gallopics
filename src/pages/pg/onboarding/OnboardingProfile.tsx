@@ -1,40 +1,105 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../../../components/Header';
 import { User, Camera } from 'lucide-react';
-import { useAuth, PROTOTYPE_USER } from '../../../context/AuthContext';
+import { useAuth } from '../../../context/AuthContext';
+import { resolveApiAssetUrl } from '../../../data/apiClient';
 
 export const OnboardingProfile: React.FC = () => {
   const navigate = useNavigate();
-  const { updateProfile, user } = useAuth();
+  const { updateProfile, uploadAvatar, user } = useAuth();
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   // State
   const [avatarUrl, setAvatarUrl] = useState<string | null>(
-    user?.avatarUrl ?? PROTOTYPE_USER.avatarUrl,
+    user?.avatarUrl ?? null,
   );
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
   const [displayName, setDisplayName] = useState(
-    user?.displayName ?? PROTOTYPE_USER.displayName,
+    user?.displayName ?? '',
   );
   const [country, setCountry] = useState(
-    user?.country ?? PROTOTYPE_USER.country,
+    user?.country ?? 'Sweden',
   );
-  const [city, setCity] = useState(user?.city ?? PROTOTYPE_USER.city);
+  const [city, setCity] = useState(user?.city ?? '');
   const [phoneCode, setPhoneCode] = useState('+46');
   const [phoneNumber, setPhoneNumber] = useState('');
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [isSaving, setIsSaving] = useState(false);
 
-  // Mock Avatar Upload
+  useEffect(() => {
+    return () => {
+      if (avatarPreviewUrl) {
+        URL.revokeObjectURL(avatarPreviewUrl);
+      }
+    };
+  }, [avatarPreviewUrl]);
+
   const handleAvatarUpload = () => {
-    // In real app, this would trigger file input
-    // For prototype, just set a dummy image
-    setAvatarUrl(
-      'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-1.2.1&auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
-    );
+    avatarInputRef.current?.click();
+  };
+
+  const handleAvatarFileChange = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    setErrors(current => ({ ...current, avatar: '' }));
+
+    if (avatarPreviewUrl) {
+      URL.revokeObjectURL(avatarPreviewUrl);
+    }
+
+    setAvatarFile(file);
+    setAvatarPreviewUrl(URL.createObjectURL(file));
+    setAvatarUrl(null);
+    e.target.value = '';
   };
 
   const handleClearAvatar = () => {
+    if (avatarPreviewUrl) {
+      URL.revokeObjectURL(avatarPreviewUrl);
+    }
+    setAvatarFile(null);
+    setAvatarPreviewUrl(null);
     setAvatarUrl(null);
+  };
+
+  const saveProfile = async (hasCompletedOnboarding: boolean) => {
+    setIsSaving(true);
+    setErrors(current => ({ ...current, avatar: '' }));
+
+    try {
+      await updateProfile({
+        avatarUrl: avatarFile ? undefined : avatarUrl,
+        displayName: displayName.trim() || user?.displayName || 'Photographer',
+        country: country.trim() || user?.country || '',
+        city: city.trim() || user?.city || '',
+        phone: phoneNumber.trim() ? `${phoneCode}${phoneNumber.trim()}` : null,
+        hasCompletedOnboarding,
+      });
+
+      if (avatarFile) {
+        await uploadAvatar(avatarFile);
+      }
+
+      navigate('/pg/onboarding/ready');
+    } catch (error) {
+      console.error('Failed to save profile', error);
+      setErrors(current => ({
+        ...current,
+        avatar: avatarFile
+          ? 'Unable to upload photo. Please try another image.'
+          : current.avatar,
+      }));
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleContinue = async () => {
@@ -49,29 +114,11 @@ export const OnboardingProfile: React.FC = () => {
       return;
     }
 
-    // Save to Global Store
-    await updateProfile({
-      avatarUrl: avatarUrl || undefined, // undefined to ignore if null, or null is valid
-      displayName,
-      country,
-      city,
-      hasCompletedOnboarding: true,
-    });
-
-    navigate('/pg/onboarding/ready');
+    await saveProfile(true);
   };
 
   const handleSkip = async () => {
-    // Save Defaults for Skipped Values to Global Store
-    await updateProfile({
-      avatarUrl: avatarUrl || PROTOTYPE_USER.avatarUrl,
-      displayName: displayName.trim() || PROTOTYPE_USER.displayName,
-      country: country.trim() || PROTOTYPE_USER.country,
-      city: city.trim() || PROTOTYPE_USER.city,
-      hasCompletedOnboarding: true,
-    });
-
-    navigate('/pg/onboarding/ready');
+    await saveProfile(true);
   };
 
   return (
@@ -89,9 +136,13 @@ export const OnboardingProfile: React.FC = () => {
           {/* 1. Avatar */}
           <div className="flex items-center mb-[var(--spacing-xl)]">
             <div className="onboarding-avatar-circle flex-center flex-shrink-0 overflow-hidden relative">
-              {avatarUrl ? (
+              {avatarPreviewUrl || avatarUrl ? (
                 <img
-                  src={avatarUrl}
+                  src={
+                    avatarPreviewUrl ??
+                    resolveApiAssetUrl(avatarUrl) ??
+                    undefined
+                  }
                   alt="Avatar"
                   className="w-full h-full object-cover"
                 />
@@ -100,21 +151,37 @@ export const OnboardingProfile: React.FC = () => {
               )}
             </div>
             <div className="flex flex-col items-start gap-[var(--spacing-xs)]">
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleAvatarFileChange}
+              />
               <button
                 onClick={handleAvatarUpload}
                 className="flex items-center gap-[6px] text-brand font-medium text-[length:var(--fs-base)]"
+                disabled={isSaving}
               >
                 <Camera size={16} />
-                {avatarUrl ? 'Change photo' : 'Upload photo'}
+                {isSaving
+                  ? 'Saving...'
+                  : avatarPreviewUrl || avatarUrl
+                    ? 'Change photo'
+                    : 'Upload photo'}
               </button>
 
-              {avatarUrl && (
+              {(avatarPreviewUrl || avatarUrl) && (
                 <button
                   onClick={handleClearAvatar}
                   className="text-[var(--color-danger)] font-normal text-[length:var(--fs-sm)]"
+                  disabled={isSaving}
                 >
                   Remove
                 </button>
+              )}
+              {errors.avatar && (
+                <span className="auth-error-msg">{errors.avatar}</span>
               )}
             </div>
           </div>
@@ -134,7 +201,7 @@ export const OnboardingProfile: React.FC = () => {
                 if (errors.displayName)
                   setErrors({ ...errors, displayName: '' });
               }}
-              placeholder={`e.g. ${PROTOTYPE_USER.displayName}`}
+              placeholder="e.g. Klara Fors"
             />
             {errors.displayName && (
               <span className="auth-error-msg">{errors.displayName}</span>
@@ -213,12 +280,17 @@ export const OnboardingProfile: React.FC = () => {
           </div>
 
           {/* CTAs */}
-          <button className="auth-btn-primary" onClick={handleContinue}>
-            Continue
+          <button
+            className="auth-btn-primary"
+            onClick={handleContinue}
+            disabled={isSaving}
+          >
+            {isSaving ? 'Saving...' : 'Continue'}
           </button>
           <button
             className="text-secondary w-full text-[length:var(--fs-sm)] mt-[var(--spacing-sm)] py-[var(--spacing-sm)] px-[var(--spacing-md)]"
             onClick={handleSkip}
+            disabled={isSaving}
           >
             Skip for now
           </button>

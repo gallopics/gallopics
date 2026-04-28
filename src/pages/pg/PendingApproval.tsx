@@ -1,14 +1,16 @@
 import React from 'react';
 import { Clock3, ShieldCheck, RefreshCw, House } from 'lucide-react';
-import { useUser } from '@clerk/clerk-react';
+import { useAuth as useClerkAuth, useUser } from '@clerk/clerk-react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '../../components/Header';
 import { useAuth } from '../../context/AuthContext';
+import { api, ApiError } from '../../data/apiClient';
 
 export const PendingApproval: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { user: clerkUser } = useUser();
+  const { getToken } = useClerkAuth();
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [refreshMessage, setRefreshMessage] = React.useState<string | null>(
     null
@@ -21,6 +23,17 @@ export const PendingApproval: React.FC = () => {
     try {
       if (clerkUser) {
         await clerkUser.reload();
+        try {
+          const photographer = await api.getMyPhotographer(getToken);
+          if (photographer.status === 'approved') {
+            window.location.assign('/pg/events');
+            return;
+          }
+        } catch (error) {
+          if (!(error instanceof ApiError && error.status === 404)) {
+            throw error;
+          }
+        }
 
         const publicApprovalStatus =
           typeof clerkUser.publicMetadata?.approvalStatus === 'string'

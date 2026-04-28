@@ -194,7 +194,7 @@ export const TitleHeader: React.FC<TitleHeaderProps> = ({
         ? clerkUser.unsafeMetadata.approvalStatus
         : undefined;
     const effectiveApprovalStatus =
-      publicApprovalStatus ?? unsafeApprovalStatus ?? user?.approvalStatus;
+      user?.approvalStatus ?? publicApprovalStatus ?? unsafeApprovalStatus;
     const isPendingPhotographer =
       !isAdmin && effectiveApprovalStatus !== 'approved';
     const fullName = user?.displayName ?? 'Photographer';

@@ -21,7 +21,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
       ? clerkUser.unsafeMetadata.approvalStatus
       : undefined;
   const effectiveApprovalStatus =
-    publicApprovalStatus ?? unsafeApprovalStatus ?? user?.approvalStatus;
+    user?.approvalStatus ?? publicApprovalStatus ?? unsafeApprovalStatus;
 
   if (!isLoaded) {
     return null;
@@ -35,6 +35,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const isAdminPath = location.pathname.startsWith('/admin');
   const isPgPath = location.pathname.startsWith('/pg');
   const isPendingApprovalPath = location.pathname === '/pg/pending-approval';
+  const isOnboardingPath = location.pathname.startsWith('/pg/onboarding/');
 
   if (isAdminPath && user?.role !== 'admin') {
     // Photographers shouldn't be on /admin paths
@@ -45,7 +46,8 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
     isPgPath &&
     user?.role !== 'admin' &&
     effectiveApprovalStatus !== 'approved' &&
-    !isPendingApprovalPath
+    !isPendingApprovalPath &&
+    !isOnboardingPath
   ) {
     return <Navigate to="/pg/pending-approval" replace />;
   }

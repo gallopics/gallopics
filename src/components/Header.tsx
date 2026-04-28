@@ -60,7 +60,7 @@ export const Header: React.FC = () => {
       ? clerkUser.unsafeMetadata.approvalStatus
       : undefined;
   const effectiveApprovalStatus =
-    publicApprovalStatus ?? unsafeApprovalStatus ?? user?.approvalStatus;
+    user?.approvalStatus ?? publicApprovalStatus ?? unsafeApprovalStatus;
   const isPendingPhotographer =
     user?.role !== 'admin' && effectiveApprovalStatus !== 'approved';
   const workspacePath =
@@ -264,12 +264,12 @@ export const Header: React.FC = () => {
                       </div>
                       <div className="flex flex-col text-left leading-[1.2] max-md:hidden">
                         <span className="text-[0.875rem] font-semibold text-[var(--color-text-primary)]">
-                          {user?.displayName || 'Klara Fors'}
+                          {user?.displayName || 'Account'}
                         </span>
                         <span className="text-[9px] text-[var(--color-text-secondary)] uppercase tracking-[0.5px] font-medium">
                           {user?.role === 'admin'
                             ? 'Admin'
-                            : user?.city || 'Stockholm'}
+                            : user?.city || 'Photographer'}
                         </span>
                       </div>
                     </button>
@@ -294,7 +294,9 @@ export const Header: React.FC = () => {
                                   ? '/admin/events'
                                   : isPendingPhotographer
                                     ? '/pg/pending-approval'
-                                    : `/photographer/${user?.id || 'klara-fors'}`
+                                    : user?.id
+                                      ? `/photographer/${user.id}`
+                                      : '/pg/events'
                               );
                               setIsUserMenuOpen(false);
                             }}

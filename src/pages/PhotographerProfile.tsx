@@ -3,7 +3,6 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import type { Photo } from '../types';
 import { RotateCcw, Pencil, Instagram, Music2, Search } from 'lucide-react';
 import { Header } from '../components/Header';
-import { Button } from '../components/Button';
 import { TitleHeader } from '../components/TitleHeader';
 import { Breadcrumbs } from '../components/Breadcrumbs';
 import type { BreadcrumbItem } from '../components/Breadcrumbs';
@@ -30,6 +29,12 @@ import { usePhotographer } from '../context/PhotographerContext';
 import { ManageHighlightsModal } from '../components/ManageHighlightsModal';
 import { assetUrl } from '../lib/utils';
 import { useAuth } from '../context/AuthContext';
+import {
+  api,
+  ApiError,
+  resolveApiAssetUrl,
+  type ApiPhotographer,
+} from '../data/apiClient';
 
 export function PhotographerProfile() {
   const { id = 'hanna-bjork' } = useParams();
@@ -44,8 +49,10 @@ export function PhotographerProfile() {
 
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [apiPhotographer, setApiPhotographer] =
+    useState<ApiPhotographer | null>(null);
   const [activeTab, setActiveTab] = useState<'highlights' | 'photos'>(
-    'highlights',
+    'highlights'
   );
 
   // Breadcrumbs
@@ -56,13 +63,58 @@ export function PhotographerProfile() {
     allPhotos: contextPhotos,
     events: contextEvents,
     availableToHire,
-    toggleAvailableToHire,
   } = usePhotographer();
   const isOwner = id === loggedInId;
   const [isHighlightsModalOpen, setIsHighlightsModalOpen] = useState(false);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    api
+      .getPublicPhotographer(id)
+      .then(profile => {
+        if (isMounted) {
+          setApiPhotographer(profile);
+        }
+      })
+      .catch(error => {
+        if (!(error instanceof ApiError && error.status === 404)) {
+          console.error('Failed to load photographer profile', error);
+        }
+        if (isMounted) {
+          setApiPhotographer(null);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [id]);
+
   const activeProfile = useMemo(() => {
     const baseProfile = getActivePhotographerProfile(id);
+    if (apiPhotographer) {
+      const [firstName = apiPhotographer.display_name, ...lastNameParts] =
+        apiPhotographer.display_name.split(' ');
+
+      return {
+        ...baseProfile,
+        photographer: {
+          ...baseProfile.photographer,
+          id: apiPhotographer.slug,
+          firstName,
+          lastName: lastNameParts.join(' '),
+          city: apiPhotographer.city || '',
+          countryCode:
+            apiPhotographer.country || baseProfile.photographer.countryCode,
+          avatarUrl: apiPhotographer.avatar_url,
+          highlights: [],
+          isAvailableToHire: apiPhotographer.is_available_to_hire,
+        },
+        dummyEvents: [],
+      };
+    }
+
     const isKnownPhotographer = baseProfile.photographer.id === id;
 
     if (isKnownPhotographer || !isOwner || !authUser) {
@@ -87,7 +139,7 @@ export function PhotographerProfile() {
       },
       dummyEvents: [],
     };
-  }, [id, isOwner, authUser, availableToHire]);
+  }, [id, apiPhotographer, isOwner, authUser, availableToHire]);
   const photographer = activeProfile?.photographer;
 
   const breadcrumbs = useMemo<BreadcrumbItem[]>(() => {
@@ -117,7 +169,7 @@ export function PhotographerProfile() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setPhotos(
-        SHOW_EVENTS ? mockPhotos.filter(p => p.photographerId === id) : [],
+        SHOW_EVENTS ? mockPhotos.filter(p => p.photographerId === id) : []
       );
       setIsLoading(false);
     }, 1500);
@@ -157,13 +209,13 @@ export function PhotographerProfile() {
 
   const combinedOptions = useMemo(() => {
     const available = photos.filter(
-      p => selectedEventId === '' || p.eventId === selectedEventId,
+      p => selectedEventId === '' || p.eventId === selectedEventId
     );
     const uniqueRiders = Array.from(
-      new Set(available.map(p => p.rider)),
+      new Set(available.map(p => p.rider))
     ).sort();
     const uniqueHorses = Array.from(
-      new Set(available.map(p => p.horse)),
+      new Set(available.map(p => p.horse))
     ).sort();
 
     const riderOptions = uniqueRiders.map(r => {
@@ -263,9 +315,11 @@ export function PhotographerProfile() {
     return <div>Photographer not found</div>;
   }
 
-  const photographerAvatar = assetUrl(
-    `images/${photographer.firstName} ${photographer.lastName}.jpg`,
-  );
+  const photographerAvatar =
+    resolveApiAssetUrl(
+      'avatarUrl' in photographer ? photographer.avatarUrl : null,
+    ) ??
+    assetUrl(`images/${photographer.firstName} ${photographer.lastName}.jpg`);
 
   return (
     <div className="page-wrapper">
@@ -292,10 +346,9 @@ export function PhotographerProfile() {
         }
         rightContent={
           <ActionCluster>
-            {isOwner && (
+            {/* {isOwner && (
               <>
                 <div className="flex items-center mr-[var(--spacing-sm)]">
-                  {/* Toggle Switch */}
                   <label className="toggle-switch-label">
                     <input
                       type="checkbox"
@@ -318,10 +371,10 @@ export function PhotographerProfile() {
                   </label>
                 </div>
               </>
-            )}
+            )} */}
 
             {/* Hire Button logic: Show if Owner (driven by context) or if Guest & Available */}
-            {(isOwner ? availableToHire : photographer.isAvailableToHire) ? (
+            {/* {(isOwner ? availableToHire : photographer.isAvailableToHire) ? (
               <Button variant="primary" size="medium">
                 Hire me
               </Button>
@@ -329,7 +382,7 @@ export function PhotographerProfile() {
               <Button variant="secondary" size="medium" disabled>
                 Not available atm
               </Button>
-            )}
+            )} */}
 
             <ActionSeparator />
 
@@ -372,7 +425,9 @@ export function PhotographerProfile() {
         <div className="tab-row">
           <div className="container flex gap-0">
             <button
-              className={`tab-btn ${activeTab === 'highlights' ? 'active' : ''}`}
+              className={`tab-btn ${
+                activeTab === 'highlights' ? 'active' : ''
+              }`}
               onClick={() => setActiveTab('highlights')}
             >
               Highlights

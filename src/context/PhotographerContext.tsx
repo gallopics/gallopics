@@ -537,7 +537,7 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
   const { user } = useAuth();
-  const photographerId = user?.id || 'klara-fors';
+  const photographerId = user?.id || '';
   const [events, setEvents] = useState<PgEvent[]>(
     SHOW_EVENTS ? MOCK_EVENTS : [],
   );

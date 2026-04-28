@@ -1,14 +1,5 @@
 import type { EventData } from './mockEvents';
-
-const RENDER_API_BASE_URL = 'https://gallopics-api.onrender.com';
-
-function getApiBaseUrl() {
-  if (import.meta.env.VITE_API_BASE_URL) {
-    return import.meta.env.VITE_API_BASE_URL;
-  }
-
-  return import.meta.env.DEV ? window.location.origin : RENDER_API_BASE_URL;
-}
+import { getApiBaseUrl } from './apiClient';
 
 export interface ApiEvent {
   id: string;
