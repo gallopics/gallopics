@@ -1,6 +1,4 @@
 import type { EventData } from './mockEvents';
-import { mockEvents } from './mockEvents';
-import { assetUrl } from '../lib/utils';
 
 const RENDER_API_BASE_URL = 'https://gallopics-api.onrender.com';
 
@@ -42,15 +40,6 @@ interface PaginatedApiResponse<T> {
   page_size: number;
 }
 
-const fallbackCovers = [
-  assetUrl('images/Abdel_Said_Arpege_du_RU5978.jpg'),
-  assetUrl('images/Alice_Nilsson_Eunomia8286.jpg'),
-  assetUrl('images/Falsterbo7800.jpg'),
-  assetUrl('images/Peder_Fredricson_Alcapone_des_Carmille8136.jpg'),
-  assetUrl('images/Anna_Svanberg_Vidar9116.jpg'),
-  assetUrl('images/Fredrik_Spetz_Galactee_de_Tivoli8292.jpg'),
-];
-
 function normalizeCountry(country: string) {
   const countryMap: Record<string, string> = {
     SE: 'Sweden',
@@ -91,32 +80,21 @@ function formatEventPeriod(startDate: string, endDate?: string | null) {
   return `${startLabel} – ${endLabel}`;
 }
 
-function getFallbackAsset(index: number, key: 'coverImage' | 'logo') {
-  const mock = mockEvents[index % mockEvents.length];
-  if (mock?.[key]) return mock[key];
-
-  if (key === 'coverImage') return fallbackCovers[index % fallbackCovers.length];
-  return assetUrl('images/logo1.svg');
-}
-
-export function mapApiEventToEventData(
-  event: ApiEvent,
-  index: number,
-): EventData {
+export function mapApiEventToEventData(event: ApiEvent): EventData {
   const country = normalizeCountry(event.country);
 
   return {
     id: event.id,
     name: event.name,
-    coverImage: getFallbackAsset(index, 'coverImage'),
+    coverImage: '',
     period: formatEventPeriod(event.start_date, event.end_date),
     startDate: event.start_date,
     endDate: event.end_date || event.start_date,
     flag: country === 'Sweden' ? '🇸🇪' : '',
-    city: event.city || event.venue_name || 'Unknown city',
+    city: event.city || event.venue_name || event.organizer_name || 'Sweden',
     discipline: event.discipline || 'Equestrian',
     country,
-    logo: getFallbackAsset(index, 'logo'),
+    logo: '',
     photographer: null,
     status: event.status === 'cancelled' ? 'disabled' : 'active',
   };

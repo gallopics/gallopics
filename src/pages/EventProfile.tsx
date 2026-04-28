@@ -95,22 +95,23 @@ const generateEventPhotos = (
 function buildApiEventDetail(event: ApiEvent): EventDetail {
   const endDate = event.end_date || event.start_date;
   const discipline = event.discipline || 'Equestrian';
+  const countryCode = event.country === 'Sweden' ? 'SE' : event.country;
   const meeting: Meeting = {
     id: event.id,
     name: event.name,
     country: {
       name: event.country,
-      code: event.country === 'Sweden' ? 'SE' : event.country.slice(0, 2),
+      code: countryCode,
     },
-    city: event.city || event.venue_name || 'Unknown city',
-    venueName: event.venue_name || event.city || 'Venue',
+    city: event.city || event.venue_name || event.organizer_name || 'Sweden',
+    venueName: event.venue_name || event.organizer_name || 'Venue pending',
     clubName: event.organizer_name || 'Gallopics',
     period: { startDate: event.start_date, endDate },
     disciplines: [discipline],
     timezone: 'Europe/Stockholm',
     photoCount: 0,
-    coverImage: assetUrl('images/Abdel_Said_Arpege_du_RU5978.jpg'),
-    logo: assetUrl('images/logo1.svg'),
+    coverImage: '',
+    logo: '',
   };
 
   return {
@@ -323,7 +324,7 @@ export function EventProfile() {
       <TitleHeader
         className="event-page-header"
         title={meeting.name}
-        avatar={meeting.logo}
+        avatar={meeting.logo || undefined}
         avatarShape="square"
         avatarMobileRow={true}
         topSubtitle={
@@ -464,7 +465,7 @@ export function EventProfile() {
               <div className="pg-empty-icon">
                 <Search size={24} />
               </div>
-              <h3>No events available – yet</h3>
+              <h3>No photos available – yet</h3>
               <p>Try adjusting your filters or search terms.</p>
               <button
                 onClick={() => {
