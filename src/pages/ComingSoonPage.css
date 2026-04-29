@@ -60,7 +60,6 @@
   filter: brightness(0) invert(1);
   opacity: 0.96;
   user-select: none;
-  animation: cs-logo-breathe 6s ease-in-out infinite 1.4s;
 }
 
 /* ── Divider ── */
@@ -185,11 +184,6 @@
 @keyframes cs-fade-up {
   from { opacity: 0; transform: translateY(14px); }
   to   { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes cs-logo-breathe {
-  0%, 100% { filter: brightness(0) invert(1); opacity: 0.96; }
-  50%       { filter: brightness(0) invert(1) drop-shadow(0 0 32px rgba(27, 58, 236, 0.7)); opacity: 1; }
 }
 
 @keyframes cs-glow-pulse {
