@@ -1,0 +1,226 @@
+.cs-root {
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow: hidden;
+  background: linear-gradient(160deg, #020b1a 0%, #040136 50%, #07022a 100%);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+.cs-canvas {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.cs-glow {
+  position: absolute;
+  width: min(760px, 95vw);
+  height: min(760px, 95vw);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(27, 58, 236, 0.2) 0%, transparent 68%);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 0;
+  animation: cs-glow-pulse 5s ease-in-out infinite;
+}
+
+/* ── Layout ── */
+.cs-spacer {
+  flex: 1;
+}
+
+.cs-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 3rem 2rem 2rem;
+  width: 100%;
+  flex: 0 0 auto;
+}
+
+/* ── Logo ── */
+.cs-logo-wrap {
+  margin-bottom: 2rem;
+}
+
+.cs-logo {
+  display: block;
+  width: min(340px, 58vw);
+  height: auto;
+  filter: brightness(0) invert(1);
+  opacity: 0.96;
+  user-select: none;
+  animation: cs-logo-breathe 6s ease-in-out infinite 1.4s;
+}
+
+/* ── Divider ── */
+.cs-divider {
+  width: 32px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.28), transparent);
+  margin-bottom: 1.5rem;
+}
+
+/* ── Headline ── */
+.cs-headline {
+  margin: 0 0 0.6rem;
+  font-size: clamp(1.15rem, 2.4vw, 1.6rem);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+  color: #ffffff;
+}
+
+/* ── Sub-line ── */
+.cs-sub {
+  margin: 0 0 2rem;
+  font-size: clamp(0.8rem, 1.4vw, 0.9rem);
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.38);
+  letter-spacing: 0.01em;
+  line-height: 1.65;
+  max-width: 560px;
+}
+
+.cs-audience-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  width: min(780px, calc(100vw - 48px));
+  margin: 0 0 1.75rem;
+}
+
+.cs-audience-card {
+  min-height: 132px;
+  padding: 1rem;
+  text-align: left;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.055);
+  backdrop-filter: blur(18px);
+}
+
+.cs-audience-card span {
+  display: block;
+  margin-bottom: 0.65rem;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.cs-audience-card p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.54);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+/* ── Badge ── */
+.cs-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 1rem;
+  border-radius: 999px;
+  border: 1px solid rgba(27, 58, 236, 0.4);
+  background: rgba(27, 58, 236, 0.1);
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.cs-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-brand);
+  flex-shrink: 0;
+  animation: cs-dot-pulse 2s ease-in-out infinite;
+}
+
+/* ── Footer — no transform conflict ── */
+.cs-footer {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  text-align: center;
+  padding: 1.5rem 1rem;
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.16);
+  flex: 0 0 auto;
+}
+
+/* ── Animations ── */
+.cs-logo-in {
+  animation: cs-logo-in 1s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.cs-fade-1 { animation: cs-fade-up 0.9s 0.35s both; }
+.cs-fade-2 { animation: cs-fade-up 0.9s 0.5s  both; }
+.cs-fade-3 { animation: cs-fade-up 0.9s 0.65s both; }
+.cs-fade-4 { animation: cs-fade-up 0.9s 0.8s  both; }
+.cs-fade-5 { animation: cs-fade-up 0.9s 0.95s both; }
+.cs-fade-6 { animation: cs-fade-up 0.9s 1.1s  both; }
+
+@keyframes cs-logo-in {
+  from { opacity: 0; transform: translateY(28px) scale(0.94); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+
+@keyframes cs-fade-up {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes cs-logo-breathe {
+  0%, 100% { filter: brightness(0) invert(1); opacity: 0.96; }
+  50%       { filter: brightness(0) invert(1) drop-shadow(0 0 32px rgba(27, 58, 236, 0.7)); opacity: 1; }
+}
+
+@keyframes cs-glow-pulse {
+  0%, 100% { opacity: 0.65; transform: translate(-50%, -50%) scale(1); }
+  50%       { opacity: 1;    transform: translate(-50%, -50%) scale(1.07); }
+}
+
+@keyframes cs-dot-pulse {
+  0%, 100% { opacity: 1;   box-shadow: 0 0 0 0   rgba(27, 58, 236, 0.7); }
+  50%       { opacity: 0.8; box-shadow: 0 0 0 4px rgba(27, 58, 236, 0); }
+}
+
+/* ── Mobile ── */
+@media (max-width: 760px) {
+  .cs-audience-grid {
+    grid-template-columns: 1fr;
+    width: min(420px, calc(100vw - 40px));
+    gap: 0.55rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .cs-audience-card {
+    min-height: auto;
+    padding: 0.85rem 0.95rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .cs-logo { width: 60vw; }
+
+  .cs-content {
+    padding-inline: 1.25rem;
+  }
+}

@@ -13,81 +13,88 @@ import { PhotographerLayout } from './pages/pg/PhotographerLayout';
 
 // Public routes — lazy loaded
 const EventsPage = lazy(() =>
-  import('./pages/EventsPage').then(m => ({ default: m.EventsPage })),
+  import('./pages/EventsPage').then(m => ({ default: m.EventsPage }))
 );
 const EventProfile = lazy(() =>
-  import('./pages/EventProfile').then(m => ({ default: m.EventProfile })),
+  import('./pages/EventProfile').then(m => ({ default: m.EventProfile }))
 );
 const PhotographerProfile = lazy(() =>
   import('./pages/PhotographerProfile').then(m => ({
     default: m.PhotographerProfile,
-  })),
+  }))
 );
 const RiderProfile = lazy(() =>
-  import('./pages/RiderProfile').then(m => ({ default: m.RiderProfile })),
+  import('./pages/RiderProfile').then(m => ({ default: m.RiderProfile }))
 );
 const HorseProfile = lazy(() =>
-  import('./pages/HorseProfile').then(m => ({ default: m.HorseProfile })),
+  import('./pages/HorseProfile').then(m => ({ default: m.HorseProfile }))
 );
 const ImageProfile = lazy(() =>
-  import('./pages/ImageProfile').then(m => ({ default: m.ImageProfile })),
+  import('./pages/ImageProfile').then(m => ({ default: m.ImageProfile }))
 );
 const Cart = lazy(() =>
-  import('./pages/Cart').then(m => ({ default: m.Cart })),
+  import('./pages/Cart').then(m => ({ default: m.Cart }))
 );
 const FAQPage = lazy(() =>
-  import('./pages/FAQPage').then(m => ({ default: m.FAQPage })),
+  import('./pages/FAQPage').then(m => ({ default: m.FAQPage }))
 );
 const PrivacyPage = lazy(() =>
-  import('./pages/PrivacyPage').then(m => ({ default: m.PrivacyPage })),
+  import('./pages/PrivacyPage').then(m => ({ default: m.PrivacyPage }))
 );
 const TermsPage = lazy(() =>
-  import('./pages/TermsPage').then(m => ({ default: m.TermsPage })),
+  import('./pages/TermsPage').then(m => ({ default: m.TermsPage }))
+);
+const ComingSoonPage = lazy(() =>
+  import('./pages/ComingSoonPage').then(m => ({ default: m.ComingSoonPage }))
 );
 
 // Photographer workspace — lazy loaded
 const EventsList = lazy(() =>
-  import('./pages/pg/EventsList').then(m => ({ default: m.EventsList })),
+  import('./pages/pg/EventsList').then(m => ({ default: m.EventsList }))
 );
 const EventDetail = lazy(() =>
-  import('./pages/pg/EventDetail').then(m => ({ default: m.EventDetail })),
+  import('./pages/pg/EventDetail').then(m => ({ default: m.EventDetail }))
 );
 const SoldPhotos = lazy(() =>
-  import('./pages/pg/SoldPhotos').then(m => ({ default: m.SoldPhotos })),
+  import('./pages/pg/SoldPhotos').then(m => ({ default: m.SoldPhotos }))
 );
 const Receipts = lazy(() =>
-  import('./pages/pg/Receipts').then(m => ({ default: m.Receipts })),
+  import('./pages/pg/Receipts').then(m => ({ default: m.Receipts }))
 );
 const PhotographerBilling = lazy(() =>
-  import('./pages/pg/Billing').then(m => ({ default: m.PhotographerBilling })),
+  import('./pages/pg/Billing').then(m => ({ default: m.PhotographerBilling }))
 );
 const Settings = lazy(() =>
-  import('./pages/pg/Settings').then(m => ({ default: m.Settings })),
+  import('./pages/pg/Settings').then(m => ({ default: m.Settings }))
 );
 const TokensPage = lazy(() =>
-  import('./pages/pg/TokensPage').then(m => ({ default: m.TokensPage })),
+  import('./pages/pg/TokensPage').then(m => ({ default: m.TokensPage }))
 );
 const UploadPage = lazy(() =>
-  import('./pages/pg/UploadPage').then(m => ({ default: m.UploadPage })),
+  import('./pages/pg/UploadPage').then(m => ({ default: m.UploadPage }))
 );
 const Photographers = lazy(() =>
-  import('./pages/pg/Photographers').then(m => ({ default: m.Photographers })),
+  import('./pages/pg/Photographers').then(m => ({ default: m.Photographers }))
 );
 const PendingApproval = lazy(() =>
   import('./pages/pg/PendingApproval').then(m => ({
     default: m.PendingApproval,
-  })),
+  }))
 );
 const OnboardingProfile = lazy(() =>
   import('./pages/pg/onboarding/OnboardingProfile').then(m => ({
     default: m.OnboardingProfile,
-  })),
+  }))
 );
 const OnboardingReady = lazy(() =>
   import('./pages/pg/onboarding/OnboardingReady').then(m => ({
     default: m.OnboardingReady,
-  })),
+  }))
 );
+
+const showComingSoon =
+  import.meta.env.VITE_SHOW_COMING_SOON === 'true' ||
+  (import.meta.env.PROD && import.meta.env.VITE_SHOW_COMING_SOON !== 'false');
 
 function App() {
   useEffect(() => {
@@ -106,7 +113,12 @@ function App() {
               <Suspense fallback={null}>
                 <Routes>
                   {/* Public Routes */}
-                  <Route path="/" element={<EventsPage />} />
+                  <Route
+                    path="/"
+                    element={
+                      showComingSoon ? <ComingSoonPage /> : <EventsPage />
+                    }
+                  />
                   <Route path="/event/:eventId" element={<EventProfile />} />
                   <Route
                     path="/photographer/:id"
@@ -119,6 +131,7 @@ function App() {
                   <Route path="/faq" element={<FAQPage />} />
                   <Route path="/privacy" element={<PrivacyPage />} />
                   <Route path="/terms" element={<TermsPage />} />
+                  <Route path="/comingsoon" element={<ComingSoonPage />} />
                   <Route
                     path="/photographerprofile"
                     element={<PhotographerProfile />}

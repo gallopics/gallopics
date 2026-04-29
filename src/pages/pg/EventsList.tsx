@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   X,
   Search,
@@ -33,15 +33,17 @@ export const EventsList: React.FC = () => {
   const { isAdmin } = useWorkspace();
   const { events } = usePhotographer();
   const navigate = useNavigate();
+  const location = useLocation();
+  const initialTab = (location.state as any)?.tab;
   const [view, setView] = useState<
     'my' | 'upcoming' | 'live' | 'past' | 'archived'
-  >(isAdmin ? 'live' : 'my');
+  >(initialTab ?? (isAdmin ? 'live' : 'my'));
   const [county, setCounty] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
 
   const [activePickerEventId, setActivePickerEventId] = useState<string | null>(
-    null,
+    null
   );
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [eventToEdit, setEventToEdit] = useState<any>(null);
@@ -78,18 +80,18 @@ export const EventsList: React.FC = () => {
       e.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (e.assignedPhotographers &&
         e.assignedPhotographers.some(p =>
-          p.name.toLowerCase().includes(searchTerm.toLowerCase()),
+          p.name.toLowerCase().includes(searchTerm.toLowerCase())
         ));
     return matchesCounty && matchesSearch;
   });
 
   const myEvents = filteredEvents.filter(
-    e => e.isRegistered || e.status === 'open',
+    e => e.isRegistered || e.status === 'open'
   );
   const liveEvents = filteredEvents.filter(e => e.status === 'open');
   const pastEvents = filteredEvents.slice(2, 4); // Mock: slice some distinct ones for past
   const upcomingEvents = filteredEvents.filter(
-    e => e.status === 'upcoming' && !e.isRegistered,
+    e => e.status === 'upcoming' && !e.isRegistered
   );
   const archivedEvents =
     filteredEvents.filter(e => e.status === 'archived').length > 0
@@ -107,7 +109,7 @@ export const EventsList: React.FC = () => {
 
   const handleNavigateToEvent = (eventId: string) => {
     const basePath = isAdmin ? '/admin' : '/pg';
-    navigate(`${basePath}/events/${eventId}`);
+    navigate(`${basePath}/events/${eventId}`, { state: { fromTab: view } });
   };
 
   const activeList = (() => {
@@ -404,7 +406,7 @@ export const EventsList: React.FC = () => {
                               onClick={e => {
                                 e.stopPropagation();
                                 setActiveMenuId(
-                                  activeMenuId === event.id ? null : event.id,
+                                  activeMenuId === event.id ? null : event.id
                                 );
                               }}
                             >
@@ -517,7 +519,7 @@ export const EventsList: React.FC = () => {
                               <img
                                 key={p.id}
                                 src={assetUrl(
-                                  `images/${p.firstName} ${p.lastName}.jpg`,
+                                  `images/${p.firstName} ${p.lastName}.jpg`
                                 )}
                                 alt={`${p.firstName} ${p.lastName}`}
                                 title={`${p.firstName} ${p.lastName}`}
@@ -566,7 +568,7 @@ export const EventsList: React.FC = () => {
                                   <div className="pg-avatar-stack solo">
                                     <img
                                       src={assetUrl(
-                                        `images/${PHOTOGRAPHERS[2].firstName} ${PHOTOGRAPHERS[2].lastName}.jpg`,
+                                        `images/${PHOTOGRAPHERS[2].firstName} ${PHOTOGRAPHERS[2].lastName}.jpg`
                                       )}
                                       alt={`${PHOTOGRAPHERS[2].firstName} ${PHOTOGRAPHERS[2].lastName}`}
                                       title={`${PHOTOGRAPHERS[2].firstName} ${PHOTOGRAPHERS[2].lastName}`}
@@ -609,6 +611,7 @@ export const EventsList: React.FC = () => {
                 key={event.id}
                 event={event}
                 onCoverChange={handleCoverChange}
+                fromTab={view}
                 onEdit={ev => {
                   setEventToEdit(ev);
                   setIsAddModalOpen(true);
@@ -729,7 +732,7 @@ export const EventsList: React.FC = () => {
                   } else {
                     console.log(
                       `${confirmModal.type}ing event:`,
-                      confirmModal.event?.id,
+                      confirmModal.event?.id
                     );
                     setConfirmModal(null);
                   }
