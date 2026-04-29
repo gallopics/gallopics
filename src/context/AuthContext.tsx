@@ -52,6 +52,39 @@ type AuthMetadata = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const normalizeTextValue = (value: unknown) =>
+  typeof value === 'string' ? value.trim().toLowerCase() : undefined;
+
+const normalizeRole = (value: unknown): AuthMetadata['role'] => {
+  const normalized = normalizeTextValue(value);
+
+  if (normalized === 'admin') {
+    return 'admin';
+  }
+
+  if (normalized === 'pg' || normalized === 'photographer') {
+    return 'pg';
+  }
+
+  return undefined;
+};
+
+const normalizeApprovalStatus = (
+  value: unknown,
+): AuthMetadata['approvalStatus'] => {
+  const normalized = normalizeTextValue(value);
+
+  if (normalized === 'approved') {
+    return 'approved';
+  }
+
+  if (normalized === 'pending') {
+    return 'pending';
+  }
+
+  return undefined;
+};
+
 export const PROTOTYPE_USER = {
   id: 'klara-fors',
   displayName: 'Klara Fors',
@@ -94,23 +127,32 @@ const readMetadataObject = (metadata: unknown): AuthMetadata => {
       typeof raw.hasCompletedOnboarding === 'boolean'
         ? raw.hasCompletedOnboarding
         : undefined,
-    role: raw.role === 'admin' ? 'admin' : raw.role === 'pg' ? 'pg' : undefined,
-    approvalStatus:
-      raw.approvalStatus === 'approved'
-        ? 'approved'
-        : raw.approvalStatus === 'pending'
-          ? 'pending'
-          : undefined,
+    role: normalizeRole(raw.role),
+    approvalStatus: normalizeApprovalStatus(raw.approvalStatus),
   };
 };
 
 const readMetadata = (
   publicMetadata: unknown,
   unsafeMetadata: unknown,
-): AuthMetadata => ({
-  ...readMetadataObject(unsafeMetadata),
-  ...readMetadataObject(publicMetadata),
-});
+): AuthMetadata => {
+  const unsafe = readMetadataObject(unsafeMetadata);
+  const publicData = readMetadataObject(publicMetadata);
+
+  return {
+    ...publicData,
+    ...unsafe,
+    role:
+      publicData.role === 'admin' || unsafe.role === 'admin'
+        ? 'admin'
+        : unsafe.role ?? publicData.role,
+    approvalStatus:
+      publicData.approvalStatus === 'approved' ||
+      unsafe.approvalStatus === 'approved'
+        ? 'approved'
+        : unsafe.approvalStatus ?? publicData.approvalStatus,
+  };
+};
 
 const splitDisplayName = (displayName: string) => {
   const parts = displayName.trim().split(/\s+/).filter(Boolean);
@@ -132,8 +174,24 @@ const resolveDisplayName = (values: Array<string | null | undefined>) =>
 const mapRole = (
   apiUser: ApiUser | null,
   metadata: AuthMetadata,
+  clerkIdentifiers: Array<string | null | undefined>,
 ): UserProfile['role'] => {
   if (apiUser?.role === 'admin' || metadata.role === 'admin') {
+    return 'admin';
+  }
+
+  if (
+    clerkIdentifiers.some(identifier => {
+      if (!identifier) {
+        return false;
+      }
+
+      const localPart = identifier.includes('@')
+        ? identifier.split('@')[0]
+        : identifier;
+      return localPart.trim().toLowerCase() === 'admin';
+    })
+  ) {
     return 'admin';
   }
 
@@ -144,7 +202,10 @@ const mapApprovalStatus = (
   photographer: ApiPhotographer | null,
   metadata: AuthMetadata,
 ): UserProfile['approvalStatus'] => {
-  if (photographer?.status === 'approved') {
+  if (
+    photographer?.status === 'approved' ||
+    metadata.approvalStatus === 'approved'
+  ) {
     return 'approved';
   }
 
@@ -266,7 +327,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       phone: apiPhotographer?.phone ?? null,
       hasCompletedOnboarding:
         metadata.hasCompletedOnboarding ?? Boolean(apiPhotographer),
-      role: mapRole(apiUser, metadata),
+      role: mapRole(apiUser, metadata, [
+        clerkUser.username,
+        clerkUser.primaryEmailAddress?.emailAddress,
+      ]),
       approvalStatus: mapApprovalStatus(apiPhotographer, metadata),
     };
   }, [apiPhotographer, apiUser, clerkUser, metadata]);
