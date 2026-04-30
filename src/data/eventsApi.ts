@@ -92,20 +92,29 @@ export function mapApiEventToEventData(event: ApiEvent): EventData {
 }
 
 export async function fetchEventsFromApi(): Promise<EventData[]> {
-  const url = new URL(
-    '/api/v1/events',
-    getApiBaseUrl(),
-  );
-  url.searchParams.set('page_size', '100');
+  const pageSize = 100;
+  const items: ApiEvent[] = [];
+  let page = 1;
+  let total = 0;
 
-  const response = await fetch(url);
+  do {
+    const url = new URL('/api/v1/events', getApiBaseUrl());
+    url.searchParams.set('page', String(page));
+    url.searchParams.set('page_size', String(pageSize));
 
-  if (!response.ok) {
-    throw new Error(`Failed to load events: ${response.status}`);
-  }
+    const response = await fetch(url);
 
-  const data = (await response.json()) as PaginatedApiResponse<ApiEvent>;
-  return data.items.map(mapApiEventToEventData);
+    if (!response.ok) {
+      throw new Error(`Failed to load events: ${response.status}`);
+    }
+
+    const data = (await response.json()) as PaginatedApiResponse<ApiEvent>;
+    items.push(...data.items);
+    total = data.total;
+    page += 1;
+  } while (items.length < total);
+
+  return items.map(mapApiEventToEventData);
 }
 
 export async function fetchEventFromApi(eventId: string): Promise<ApiEvent> {

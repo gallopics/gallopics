@@ -4199,6 +4199,10 @@ textarea.auth-input {
   transition: all 0.2s ease;
 }
 
+.pg-event-row-grid.upcoming-event.no-logo {
+  grid-template-columns: 1fr auto;
+}
+
 .pg-event-row-grid.upcoming-event:hover {
   border-color: #d1d1d1;
   transform: translateY(-1px);
@@ -4550,6 +4554,10 @@ textarea.auth-input {
   .pg-event-row-grid.upcoming-event {
     grid-template-columns: 48px 1fr;
     gap: 16px;
+  }
+
+  .pg-event-row-grid.upcoming-event.no-logo {
+    grid-template-columns: 1fr;
   }
 
   .pg-grid-col-actions {

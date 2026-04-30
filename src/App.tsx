@@ -92,9 +92,11 @@ const OnboardingReady = lazy(() =>
   }))
 );
 
-const showComingSoon =
-  import.meta.env.VITE_SHOW_COMING_SOON === 'true' ||
-  (import.meta.env.PROD && import.meta.env.VITE_SHOW_COMING_SOON !== 'false');
+// const showComingSoon =
+//   import.meta.env.VITE_SHOW_COMING_SOON === 'true' ||
+//   (import.meta.env.PROD && import.meta.env.VITE_SHOW_COMING_SOON !== 'false');
+
+const showComingSoon = import.meta.env.VITE_SHOW_COMING_SOON === 'true';
 
 function App() {
   useEffect(() => {
