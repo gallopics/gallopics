@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   X,
@@ -15,7 +15,10 @@ import {
 } from 'lucide-react';
 import { useWorkspace } from '../../context/WorkspaceContext';
 
-import { usePhotographer } from '../../context/PhotographerContext';
+import {
+  usePhotographer,
+  type PgEvent,
+} from '../../context/PhotographerContext';
 import { ModernDropdown } from '../../components/ModernDropdown';
 import { Button } from '../../components/Button';
 import { FilterChip } from '../../components/FilterChip';
@@ -26,8 +29,30 @@ import { ApplyEventModal } from './components/ApplyEventModal';
 import { AddEventModal } from './components/AddEventModal';
 import { PgToast } from './PgToast';
 import { PHOTOGRAPHERS } from '../../data/mockData';
+import { fetchEventsFromApi } from '../../data/eventsApi';
+import type { EventData } from '../../data/mockEvents';
 import { assetUrl } from '../../lib/utils';
 import '../../styles/shared-filters.css';
+
+const mapApiEventToPgEvent = (event: EventData): PgEvent => ({
+  id: event.id,
+  title: event.name,
+  date: event.startDate || event.period,
+  dateRange: event.period,
+  location: `${event.city}, ${event.country}`,
+  coverImage: event.coverImage,
+  status: 'upcoming',
+  isRegistered: false,
+  photosCount: event.photoCount || 0,
+  publishedCount: 0,
+  soldCount: 0,
+  logo: event.logo || event.coverImage || assetUrl('images/events/default.png'),
+  venueName: event.name,
+  disciplines: [event.discipline],
+  city: event.city,
+  assignedPhotographers: event.photographer ? [event.photographer] : [],
+  applicationsWelcomed: event.status !== 'disabled',
+});
 
 export const EventsList: React.FC = () => {
   const { isAdmin } = useWorkspace();
@@ -50,6 +75,11 @@ export const EventsList: React.FC = () => {
   const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
   const [applyingEvent, setApplyingEvent] = useState<any>(null);
   const [showApplyToast, setShowApplyToast] = useState(false);
+  const [apiUpcomingEvents, setApiUpcomingEvents] = useState<PgEvent[]>([]);
+  const [isLoadingUpcomingEvents, setIsLoadingUpcomingEvents] = useState(false);
+  const [upcomingEventsError, setUpcomingEventsError] = useState<string | null>(
+    null,
+  );
 
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
@@ -70,8 +100,43 @@ export const EventsList: React.FC = () => {
     setConfirmModal(null);
   };
 
+  useEffect(() => {
+    if (isAdmin || view !== 'upcoming') return;
+
+    let isMounted = true;
+
+    async function loadUpcomingEvents() {
+      try {
+        setIsLoadingUpcomingEvents(true);
+        setUpcomingEventsError(null);
+        const apiEvents = await fetchEventsFromApi();
+        if (isMounted) {
+          setApiUpcomingEvents(apiEvents.map(mapApiEventToPgEvent));
+        }
+      } catch (error) {
+        if (isMounted) {
+          setUpcomingEventsError(
+            error instanceof Error ? error.message : 'Failed to load events',
+          );
+          setApiUpcomingEvents([]);
+        }
+      } finally {
+        if (isMounted) setIsLoadingUpcomingEvents(false);
+      }
+    }
+
+    void loadUpcomingEvents();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAdmin, view]);
+
   // Filter Logic
-  const filteredEvents = events.filter(e => {
+  const eventSource =
+    !isAdmin && view === 'upcoming' ? apiUpcomingEvents : events;
+
+  const filteredEvents = eventSource.filter(e => {
     const matchesCounty =
       !county || e.city.toLowerCase().includes(county.toLowerCase());
     const matchesSearch =
@@ -112,7 +177,7 @@ export const EventsList: React.FC = () => {
     navigate(`${basePath}/events/${eventId}`, { state: { fromTab: view } });
   };
 
-  const activeList = (() => {
+  const activeList = useMemo(() => {
     if (isAdmin) {
       if (view === 'live') return liveEvents;
       if (view === 'past') return pastEvents;
@@ -121,7 +186,16 @@ export const EventsList: React.FC = () => {
       return upcomingEvents;
     }
     return view === 'upcoming' ? upcomingEvents : myEvents;
-  })();
+  }, [
+    archivedEvents,
+    isAdmin,
+    liveEvents,
+    myEvents,
+    pastEvents,
+    upcomingEvents,
+    view,
+  ]);
+  const isPhotographerUpcomingView = !isAdmin && view === 'upcoming';
 
   return (
     <div className="pg-events-container" onClick={() => setActiveMenuId(null)}>
@@ -282,7 +356,23 @@ export const EventsList: React.FC = () => {
       {/* List Content */}
       {isAdmin || view === 'upcoming' ? (
         <div className="pg-events-list upcoming-list">
-          {activeList.length === 0 ? (
+          {isPhotographerUpcomingView && isLoadingUpcomingEvents ? (
+            <div className="pg-empty-state">
+              <div className="pg-empty-icon">
+                <CalendarPlus size={24} />
+              </div>
+              <h3>Loading events...</h3>
+              <p>Fetching the latest event list.</p>
+            </div>
+          ) : isPhotographerUpcomingView && upcomingEventsError ? (
+            <div className="pg-empty-state">
+              <div className="pg-empty-icon">
+                <AlertCircle size={24} />
+              </div>
+              <h3>Could not load events</h3>
+              <p>{upcomingEventsError}</p>
+            </div>
+          ) : activeList.length === 0 ? (
             <div className="pg-empty-state">
               <div className="pg-empty-icon">
                 <CalendarX2 size={24} />
@@ -293,25 +383,29 @@ export const EventsList: React.FC = () => {
               </p>
             </div>
           ) : (
-            activeList.map((event, index) => {
+            activeList.map(event => {
               const isApplied =
                 !isAdmin &&
                 view === 'upcoming' &&
-                index >= activeList.length - 2;
+                event.isRegistered === true;
               return (
                 <div
                   key={event.id}
                   className={`pg-event-row-grid upcoming-event relative ${
                     isApplied ? 'applied' : ''
-                  } ${isAdmin ? 'clickable-row' : ''}`}
+                  } ${isAdmin ? 'clickable-row' : ''} ${
+                    isPhotographerUpcomingView ? 'no-logo' : ''
+                  }`}
                   style={{ zIndex: activeMenuId === event.id ? 1001 : 1 }}
                   onClick={() => isAdmin && handleNavigateToEvent(event.id)}
                 >
-                  <div className="pg-grid-col-thumb">
-                    <div className="pg-event-thumb-small">
-                      <img src={event.logo} alt={event.title} />
+                  {!isPhotographerUpcomingView && (
+                    <div className="pg-grid-col-thumb">
+                      <div className="pg-event-thumb-small">
+                        <img src={event.logo} alt={event.title} />
+                      </div>
                     </div>
-                  </div>
+                  )}
                   <div className="pg-grid-col-content">
                     <div className="pg-event-date-small">{event.dateRange}</div>
                     <h3 className="pg-event-title-bold">{event.title}</h3>
@@ -538,12 +632,7 @@ export const EventsList: React.FC = () => {
                       ) : (
                         <>
                           {(() => {
-                            // Demo logic for Photographer Flow (view === 'upcoming')
-                            const isLast = index === activeList.length - 1;
-                            const isThird = index === 2;
-                            const isFirst = index === 0;
-
-                            if (isLast) {
+                            if (event.applicationsWelcomed === false) {
                               return (
                                 <span className="pg-applications-watermark off">
                                   Closed
@@ -551,39 +640,15 @@ export const EventsList: React.FC = () => {
                               );
                             }
 
-                            if (isFirst) {
-                              return (
-                                <span
-                                  className="pg-applications-watermark off disabled-tag"
-                                  title="Registration opens soon"
-                                >
-                                  Will open shortly
-                                </span>
-                              );
-                            }
-
                             return (
-                              <>
-                                {isThird && (
-                                  <div className="pg-avatar-stack solo">
-                                    <img
-                                      src={assetUrl(
-                                        `images/${PHOTOGRAPHERS[2].firstName} ${PHOTOGRAPHERS[2].lastName}.jpg`
-                                      )}
-                                      alt={`${PHOTOGRAPHERS[2].firstName} ${PHOTOGRAPHERS[2].lastName}`}
-                                      title={`${PHOTOGRAPHERS[2].firstName} ${PHOTOGRAPHERS[2].lastName}`}
-                                    />
-                                  </div>
-                                )}
-                                <FilterChip
-                                  label="Apply"
-                                  onClick={(e?: any) => {
-                                    e?.stopPropagation?.();
-                                    setApplyingEvent(event);
-                                    setIsApplyModalOpen(true);
-                                  }}
-                                />
-                              </>
+                              <FilterChip
+                                label="Apply"
+                                onClick={(e?: any) => {
+                                  e?.stopPropagation?.();
+                                  setApplyingEvent(event);
+                                  setIsApplyModalOpen(true);
+                                }}
+                              />
                             );
                           })()}
                         </>
