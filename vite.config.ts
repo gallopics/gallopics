@@ -8,7 +8,7 @@ import path from 'path';
 export default defineConfig(() => {
   const base = process.env.VITE_BASE_PATH ?? '/';
   const apiProxyTarget =
-    process.env.VITE_API_PROXY_TARGET ?? 'http://localhost:8000';
+    process.env.VITE_API_PROXY_TARGET ?? 'https://gallopics-api.onrender.com';
 
   return {
     base,
