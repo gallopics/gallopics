@@ -8,6 +8,7 @@ interface PgEventCardProps {
   event: PgEvent;
   onCoverChange: (eventId: string) => void;
   onEdit?: (event: PgEvent) => void;
+  onCancelBooking?: (event: PgEvent, e: React.MouseEvent) => void;
   fromTab?: string;
 }
 
@@ -15,6 +16,7 @@ export const PgEventCard: React.FC<PgEventCardProps> = ({
   event,
   onCoverChange,
   onEdit,
+  onCancelBooking,
   fromTab,
 }) => {
   const { basePath } = useWorkspace();
@@ -154,7 +156,15 @@ export const PgEventCard: React.FC<PgEventCardProps> = ({
           <div className="h-px bg-[var(--ui-bg-subtle)] w-full mb-4" />
 
           {/* 3. Footer row (Stats only) */}
-          <div className="flex justify-end items-center">
+          <div className="flex justify-between items-center gap-3">
+            {onCancelBooking && (
+              <button
+                className="px-3.5 py-1.5 rounded-lg border border-[var(--color-danger-border)] bg-[var(--color-danger-tint)] text-[var(--color-danger)] text-[0.75rem] font-semibold cursor-pointer transition-colors hover:bg-white"
+                onClick={e => onCancelBooking(event, e)}
+              >
+                Cancel booking
+              </button>
+            )}
             <div className="flex items-center gap-2">
               <div className="inline-flex flex-col items-start justify-center gap-0 px-3.5 py-1.5 rounded-lg bg-[var(--ui-bg-subtle)] text-[var(--color-text-secondary)] text-[0.75rem] font-semibold whitespace-nowrap text-left">
                 <span className="text-[0.625rem] font-semibold leading-[1.2] opacity-80">

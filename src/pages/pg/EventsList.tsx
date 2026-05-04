@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth as useClerkAuth } from '@clerk/clerk-react';
 import {
   X,
   Search,
@@ -14,6 +15,7 @@ import {
   CalendarPlus,
 } from 'lucide-react';
 import { useWorkspace } from '../../context/WorkspaceContext';
+import { useAuth } from '../../context/AuthContext';
 
 import {
   usePhotographer,
@@ -25,11 +27,10 @@ import { FilterChip } from '../../components/FilterChip';
 import { TitleHeader } from '../../components/TitleHeader';
 import { PgEventCard } from './components/PgEventCard';
 import { CoverImagePickerModal } from './components/CoverImagePickerModal';
-import { ApplyEventModal } from './components/ApplyEventModal';
 import { AddEventModal } from './components/AddEventModal';
 import { PgToast } from './PgToast';
-import { PHOTOGRAPHERS } from '../../data/mockData';
-import { fetchEventsFromApi } from '../../data/eventsApi';
+import { fetchEventsFromApi, mapApiEventToEventData } from '../../data/eventsApi';
+import { api, ApiError, type ApiEvent } from '../../data/apiClient';
 import type { EventData } from '../../data/mockEvents';
 import { assetUrl } from '../../lib/utils';
 import '../../styles/shared-filters.css';
@@ -54,9 +55,20 @@ const mapApiEventToPgEvent = (event: EventData): PgEvent => ({
   applicationsWelcomed: event.status !== 'disabled',
 });
 
+const mapBackendEventToPgEvent = (
+  event: ApiEvent,
+  isRegistered: boolean,
+): PgEvent => ({
+  ...mapApiEventToPgEvent(mapApiEventToEventData(event)),
+  isRegistered,
+  status: isRegistered ? 'open' : 'upcoming',
+});
+
 export const EventsList: React.FC = () => {
   const { isAdmin } = useWorkspace();
+  const { user } = useAuth();
   const { events } = usePhotographer();
+  const { getToken } = useClerkAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const initialTab = (location.state as any)?.tab;
@@ -72,10 +84,11 @@ export const EventsList: React.FC = () => {
   );
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [eventToEdit, setEventToEdit] = useState<any>(null);
-  const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
-  const [applyingEvent, setApplyingEvent] = useState<any>(null);
   const [showApplyToast, setShowApplyToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('Booking updated.');
   const [apiUpcomingEvents, setApiUpcomingEvents] = useState<PgEvent[]>([]);
+  const [bookedEvents, setBookedEvents] = useState<PgEvent[]>([]);
+  const [bookingEventId, setBookingEventId] = useState<string | null>(null);
   const [isLoadingUpcomingEvents, setIsLoadingUpcomingEvents] = useState(false);
   const [upcomingEventsError, setUpcomingEventsError] = useState<string | null>(
     null,
@@ -83,35 +96,76 @@ export const EventsList: React.FC = () => {
 
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean;
-    type: 'archive' | 'delete' | 'cancel_application';
+    type: 'archive' | 'delete';
     event: any;
   } | null>(null);
-  const [withdrawReason, setWithdrawReason] = useState('');
 
-  const handleCancelAppClick = (event: any, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setWithdrawReason('');
-    setConfirmModal({ isOpen: true, type: 'cancel_application', event });
-  };
+  const syncLocalPhotographerProfile = useCallback(async () => {
+    if (!user || user.role === 'admin') {
+      return;
+    }
 
-  const handleConfirmCancelApp = () => {
-    // Mock cancellation logic
-    console.log(`Cancelled application for ${confirmModal?.event?.title}`);
-    setConfirmModal(null);
-  };
+    await api.upsertMyPhotographer(getToken, {
+      slug: user.id,
+      display_name: user.displayName || 'Photographer',
+      city: user.city || null,
+      country: user.country || null,
+      avatar_url: user.avatarUrl ?? null,
+      phone: user.phone ?? null,
+      is_available_to_hire: true,
+    });
+  }, [
+    getToken,
+    user?.avatarUrl,
+    user?.city,
+    user?.country,
+    user?.displayName,
+    user?.id,
+    user?.phone,
+    user?.role,
+  ]);
 
   useEffect(() => {
-    if (isAdmin || view !== 'upcoming') return;
+    if (isAdmin) return;
 
     let isMounted = true;
 
-    async function loadUpcomingEvents() {
+    async function loadEvents() {
       try {
         setIsLoadingUpcomingEvents(true);
         setUpcomingEventsError(null);
         const apiEvents = await fetchEventsFromApi();
+        let bookings: ApiEvent[] = [];
+
+        try {
+          bookings = await api.listMyEventBookings(getToken);
+        } catch (bookingsError) {
+          if (
+            bookingsError instanceof ApiError &&
+            bookingsError.status === 403
+          ) {
+            await syncLocalPhotographerProfile();
+            bookings = await api.listMyEventBookings(getToken);
+          } else {
+            console.warn('Failed to load event bookings', bookingsError);
+          }
+        }
+
         if (isMounted) {
-          setApiUpcomingEvents(apiEvents.map(mapApiEventToPgEvent));
+          const booked = bookings.map(event =>
+            mapBackendEventToPgEvent(event, true),
+          );
+          const bookedIds = new Set(booked.map(event => event.id));
+          setBookedEvents(booked);
+          setApiUpcomingEvents(
+            apiEvents
+              .map(mapApiEventToPgEvent)
+              .map(event =>
+                bookedIds.has(event.id)
+                  ? { ...event, isRegistered: true, status: 'open' }
+                  : event,
+              ),
+          );
         }
       } catch (error) {
         if (isMounted) {
@@ -119,22 +173,35 @@ export const EventsList: React.FC = () => {
             error instanceof Error ? error.message : 'Failed to load events',
           );
           setApiUpcomingEvents([]);
+          setBookedEvents([]);
         }
       } finally {
         if (isMounted) setIsLoadingUpcomingEvents(false);
       }
     }
 
-    void loadUpcomingEvents();
+    void loadEvents();
 
     return () => {
       isMounted = false;
     };
-  }, [isAdmin, view]);
+  }, [getToken, isAdmin, syncLocalPhotographerProfile]);
 
   // Filter Logic
+  const bookedEventIds = useMemo(
+    () => new Set(bookedEvents.map(event => event.id)),
+    [bookedEvents],
+  );
+  const workspaceEvents = useMemo(() => {
+    if (isAdmin) return events;
+    const localEventsWithoutBookedApiDupes = events.filter(
+      event => !bookedEventIds.has(event.id),
+    );
+    return [...bookedEvents, ...localEventsWithoutBookedApiDupes];
+  }, [bookedEventIds, bookedEvents, events, isAdmin]);
+
   const eventSource =
-    !isAdmin && view === 'upcoming' ? apiUpcomingEvents : events;
+    !isAdmin && view === 'upcoming' ? apiUpcomingEvents : workspaceEvents;
 
   const filteredEvents = eventSource.filter(e => {
     const matchesCounty =
@@ -163,9 +230,68 @@ export const EventsList: React.FC = () => {
       ? filteredEvents.filter(e => e.status === 'archived')
       : filteredEvents.slice(-2); // Fallback if no status match
 
-  const handleApplySubmit = () => {
-    setShowApplyToast(true);
-    setTimeout(() => setShowApplyToast(false), 3000);
+  const handleBookEvent = async (event: PgEvent, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    try {
+      setBookingEventId(event.id);
+      let booked: ApiEvent;
+      try {
+        booked = await api.bookEvent(getToken, event.id);
+      } catch (bookingError) {
+        if (!(bookingError instanceof ApiError) || bookingError.status !== 403) {
+          throw bookingError;
+        }
+
+        await syncLocalPhotographerProfile();
+        booked = await api.bookEvent(getToken, event.id);
+      }
+      const bookedPgEvent = mapBackendEventToPgEvent(booked, true);
+      setBookedEvents(prev => [
+        bookedPgEvent,
+        ...prev.filter(item => item.id !== event.id),
+      ]);
+      setApiUpcomingEvents(prev =>
+        prev.map(item =>
+          item.id === event.id
+            ? { ...item, isRegistered: true, status: 'open' }
+            : item,
+        ),
+      );
+      setToastMessage('Event booked.');
+      setShowApplyToast(true);
+      setTimeout(() => setShowApplyToast(false), 3000);
+    } catch (error) {
+      setUpcomingEventsError(
+        error instanceof Error ? error.message : 'Failed to book event',
+      );
+    } finally {
+      setBookingEventId(null);
+    }
+  };
+
+  const handleCancelBooking = async (event: PgEvent, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    try {
+      setBookingEventId(event.id);
+      await api.cancelEventBooking(getToken, event.id);
+      setBookedEvents(prev => prev.filter(item => item.id !== event.id));
+      setApiUpcomingEvents(prev =>
+        prev.map(item =>
+          item.id === event.id
+            ? { ...item, isRegistered: false, status: 'upcoming' }
+            : item,
+        ),
+      );
+      setToastMessage('Booking cancelled.');
+      setShowApplyToast(true);
+      setTimeout(() => setShowApplyToast(false), 3000);
+    } catch (error) {
+      setUpcomingEventsError(
+        error instanceof Error ? error.message : 'Failed to cancel booking',
+      );
+    } finally {
+      setBookingEventId(null);
+    }
   };
 
   const handleCoverChange = (eventId: string) => {
@@ -175,6 +301,19 @@ export const EventsList: React.FC = () => {
   const handleNavigateToEvent = (eventId: string) => {
     const basePath = isAdmin ? '/admin' : '/pg';
     navigate(`${basePath}/events/${eventId}`, { state: { fromTab: view } });
+  };
+
+  const handleOpenUpcomingEvent = (eventId: string) => {
+    if (isPhotographerUpcomingView) {
+      navigate(`/event/${eventId}`, {
+        state: { from: '/pg/events', fromTab: view },
+      });
+      return;
+    }
+
+    if (isAdmin) {
+      handleNavigateToEvent(eventId);
+    }
   };
 
   const activeList = useMemo(() => {
@@ -249,7 +388,6 @@ export const EventsList: React.FC = () => {
                       onClick={() => setView('upcoming')}
                     >
                       Upcoming
-                      <span className="pg-tab-badge-dot" />
                     </button>
                     <button
                       className={`pg-tab-btn ${
@@ -275,7 +413,6 @@ export const EventsList: React.FC = () => {
                       onClick={() => setView('upcoming')}
                     >
                       Upcoming
-                      <span className="pg-tab-badge-dot" />
                     </button>
                   </>
                 )}
@@ -393,11 +530,13 @@ export const EventsList: React.FC = () => {
                   key={event.id}
                   className={`pg-event-row-grid upcoming-event relative ${
                     isApplied ? 'applied' : ''
-                  } ${isAdmin ? 'clickable-row' : ''} ${
+                  } ${
+                    isAdmin || isPhotographerUpcomingView ? 'clickable-row' : ''
+                  } ${
                     isPhotographerUpcomingView ? 'no-logo' : ''
                   }`}
                   style={{ zIndex: activeMenuId === event.id ? 1001 : 1 }}
-                  onClick={() => isAdmin && handleNavigateToEvent(event.id)}
+                  onClick={() => handleOpenUpcomingEvent(event.id)}
                 >
                   {!isPhotographerUpcomingView && (
                     <div className="pg-grid-col-thumb">
@@ -607,28 +746,15 @@ export const EventsList: React.FC = () => {
                           </div>
                         </div>
                       ) : isApplied ? (
-                        <>
-                          <div className="pg-avatar-stack">
-                            {PHOTOGRAPHERS.slice(0, 2).map(p => (
-                              <img
-                                key={p.id}
-                                src={assetUrl(
-                                  `images/${p.firstName} ${p.lastName}.jpg`
-                                )}
-                                alt={`${p.firstName} ${p.lastName}`}
-                                title={`${p.firstName} ${p.lastName}`}
-                              />
-                            ))}
-                          </div>
-                          <div className="w-px h-5 bg-[var(--color-border)] mx-1 shrink-0" />
-                          <FilterChip
-                            label="Withdraw"
-                            onClick={(e?: any) =>
-                              handleCancelAppClick(event, e)
-                            }
-                            className="hover:!bg-[var(--color-danger-tint)] hover:!border-[var(--color-danger-border)] hover:!text-[var(--color-danger)]"
-                          />
-                        </>
+                        <FilterChip
+                          label={
+                            bookingEventId === event.id
+                              ? 'Cancelling...'
+                              : 'Cancel booking'
+                          }
+                          onClick={(e?: any) => handleCancelBooking(event, e)}
+                          className="hover:!bg-[var(--color-danger-tint)] hover:!border-[var(--color-danger-border)] hover:!text-[var(--color-danger)]"
+                        />
                       ) : (
                         <>
                           {(() => {
@@ -642,12 +768,12 @@ export const EventsList: React.FC = () => {
 
                             return (
                               <FilterChip
-                                label="Apply"
-                                onClick={(e?: any) => {
-                                  e?.stopPropagation?.();
-                                  setApplyingEvent(event);
-                                  setIsApplyModalOpen(true);
-                                }}
+                                label={
+                                  bookingEventId === event.id
+                                    ? 'Booking...'
+                                    : 'Book'
+                                }
+                                onClick={(e?: any) => handleBookEvent(event, e)}
                               />
                             );
                           })()}
@@ -676,6 +802,9 @@ export const EventsList: React.FC = () => {
                 key={event.id}
                 event={event}
                 onCoverChange={handleCoverChange}
+                onCancelBooking={
+                  bookedEventIds.has(event.id) ? handleCancelBooking : undefined
+                }
                 fromTab={view}
                 onEdit={ev => {
                   setEventToEdit(ev);
@@ -705,17 +834,10 @@ export const EventsList: React.FC = () => {
         eventToEdit={eventToEdit}
       />
 
-      <ApplyEventModal
-        isOpen={isApplyModalOpen}
-        onClose={() => setIsApplyModalOpen(false)}
-        event={applyingEvent}
-        onSubmit={handleApplySubmit}
-      />
-
       {showApplyToast && (
         <PgToast
           type="success"
-          message="Application sent."
+          message={toastMessage}
           className="fixed bottom-6 right-6"
         />
       )}
@@ -732,8 +854,6 @@ export const EventsList: React.FC = () => {
                 <h3 className="mt-0 text-[1.125rem] font-bold mb-2 text-primary">
                   {confirmModal.type === 'archive' && 'Archive event?'}
                   {confirmModal.type === 'delete' && 'Delete event?'}
-                  {confirmModal.type === 'cancel_application' &&
-                    'Withdraw application?'}
                 </h3>
                 <p className="mb-4 text-[0.875rem] leading-[1.5] text-secondary">
                   {confirmModal.type === 'archive' && (
@@ -750,29 +870,7 @@ export const EventsList: React.FC = () => {
                       cannot be undone.
                     </>
                   )}
-                  {confirmModal.type === 'cancel_application' && (
-                    <>
-                      You are withdrawing your application for{' '}
-                      <strong>{confirmModal.event?.title}</strong>.
-                    </>
-                  )}
                 </p>
-                {confirmModal.type === 'cancel_application' && (
-                  <div className="mb-6">
-                    <label className="block text-[0.75rem] font-600 text-secondary uppercase tracking-wide mb-1.5">
-                      Reason{' '}
-                      <span style={{ color: 'var(--color-danger)' }}>*</span>
-                    </label>
-                    <textarea
-                      className="auth-input w-full"
-                      rows={3}
-                      placeholder="Please provide a reason for withdrawing..."
-                      value={withdrawReason}
-                      onChange={e => setWithdrawReason(e.target.value)}
-                      autoFocus
-                    />
-                  </div>
-                )}
               </div>
             </div>
             <div className="modal-footer-actions">
@@ -780,32 +878,22 @@ export const EventsList: React.FC = () => {
                 className="modal-btn-cancel"
                 onClick={() => {
                   setConfirmModal(null);
-                  setWithdrawReason('');
                 }}
               >
                 Cancel
               </button>
               <button
                 className="modal-btn-danger"
-                disabled={
-                  confirmModal.type === 'cancel_application' &&
-                  !withdrawReason.trim()
-                }
                 onClick={() => {
-                  if (confirmModal.type === 'cancel_application') {
-                    handleConfirmCancelApp();
-                  } else {
-                    console.log(
-                      `${confirmModal.type}ing event:`,
-                      confirmModal.event?.id
-                    );
-                    setConfirmModal(null);
-                  }
+                  console.log(
+                    `${confirmModal.type}ing event:`,
+                    confirmModal.event?.id
+                  );
+                  setConfirmModal(null);
                 }}
               >
                 {confirmModal.type === 'archive' && 'Archive'}
                 {confirmModal.type === 'delete' && 'Delete'}
-                {confirmModal.type === 'cancel_application' && 'Withdraw'}
               </button>
             </div>
           </div>

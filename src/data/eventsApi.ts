@@ -1,5 +1,6 @@
 import type { EventData } from './mockEvents';
 import { getApiBaseUrl } from './apiClient';
+import type { ClassSection, DailySchedule, EventDetail, Meeting } from '../types';
 
 export interface ApiEvent {
   id: string;
@@ -29,6 +30,29 @@ interface PaginatedApiResponse<T> {
   total: number;
   page: number;
   page_size: number;
+}
+
+interface ApiEventClass {
+  id: string;
+  name: string;
+  class_no?: string | null;
+  date: string;
+  start_time?: string | null;
+  arena: string;
+  discipline?: string | null;
+  position: number;
+}
+
+interface ApiEventScheduleDay {
+  date: string;
+  classes: ApiEventClass[];
+}
+
+export interface ApiEventSchedule {
+  event_id: string;
+  equipe_meeting_id: string;
+  classes_count: number;
+  days: ApiEventScheduleDay[];
 }
 
 function normalizeCountry(country: string) {
@@ -129,4 +153,108 @@ export async function fetchEventFromApi(eventId: string): Promise<ApiEvent> {
   }
 
   return (await response.json()) as ApiEvent;
+}
+
+export function mapApiScheduleToDailySchedule(
+  schedule: ApiEventSchedule,
+): DailySchedule[] {
+  return schedule.days.map(day => {
+    const arenas = new Map<string, ClassSection[]>();
+
+    day.classes.forEach(eventClass => {
+      if (!arenas.has(eventClass.arena)) arenas.set(eventClass.arena, []);
+      arenas.get(eventClass.arena)!.push({
+        classSectionId: eventClass.id,
+        name: eventClass.name,
+        startTime: eventClass.start_time || 'TBD',
+        position: eventClass.position,
+        discipline: eventClass.discipline || 'Equestrian',
+        entriesCount: 0,
+      });
+    });
+
+    return {
+      date: day.date,
+      arenas: Array.from(arenas.entries()).map(
+        ([arenaName, competitions], index) => ({
+          id: `${day.date}-${arenaName}`,
+          name: arenaName,
+          position: index,
+          competitions,
+        }),
+      ),
+    };
+  });
+}
+
+export function buildApiEventDetail(
+  event: ApiEvent,
+  schedule?: DailySchedule[],
+): EventDetail {
+  const endDate = event.end_date || event.start_date;
+  const discipline = event.discipline || 'Equestrian';
+  const countryCode = event.country === 'Sweden' ? 'SE' : event.country;
+  const meeting: Meeting = {
+    id: event.id,
+    name: event.name,
+    country: {
+      name: event.country,
+      code: countryCode,
+    },
+    city: event.city || event.venue_name || event.organizer_name || 'Sweden',
+    venueName: event.venue_name || event.organizer_name || 'Venue pending',
+    clubName: event.organizer_name || 'Gallopics',
+    period: { startDate: event.start_date, endDate },
+    disciplines: [discipline],
+    timezone: 'Europe/Stockholm',
+    photoCount: 0,
+    coverImage: '',
+    logo: '',
+  };
+
+  return {
+    meetingId: event.id,
+    meeting,
+    schedule:
+      schedule && schedule.length > 0
+        ? schedule
+        : [
+            {
+              date: event.start_date,
+              arenas: [
+                {
+                  id: `${event.id}-arena`,
+                  name: meeting.venueName,
+                  position: 1,
+                  competitions: [
+                    {
+                      classSectionId: `${event.id}-class`,
+                      name: discipline,
+                      startTime: '09:00',
+                      position: 1,
+                      discipline,
+                      entriesCount: 0,
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+  };
+}
+
+export async function fetchEventScheduleFromApi(
+  eventId: string,
+): Promise<ApiEventSchedule> {
+  const url = new URL(
+    `/api/v1/events/${encodeURIComponent(eventId)}/schedule`,
+    getApiBaseUrl(),
+  );
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`Failed to load event schedule: ${response.status}`);
+  }
+
+  return (await response.json()) as ApiEventSchedule;
 }

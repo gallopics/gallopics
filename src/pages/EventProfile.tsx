@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { RotateCcw, Search } from 'lucide-react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { CalendarDays, Clock, MapPin, RotateCcw } from 'lucide-react';
 import { Header } from '../components/Header';
 import { TitleHeader } from '../components/TitleHeader';
 import { Breadcrumbs } from '../components/Breadcrumbs';
@@ -10,7 +10,12 @@ import { PhotoCard } from '../components/PhotoCard';
 import { ModernDropdown } from '../components/ModernDropdown';
 import { InfoChip } from '../components/InfoChip';
 import { eventDetails } from '../data/mockEventDetails';
-import { fetchEventFromApi, type ApiEvent } from '../data/eventsApi';
+import {
+  buildApiEventDetail,
+  fetchEventFromApi,
+  fetchEventScheduleFromApi,
+  mapApiScheduleToDailySchedule,
+} from '../data/eventsApi';
 import {
   photos as basePhotos,
   RIDERS,
@@ -40,6 +45,7 @@ const generateEventPhotos = (
   count: number,
   discipline?: string,
   meetingOverride?: Meeting,
+  eventClasses: ClassSection[] = [],
 ): Photo[] => {
   const srcPool = Array.from(new Set(basePhotos.map(p => p.src)));
   const comp =
@@ -50,6 +56,7 @@ const generateEventPhotos = (
   return Array.from({ length: count }).map((_, i) => {
     const src = pick(srcPool);
     const rider = pick(RIDERS);
+    const competition = eventClasses.length > 0 ? pick(eventClasses) : null;
     const horseMapping = RIDER_PRIMARY_HORSE.find(m => m.riderId === rider.id);
     const horse =
       HORSES.find(h => h.id === horseMapping?.primaryHorseId) || HORSES[0];
@@ -83,68 +90,36 @@ const generateEventPhotos = (
       className: 'photo-grid-item',
       time: `${9 + (i % 8)}:00`,
       city: comp?.city || 'Sweden',
-      arena: 'Main Arena',
+      arena: competition?.name || 'Main Arena',
       countryCode: comp?.country.code.toLowerCase() || 'se',
-      discipline: discipline || 'Show Jumping',
+      discipline: competition?.discipline || discipline || 'Show Jumping',
       photographer: comp?.photographer?.name || 'Gallopics',
       photographerId: comp?.photographer?.id,
     };
   });
 };
 
-function buildApiEventDetail(event: ApiEvent): EventDetail {
-  const endDate = event.end_date || event.start_date;
-  const discipline = event.discipline || 'Equestrian';
-  const countryCode = event.country === 'Sweden' ? 'SE' : event.country;
-  const meeting: Meeting = {
-    id: event.id,
-    name: event.name,
-    country: {
-      name: event.country,
-      code: countryCode,
-    },
-    city: event.city || event.venue_name || event.organizer_name || 'Sweden',
-    venueName: event.venue_name || event.organizer_name || 'Venue pending',
-    clubName: event.organizer_name || 'Gallopics',
-    period: { startDate: event.start_date, endDate },
-    disciplines: [discipline],
-    timezone: 'Europe/Stockholm',
-    photoCount: 0,
-    coverImage: '',
-    logo: '',
-  };
-
-  return {
-    meetingId: event.id,
-    meeting,
-    schedule: [
-      {
-        date: event.start_date,
-        arenas: [
-          {
-            id: `${event.id}-arena`,
-            name: meeting.venueName,
-            position: 1,
-            competitions: [
-              {
-                classSectionId: `${event.id}-class`,
-                name: discipline,
-                startTime: '09:00',
-                position: 1,
-                discipline,
-                entriesCount: 0,
-              },
-            ],
-          },
-        ],
-      },
-    ],
-  };
-}
-
 export function EventProfile() {
   const { eventId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const fromPath =
+    typeof location.state === 'object' &&
+    location.state !== null &&
+    'from' in location.state &&
+    typeof location.state.from === 'string'
+      ? location.state.from
+      : '/';
+  const fromTab =
+    typeof location.state === 'object' &&
+    location.state !== null &&
+    'fromTab' in location.state &&
+    typeof location.state.fromTab === 'string'
+      ? location.state.fromTab
+      : undefined;
+  const navigateBackToEvents = () => {
+    navigate(fromPath, fromTab ? { state: { tab: fromTab } } : undefined);
+  };
 
   const localEventDetail = eventDetails.find(e => e.meetingId === eventId);
   const [apiEventDetail, setApiEventDetail] = useState<EventDetail | null>(
@@ -178,7 +153,18 @@ export function EventProfile() {
         setIsLoadingEvent(true);
         setEventLoadError(null);
         const apiEvent = await fetchEventFromApi(apiEventId);
-        if (isMounted) setApiEventDetail(buildApiEventDetail(apiEvent));
+        let schedule;
+
+        try {
+          const apiSchedule = await fetchEventScheduleFromApi(apiEvent.id);
+          schedule = mapApiScheduleToDailySchedule(apiSchedule);
+        } catch (scheduleError) {
+          console.warn('Failed to load event schedule', scheduleError);
+        }
+
+        if (isMounted) {
+          setApiEventDetail(buildApiEventDetail(apiEvent, schedule));
+        }
       } catch (error) {
         if (isMounted) {
           setEventLoadError(
@@ -201,11 +187,15 @@ export function EventProfile() {
     if (eventDetail) {
       setLoading(true);
       setTimeout(() => {
+        const eventClasses = eventDetail.schedule.flatMap(day =>
+          day.arenas.flatMap(arena => arena.competitions),
+        );
         const generated = generateEventPhotos(
           eventDetail.meetingId,
           eventDetail.meeting.photoCount,
           eventDetail.meeting.disciplines[0],
           eventDetail.meeting,
+          eventClasses,
         );
         setPhotos(generated);
         setLoading(false);
@@ -225,6 +215,20 @@ export function EventProfile() {
       ),
     );
     return classes;
+  }, [eventDetail]);
+
+  const classesByDay = useMemo(() => {
+    if (!eventDetail) return [];
+
+    return eventDetail.schedule.map(day => ({
+      date: day.date,
+      classes: day.arenas.flatMap(arena =>
+        arena.competitions.map(competition => ({
+          ...competition,
+          arenaName: arena.name,
+        })),
+      ),
+    }));
   }, [eventDetail]);
 
   const classOptions = useMemo(() => {
@@ -276,7 +280,7 @@ export function EventProfile() {
   const activePhotos = useMemo(() => {
     if (!photos.length) return [];
     return photos.filter(p => {
-      const matchClass = eventClass === 'All' || p.arena.includes(eventClass); // Arena is used as mock for Class location
+      const matchClass = eventClass === 'All' || p.arena === eventClass;
 
       // Search Query Logic: Matches either Rider OR Horse
       let matchSearch = true;
@@ -316,7 +320,7 @@ export function EventProfile() {
 
       <Breadcrumbs
         items={[
-          { label: 'Events', onClick: () => navigate('/') },
+          { label: 'Events', onClick: navigateBackToEvents },
           { label: meeting.name, active: true },
         ]}
       />
@@ -393,9 +397,7 @@ export function EventProfile() {
       <section className="grid-section">
         <div className="container">
           <div className="filters-wrapper">
-            {/* New Shared Filter Structure */}
             <div className="filter-container">
-              {/* Row 1/Col 1: Swipeable Filters + Reset */}
               <div className="filter-group">
                 <ModernDropdown
                   value={eventClass}
@@ -418,7 +420,6 @@ export function EventProfile() {
                 </button>
               </div>
 
-              {/* Row 2/Col 2: Search (Full Width on Mobile) */}
               <div className="search-group">
                 <ScopedSearchBar
                   placeholder="Search by riders or horses..."
@@ -430,10 +431,59 @@ export function EventProfile() {
                 />
               </div>
 
-              {/* Optional: Results Count */}
-              <div className="filter-results-count">
-                Showing {activePhotos.length} photos
+            </div>
+          </div>
+
+          <div className="event-classes-section">
+            <div className="event-classes-header">
+              <div>
+                <h2>Classes</h2>
+                <p>{allEventClasses.length} classes scheduled for this event</p>
               </div>
+            </div>
+
+            <div className="event-classes-days">
+              {classesByDay.map(day => (
+                <div className="event-classes-day" key={day.date}>
+                  <div className="event-classes-date">
+                    <CalendarDays size={16} />
+                    <span>
+                      {new Date(`${day.date}T00:00:00`).toLocaleDateString(
+                        'en-GB',
+                        {
+                          weekday: 'short',
+                          day: 'numeric',
+                          month: 'short',
+                        },
+                      )}
+                    </span>
+                  </div>
+
+                  <div className="event-classes-list">
+                    {day.classes.map(competition => (
+                      <button
+                        key={competition.classSectionId}
+                        className={`event-class-row ${
+                          eventClass === competition.name ? 'active' : ''
+                        }`}
+                        onClick={() => setEventClass(competition.name)}
+                      >
+                        <span className="event-class-time">
+                          <Clock size={14} />
+                          {competition.startTime}
+                        </span>
+                        <span className="event-class-name">
+                          {competition.name}
+                        </span>
+                        <span className="event-class-arena">
+                          <MapPin size={14} />
+                          {competition.arenaName}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -460,24 +510,6 @@ export function EventProfile() {
             ))}
           </MasonryGrid>
 
-          {!loading && activePhotos.length === 0 && (
-            <div className="pg-empty-state">
-              <div className="pg-empty-icon">
-                <Search size={24} />
-              </div>
-              <h3>No photos available – yet</h3>
-              <p>Try adjusting your filters or search terms.</p>
-              <button
-                onClick={() => {
-                  setSearchQuery('');
-                  setEventClass('All');
-                }}
-                className="pg-btn pg-btn-secondary mt-2"
-              >
-                Clear filters
-              </button>
-            </div>
-          )}
         </div>
       </section>
 

@@ -44,6 +44,29 @@ export interface ApiPhotographer {
   updated_at: string;
 }
 
+export interface ApiEvent {
+  id: string;
+  tdb_id?: string | null;
+  equipe_id?: string | null;
+  name: string;
+  slug: string;
+  discipline?: string | null;
+  horse_type?: string | null;
+  organizer_name?: string | null;
+  district?: string | null;
+  venue_name?: string | null;
+  city?: string | null;
+  country: string;
+  start_date: string;
+  end_date?: string | null;
+  status: 'upcoming' | 'ongoing' | 'completed' | 'cancelled';
+  is_sustainable: boolean;
+  match_status: 'unmatched' | 'matched' | 'manual' | 'rejected';
+  match_score?: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface UpsertPhotographerProfile {
   slug?: string;
   display_name: string;
@@ -141,5 +164,19 @@ export const api = {
   getPublicPhotographer: (slugOrId: string) =>
     request<ApiPhotographer>(
       `/api/v1/photographers/${encodeURIComponent(slugOrId)}`,
+    ),
+  listMyEventBookings: (getToken: TokenGetter) =>
+    request<ApiEvent[]>('/api/v1/photographer/bookings', {}, getToken),
+  bookEvent: (getToken: TokenGetter, eventId: string) =>
+    request<ApiEvent>(
+      `/api/v1/photographer/bookings/${encodeURIComponent(eventId)}`,
+      { method: 'POST' },
+      getToken,
+    ),
+  cancelEventBooking: (getToken: TokenGetter, eventId: string) =>
+    request<void>(
+      `/api/v1/photographer/bookings/${encodeURIComponent(eventId)}`,
+      { method: 'DELETE' },
+      getToken,
     ),
 };
