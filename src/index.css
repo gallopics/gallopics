@@ -804,7 +804,8 @@
 }
 
 .event-class-time,
-.event-class-arena {
+.event-class-arena,
+.event-class-upload {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -822,6 +823,18 @@
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.event-class-upload {
+  justify-self: end;
+  color: var(--color-brand-primary);
+  font-weight: var(--fw-semibold);
+}
+
+.event-class-row:has(.event-class-upload) {
+  grid-template-columns:
+    72px minmax(0, 1fr) minmax(96px, auto)
+    minmax(74px, auto);
 }
 
 @media (max-width: 1200px) {
@@ -4472,6 +4485,17 @@ textarea.auth-input {
   color: var(--color-border, #e5e5e5);
 }
 
+.pg-loading-icon {
+  color: var(--color-brand-primary);
+  animation: pg-spin 0.9s linear infinite;
+}
+
+@keyframes pg-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .btn.pg-btn-red-outline {
   background: #fef2f2 !important;
   border: 1px solid #fecaca !important;
@@ -5247,6 +5271,37 @@ textarea.auth-input {
   letter-spacing: 0.06em;
   color: #999;
   margin-bottom: 4px;
+}
+
+.pg-class-upload-context {
+  padding: 14px;
+  border: 1px solid rgba(27, 58, 236, 0.16);
+  border-radius: 12px;
+  background: var(--color-brand-tint);
+}
+
+.pg-class-upload-label {
+  margin-bottom: 4px;
+  color: var(--color-brand-primary);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.pg-class-upload-name {
+  color: var(--color-text-primary);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.pg-class-upload-meta {
+  margin-top: 4px;
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.4;
 }
 
 .pg-form-field {

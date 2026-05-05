@@ -1,5 +1,5 @@
 import React from 'react';
-import { Image as ImageIcon, MoreHorizontal, Edit2 } from 'lucide-react';
+import { Image as ImageIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { PgEvent } from '../../../context/PhotographerContext';
 import { useWorkspace } from '../../../context/WorkspaceContext';
@@ -10,26 +10,32 @@ interface PgEventCardProps {
   onEdit?: (event: PgEvent) => void;
   onCancelBooking?: (event: PgEvent, e: React.MouseEvent) => void;
   fromTab?: string;
+  eventProfilePath?: string;
+  eventProfileState?: unknown;
+  hideLogo?: boolean;
 }
 
 export const PgEventCard: React.FC<PgEventCardProps> = ({
   event,
   onCoverChange,
-  onEdit,
   onCancelBooking,
   fromTab,
+  eventProfilePath,
+  eventProfileState,
+  hideLogo = false,
 }) => {
   const { basePath } = useWorkspace();
   const navigate = useNavigate();
-  const [isMenuOpen, setIsMenuOpen] = React.useState(false);
   const hasCover = !!event.coverImage;
+  const eventTargetPath = eventProfilePath ?? `${basePath}/events/${event.id}`;
+  const eventTargetState = eventProfileState ?? { fromTab: fromTab ?? 'my' };
 
   return (
     <div
       className="relative flex flex-col cursor-pointer transition-[translate,box-shadow] duration-300 ease-[cubic-bezier(0.2,0,0.2,1)] mt-4 hover:-translate-y-1 group"
       onClick={() =>
-        navigate(`${basePath}/events/${event.id}`, {
-          state: { fromTab: fromTab ?? 'my' },
+        navigate(eventTargetPath, {
+          state: eventTargetState,
         })
       }
     >
@@ -81,13 +87,15 @@ export const PgEventCard: React.FC<PgEventCardProps> = ({
         {/* 2. Info Area (Avatar + Title/Date) */}
         <div className="pt-4 flex flex-col">
           <div className="flex items-center gap-4 mb-4">
-            <div className="w-[52px] h-[52px] rounded-xl overflow-hidden bg-white border border-black/[0.06] flex-shrink-0">
-              <img
-                src={event.logo}
-                alt=""
-                className="w-full h-full object-contain p-0.5"
-              />
-            </div>
+            {!hideLogo && (
+              <div className="w-[52px] h-[52px] rounded-xl overflow-hidden bg-white border border-black/[0.06] flex-shrink-0">
+                <img
+                  src={event.logo}
+                  alt=""
+                  className="w-full h-full object-contain p-0.5"
+                />
+              </div>
+            )}
             <div className="flex flex-col justify-center flex-1">
               <div className="flex items-center gap-1 mb-0.5">
                 <span className="text-[0.75rem] leading-none">🇸🇪</span>
@@ -104,7 +112,7 @@ export const PgEventCard: React.FC<PgEventCardProps> = ({
             </div>
 
             {/* More Action with Separator */}
-            <div className="relative flex items-center ml-auto">
+            {/* <div className="relative flex items-center ml-auto">
               <div className="w-px h-6 bg-[var(--dropdown-divider-color)] mx-3" />
               <button
                 className={`w-8 h-8 flex items-center justify-center rounded-full border bg-white cursor-pointer transition-all duration-200 p-0 outline-none
@@ -130,8 +138,8 @@ export const PgEventCard: React.FC<PgEventCardProps> = ({
                     className="dropdown-item"
                     onClick={() => {
                       setIsMenuOpen(false);
-                      navigate(`${basePath}/events/${event.id}`, {
-                        state: { fromTab: fromTab ?? 'my' },
+                      navigate(eventTargetPath, {
+                        state: eventTargetState,
                       });
                     }}
                   >
@@ -150,7 +158,7 @@ export const PgEventCard: React.FC<PgEventCardProps> = ({
                   </button>
                 </div>
               )}
-            </div>
+            </div> */}
           </div>
 
           <div className="h-px bg-[var(--ui-bg-subtle)] w-full mb-4" />
@@ -166,14 +174,14 @@ export const PgEventCard: React.FC<PgEventCardProps> = ({
               </button>
             )}
             <div className="flex items-center gap-2">
-              <div className="inline-flex flex-col items-start justify-center gap-0 px-3.5 py-1.5 rounded-lg bg-[var(--ui-bg-subtle)] text-[var(--color-text-secondary)] text-[0.75rem] font-semibold whitespace-nowrap text-left">
+              {/* <div className="inline-flex flex-col items-start justify-center gap-0 px-3.5 py-1.5 rounded-lg bg-[var(--ui-bg-subtle)] text-[var(--color-text-secondary)] text-[0.75rem] font-semibold whitespace-nowrap text-left">
                 <span className="text-[0.625rem] font-semibold leading-[1.2] opacity-80">
                   Published
                 </span>
                 <span className="text-[0.8125rem] font-bold leading-[1.2]">
                   {event.publishedCount ?? 0}
                 </span>
-              </div>
+              </div> */}
               {/* <div className="inline-flex flex-col items-start justify-center gap-0 px-3.5 py-1.5 rounded-lg bg-[var(--color-success-tint)] text-[var(--color-success)] text-[0.75rem] font-semibold whitespace-nowrap text-left">
                 <span className="text-[0.625rem] font-semibold leading-[1.2] opacity-80">
                   Sales
