@@ -1,6 +1,12 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { CalendarDays, Clock, MapPin, RotateCcw } from 'lucide-react';
+import {
+  CalendarDays,
+  Clock,
+  MapPin,
+  RotateCcw,
+  UploadCloud,
+} from 'lucide-react';
 import { Header } from '../components/Header';
 import { TitleHeader } from '../components/TitleHeader';
 import { Breadcrumbs } from '../components/Breadcrumbs';
@@ -117,6 +123,8 @@ export function EventProfile() {
     typeof location.state.fromTab === 'string'
       ? location.state.fromTab
       : undefined;
+  const isPhotographerMyEventView =
+    fromPath === '/pg/events' && fromTab === 'my';
   const navigateBackToEvents = () => {
     navigate(fromPath, fromTab ? { state: { tab: fromTab } } : undefined);
   };
@@ -466,7 +474,21 @@ export function EventProfile() {
                         className={`event-class-row ${
                           eventClass === competition.name ? 'active' : ''
                         }`}
-                        onClick={() => setEventClass(competition.name)}
+                        onClick={() => {
+                          if (isPhotographerMyEventView) {
+                            const params = new URLSearchParams({
+                              eventId: meeting.id,
+                              classId: competition.classSectionId,
+                              className: competition.name,
+                              arenaName: competition.arenaName,
+                              from: 'eventProfile',
+                            });
+                            navigate(`/pg/upload?${params.toString()}`);
+                            return;
+                          }
+
+                          setEventClass(competition.name);
+                        }}
                       >
                         <span className="event-class-time">
                           <Clock size={14} />
@@ -479,6 +501,12 @@ export function EventProfile() {
                           <MapPin size={14} />
                           {competition.arenaName}
                         </span>
+                        {isPhotographerMyEventView && (
+                          <span className="event-class-upload">
+                            <UploadCloud size={14} />
+                            Upload
+                          </span>
+                        )}
                       </button>
                     ))}
                   </div>

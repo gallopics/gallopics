@@ -13,6 +13,7 @@ import {
   AlertCircle,
   CalendarX2,
   CalendarPlus,
+  Loader2,
 } from 'lucide-react';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { useAuth } from '../../context/AuthContext';
@@ -335,6 +336,8 @@ export const EventsList: React.FC = () => {
     view,
   ]);
   const isPhotographerUpcomingView = !isAdmin && view === 'upcoming';
+  const isPhotographerMyEventsLoading =
+    !isAdmin && view === 'my' && isLoadingUpcomingEvents && myEvents.length === 0;
 
   return (
     <div className="pg-events-container" onClick={() => setActiveMenuId(null)}>
@@ -788,7 +791,15 @@ export const EventsList: React.FC = () => {
         </div>
       ) : (
         <div className="pg-events-grid">
-          {myEvents.length === 0 ? (
+          {isPhotographerMyEventsLoading ? (
+            <div className="pg-empty-state">
+              <div className="pg-empty-icon pg-loading-icon">
+                <Loader2 size={24} />
+              </div>
+              <h3>Loading your events...</h3>
+              <p>Fetching the events you've joined or been assigned to.</p>
+            </div>
+          ) : myEvents.length === 0 ? (
             <div className="pg-empty-state">
               <div className="pg-empty-icon">
                 <CalendarPlus size={24} />
@@ -805,6 +816,15 @@ export const EventsList: React.FC = () => {
                 onCancelBooking={
                   bookedEventIds.has(event.id) ? handleCancelBooking : undefined
                 }
+                eventProfilePath={
+                  bookedEventIds.has(event.id) ? `/event/${event.id}` : undefined
+                }
+                eventProfileState={
+                  bookedEventIds.has(event.id)
+                    ? { from: '/pg/events', fromTab: view }
+                    : undefined
+                }
+                hideLogo={!isAdmin && view === 'my'}
                 fromTab={view}
                 onEdit={ev => {
                   setEventToEdit(ev);

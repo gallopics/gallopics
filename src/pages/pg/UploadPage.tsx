@@ -5,11 +5,9 @@ import {
   UploadCloud,
   CheckCircle,
   X,
-  Check,
   AlertCircle,
   Trash2,
 } from 'lucide-react';
-import { ModernDropdown } from '../../components/ModernDropdown';
 import { useWorkspace } from '../../context/WorkspaceContext';
 
 export const UploadPage: React.FC = () => {
@@ -27,16 +25,13 @@ export const UploadPage: React.FC = () => {
 
   // Local State
   const urlEventId = searchParams.get('eventId');
+  const urlClassId = searchParams.get('classId');
+  const urlClassName = searchParams.get('className');
+  const urlArenaName = searchParams.get('arenaName');
   const [selectedEventId, setSelectedEventId] = useState<string>(
     urlEventId || '',
   );
-  const [selectedBatch, setSelectedBatch] = useState<string>('Random');
-  const [existingBatches, setExistingBatches] = useState([
-    'Random',
-    'Misc',
-    'Uncategorised',
-  ]);
-  const [isCreatingBatch, setIsCreatingBatch] = useState(false);
+  const [selectedBatch] = useState<string>(urlClassName || 'Random');
   const [isDragActive, setIsDragActive] = useState(false);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -55,7 +50,14 @@ export const UploadPage: React.FC = () => {
   // Sync Context whenever selectedEventId changes
   useEffect(() => {
     if (selectedEventId) {
-      setSearchParams({ eventId: selectedEventId }, { replace: true });
+      setSearchParams(
+        currentParams => {
+          const nextParams = new URLSearchParams(currentParams);
+          nextParams.set('eventId', selectedEventId);
+          return nextParams;
+        },
+        { replace: true },
+      );
       setCurrentUploadEventId(selectedEventId);
     }
   }, [selectedEventId, setSearchParams, setCurrentUploadEventId]);
@@ -65,11 +67,9 @@ export const UploadPage: React.FC = () => {
   const files = session?.files || [];
   const hasFiles = files.length > 0;
 
-  // Options for Dropdowns (compact event names only)
-  const eventOptions = events.map(e => ({
-    label: e.title,
-    value: e.id,
-  }));
+  const selectedEventTitle =
+    events.find(event => event.id === selectedEventId)?.title ||
+    'Selected event';
 
   // Handlers
   const handleClose = () => {
@@ -79,6 +79,10 @@ export const UploadPage: React.FC = () => {
     if (from === 'event' && urlEventId) {
       // Explicitly go back to the event we came from
       navigate(`${basePath}/events/${urlEventId}`);
+    } else if (from === 'eventProfile' && urlEventId) {
+      navigate(`/event/${urlEventId}`, {
+        state: { from: '/pg/events', fromTab: 'my' },
+      });
     } else if (from === 'sidebar') {
       // Usually means we came from "anywhere", so events list is a safe home
       navigate(`${basePath}/events`);
@@ -133,18 +137,9 @@ export const UploadPage: React.FC = () => {
     }
 
     // Pass the selected batch as classId metadata
-    startUpload(filesToUpload, { classId: selectedBatch || undefined });
-  };
-
-  const handleBatchChange = (val: string) => {
-    setSelectedBatch(val);
-    // If it's a new batch, add it to our local list so it doesn't show "Create" again
-    if (
-      val &&
-      !existingBatches.some(b => b.toLowerCase() === val.toLowerCase())
-    ) {
-      setExistingBatches(prev => [val, ...prev]);
-    }
+    startUpload(filesToUpload, {
+      classId: urlClassId || selectedBatch || undefined,
+    });
   };
 
   const handleClearAll = () => {
@@ -183,87 +178,17 @@ export const UploadPage: React.FC = () => {
           <div className="pg-upload-card">
             <div className="pg-upload-eyebrow">Event Details</div>
 
-            <div className="pg-form-field">
-              <label className="pg-field-label">Target Event</label>
-              <ModernDropdown
-                value={selectedEventId}
-                options={eventOptions}
-                onChange={val => setSelectedEventId(val)}
-                placeholder="Select event"
-                showSearch
-                searchPlaceholder="Search events..."
-                variant="pill"
-              />
-            </div>
-
-            <div className="pg-form-field">
-              <label className="pg-field-label">Batch</label>
-              <div className="pg-batch-pills-row">
-                {existingBatches.slice(0, 5).map(batch => (
-                  <button
-                    key={batch}
-                    type="button"
-                    className={`pg-batch-pill ${selectedBatch === batch ? 'active' : ''}`}
-                    onClick={() => {
-                      setSelectedBatch(batch);
-                      setIsCreatingBatch(false);
-                    }}
-                  >
-                    {batch}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  className={`pg-batch-pill new-batch-pill ${isCreatingBatch ? 'active' : ''}`}
-                  onClick={() => setIsCreatingBatch(true)}
-                >
-                  + Add New
-                </button>
-              </div>
-
-              <div className="pg-field-footnote">
-                Use batches to organize your uploads, such as by prize giving,
-                specific rider sets, or by classes and disciplines.
-              </div>
-
-              {isCreatingBatch && (
-                <div className="pg-batch-inline-editor">
-                  <div className="pg-batch-editor-content">
-                    <input
-                      type="text"
-                      className="pg-batch-input"
-                      value={selectedBatch}
-                      autoFocus
-                      onChange={e => handleBatchChange(e.target.value)}
-                      placeholder="E.g. Prize giving"
-                    />
-                    <div className="pg-batch-inline-actions">
-                      <button
-                        type="button"
-                        className="pg-batch-icon-btn confirm"
-                        onClick={() => {
-                          if (selectedBatch.trim()) {
-                            handleBatchChange(selectedBatch.trim());
-                            setIsCreatingBatch(false);
-                          } else {
-                            setIsCreatingBatch(false);
-                          }
-                        }}
-                      >
-                        <Check size={14} strokeWidth={3} />
-                      </button>
-                      <button
-                        type="button"
-                        className="pg-batch-icon-btn cancel"
-                        onClick={() => setIsCreatingBatch(false)}
-                      >
-                        <X size={14} strokeWidth={3} />
-                      </button>
-                    </div>
-                  </div>
+            {urlClassName && (
+              <div className="pg-class-upload-context">
+                <div className="pg-class-upload-label">Class upload</div>
+                <div className="pg-class-upload-name">{urlClassName}</div>
+                <div className="pg-class-upload-meta">
+                  {selectedEventTitle}
+                  {urlArenaName ? ` • ${urlArenaName}` : ''}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
+
           </div>
 
           {/* Sidebar Drop Zone */}

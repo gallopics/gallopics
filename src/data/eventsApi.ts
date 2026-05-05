@@ -1,6 +1,11 @@
 import type { EventData } from './mockEvents';
 import { getApiBaseUrl } from './apiClient';
-import type { ClassSection, DailySchedule, EventDetail, Meeting } from '../types';
+import type {
+  ClassSection,
+  DailySchedule,
+  EventDetail,
+  Meeting,
+} from '../types';
 
 export interface ApiEvent {
   id: string;
@@ -142,10 +147,7 @@ export async function fetchEventsFromApi(): Promise<EventData[]> {
 }
 
 export async function fetchEventFromApi(eventId: string): Promise<ApiEvent> {
-  const url = new URL(
-    `/api/v1/events/${eventId}`,
-    getApiBaseUrl(),
-  );
+  const url = new URL(`/api/v1/events/${eventId}`, getApiBaseUrl());
   const response = await fetch(url);
 
   if (!response.ok) {
@@ -156,7 +158,7 @@ export async function fetchEventFromApi(eventId: string): Promise<ApiEvent> {
 }
 
 export function mapApiScheduleToDailySchedule(
-  schedule: ApiEventSchedule,
+  schedule: ApiEventSchedule
 ): DailySchedule[] {
   return schedule.days.map(day => {
     const arenas = new Map<string, ClassSection[]>();
@@ -181,7 +183,7 @@ export function mapApiScheduleToDailySchedule(
           name: arenaName,
           position: index,
           competitions,
-        }),
+        })
       ),
     };
   });
@@ -189,7 +191,7 @@ export function mapApiScheduleToDailySchedule(
 
 export function buildApiEventDetail(
   event: ApiEvent,
-  schedule?: DailySchedule[],
+  schedule?: DailySchedule[]
 ): EventDetail {
   const endDate = event.end_date || event.start_date;
   const discipline = event.discipline || 'Equestrian';
@@ -244,11 +246,11 @@ export function buildApiEventDetail(
 }
 
 export async function fetchEventScheduleFromApi(
-  eventId: string,
+  eventId: string
 ): Promise<ApiEventSchedule> {
   const url = new URL(
     `/api/v1/events/${encodeURIComponent(eventId)}/schedule`,
-    getApiBaseUrl(),
+    getApiBaseUrl()
   );
   const response = await fetch(url);
 
