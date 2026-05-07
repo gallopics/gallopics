@@ -92,7 +92,7 @@ export class ApiError extends Error {
 async function request<T>(
   path: string,
   options: RequestInit = {},
-  getToken?: TokenGetter,
+  getToken?: TokenGetter
 ): Promise<T> {
   const headers = new Headers(options.headers);
   headers.set('Accept', 'application/json');
@@ -139,17 +139,18 @@ async function request<T>(
 }
 
 export const api = {
-  getMe: (getToken: TokenGetter) => request<ApiUser>('/api/v1/me', {}, getToken),
+  getMe: (getToken: TokenGetter) =>
+    request<ApiUser>('/api/v1/me', {}, getToken),
   getMyPhotographer: (getToken: TokenGetter) =>
     request<ApiPhotographer>('/api/v1/photographer/me', {}, getToken),
   upsertMyPhotographer: (
     getToken: TokenGetter,
-    body: UpsertPhotographerProfile,
+    body: UpsertPhotographerProfile
   ) =>
     request<ApiPhotographer>(
       '/api/v1/photographer/me',
       { method: 'PUT', body: JSON.stringify(body) },
-      getToken,
+      getToken
     ),
   uploadMyAvatar: (getToken: TokenGetter, file: File) => {
     const formData = new FormData();
@@ -158,12 +159,12 @@ export const api = {
     return request<ApiPhotographer>(
       '/api/v1/photographer/me/avatar',
       { method: 'POST', body: formData },
-      getToken,
+      getToken
     );
   },
   getPublicPhotographer: (slugOrId: string) =>
     request<ApiPhotographer>(
-      `/api/v1/photographers/${encodeURIComponent(slugOrId)}`,
+      `/api/v1/photographers/${encodeURIComponent(slugOrId)}`
     ),
   listMyEventBookings: (getToken: TokenGetter) =>
     request<ApiEvent[]>('/api/v1/photographer/bookings', {}, getToken),
@@ -171,12 +172,112 @@ export const api = {
     request<ApiEvent>(
       `/api/v1/photographer/bookings/${encodeURIComponent(eventId)}`,
       { method: 'POST' },
-      getToken,
+      getToken
     ),
   cancelEventBooking: (getToken: TokenGetter, eventId: string) =>
     request<void>(
       `/api/v1/photographer/bookings/${encodeURIComponent(eventId)}`,
       { method: 'DELETE' },
-      getToken,
+      getToken
+    ),
+
+  // Upload methods
+  uploadPhotos: (getToken: TokenGetter, eventId: string, files: File[]) => {
+    const formData = new FormData();
+    formData.set('event_id', eventId);
+    files.forEach(file => formData.append('files', file));
+    return request<ApiPhoto[]>(
+      '/api/v1/photographer/uploads',
+      { method: 'POST', body: formData },
+      getToken
+    );
+  },
+
+  completeUpload: (getToken: TokenGetter, sessionId: string) =>
+    request<ApiPhoto[]>(
+      '/api/v1/photographer/uploads/complete',
+      {
+        method: 'POST',
+        body: JSON.stringify({ session_id: sessionId }),
+      },
+      getToken
+    ),
+
+  listMyPhotos: (
+    getToken: TokenGetter,
+    eventId?: string,
+    visibility?: string
+  ) => {
+    const params = new URLSearchParams();
+    if (eventId) params.set('event_id', eventId);
+    if (visibility) params.set('visibility', visibility);
+    return request<PaginatedResponse<ApiPhoto>>(
+      `/api/v1/photographer/photos?${params.toString()}`,
+      {},
+      getToken
+    );
+  },
+
+  updatePhoto: (
+    getToken: TokenGetter,
+    photoId: string,
+    data: {
+      visibility?: string;
+      price?: number;
+      tags?: Array<{ type: string; value: string }>;
+    }
+  ) =>
+    request<ApiPhoto>(
+      `/api/v1/photographer/photos/${encodeURIComponent(photoId)}`,
+      { method: 'PATCH', body: JSON.stringify(data) },
+      getToken
+    ),
+
+  deletePhoto: (getToken: TokenGetter, photoId: string) =>
+    request<void>(
+      `/api/v1/photographer/photos/${encodeURIComponent(photoId)}`,
+      { method: 'DELETE' },
+      getToken
+    ),
+
+  getEventGallery: (eventId: string, page?: number, pageSize?: number) => {
+    const params = new URLSearchParams();
+    if (page) params.set('page', String(page));
+    if (pageSize) params.set('page_size', String(pageSize));
+    return request<PaginatedResponse<ApiPhoto>>(
+      `/api/v1/events/${eventId}/gallery?${params.toString()}`
+    );
+  },
+
+  searchGallery: (eventId: string, q: string, tagType?: string) =>
+    request<ApiPhoto[]>(
+      `/api/v1/events/${eventId}/gallery/search?q=${encodeURIComponent(q)}${
+        tagType ? `&tag_type=${tagType}` : ''
+      }`
     ),
 };
+
+// --- Additional Types for Upload/Gallery ---
+
+export interface ApiPhoto {
+  id: string;
+  event_id: string;
+  photographer_id: string;
+  price: number;
+  currency: string;
+  status: 'processing' | 'ready' | 'failed';
+  visibility: 'draft' | 'published';
+  tags: Array<{ type: string; value: string }>;
+  storage_key_original?: string | null;
+  storage_key_thumbnail?: string | null;
+  storage_key_preview?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+}

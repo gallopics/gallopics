@@ -51,7 +51,7 @@ const generateEventPhotos = (
   count: number,
   discipline?: string,
   meetingOverride?: Meeting,
-  eventClasses: ClassSection[] = [],
+  eventClasses: ClassSection[] = []
 ): Photo[] => {
   const srcPool = Array.from(new Set(basePhotos.map(p => p.src)));
   const comp =
@@ -131,14 +131,14 @@ export function EventProfile() {
 
   const localEventDetail = eventDetails.find(e => e.meetingId === eventId);
   const [apiEventDetail, setApiEventDetail] = useState<EventDetail | null>(
-    null,
+    null
   );
   const [isLoadingEvent, setIsLoadingEvent] = useState(!localEventDetail);
   const [eventLoadError, setEventLoadError] = useState<string | null>(null);
   const eventDetail = localEventDetail || apiEventDetail;
   const eventPhotographer = useMemo(
     () => PHOTOGRAPHERS.find(p => p.primaryEventId === eventId),
-    [eventId],
+    [eventId]
   );
 
   const [photos, setPhotos] = useState<Photo[]>([]);
@@ -176,7 +176,7 @@ export function EventProfile() {
       } catch (error) {
         if (isMounted) {
           setEventLoadError(
-            error instanceof Error ? error.message : 'Failed to load event',
+            error instanceof Error ? error.message : 'Failed to load event'
           );
         }
       } finally {
@@ -196,14 +196,14 @@ export function EventProfile() {
       setLoading(true);
       setTimeout(() => {
         const eventClasses = eventDetail.schedule.flatMap(day =>
-          day.arenas.flatMap(arena => arena.competitions),
+          day.arenas.flatMap(arena => arena.competitions)
         );
         const generated = generateEventPhotos(
           eventDetail.meetingId,
           eventDetail.meeting.photoCount,
           eventDetail.meeting.disciplines[0],
           eventDetail.meeting,
-          eventClasses,
+          eventClasses
         );
         setPhotos(generated);
         setLoading(false);
@@ -219,8 +219,8 @@ export function EventProfile() {
     const classes: ClassSection[] = [];
     eventDetail.schedule.forEach(day =>
       day.arenas.forEach(arena =>
-        arena.competitions.forEach(comp => classes.push(comp)),
-      ),
+        arena.competitions.forEach(comp => classes.push(comp))
+      )
     );
     return classes;
   }, [eventDetail]);
@@ -234,7 +234,7 @@ export function EventProfile() {
         arena.competitions.map(competition => ({
           ...competition,
           arenaName: arena.name,
-        })),
+        }))
       ),
     }));
   }, [eventDetail]);
@@ -277,11 +277,11 @@ export function EventProfile() {
   // 3. Absolute Totals for Header (Stable)
   const totalRiders = useMemo(
     () => new Set(photos.map(p => p.rider)).size,
-    [photos],
+    [photos]
   );
   const totalHorses = useMemo(
     () => new Set(photos.map(p => p.horse)).size,
-    [photos],
+    [photos]
   );
 
   // 4. Final Photo Filtering
@@ -386,11 +386,11 @@ export function EventProfile() {
                   name={`${eventPhotographer.firstName} ${eventPhotographer.lastName}`}
                   variant="photographer"
                   avatarUrl={assetUrl(
-                    `images/${eventPhotographer.firstName} ${eventPhotographer.lastName}.jpg`,
+                    `images/${eventPhotographer.firstName} ${eventPhotographer.lastName}.jpg`
                   )}
                   onClick={() =>
                     navigate(
-                      `/photographer/${eventPhotographer.id}?from=event&eventId=${eventId}`,
+                      `/photographer/${eventPhotographer.id}?from=event&eventId=${eventId}`
                     )
                   }
                 />
@@ -438,7 +438,6 @@ export function EventProfile() {
                   variant="v2"
                 />
               </div>
-
             </div>
           </div>
 
@@ -462,7 +461,7 @@ export function EventProfile() {
                           weekday: 'short',
                           day: 'numeric',
                           month: 'short',
-                        },
+                        }
                       )}
                     </span>
                   </div>
@@ -476,14 +475,15 @@ export function EventProfile() {
                         }`}
                         onClick={() => {
                           if (isPhotographerMyEventView) {
-                            const params = new URLSearchParams({
-                              eventId: meeting.id,
-                              classId: competition.classSectionId,
-                              className: competition.name,
-                              arenaName: competition.arenaName,
-                              from: 'eventProfile',
+                            // Navigate to EventDetail with the class pre-selected
+                            navigate(`/pg/events/${meeting.id}`, {
+                              state: {
+                                selectedClassId: competition.classSectionId,
+                                selectedClassName: competition.name,
+                                selectedArenaName: competition.arenaName,
+                                fromUpload: true,
+                              },
                             });
-                            navigate(`/pg/upload?${params.toString()}`);
                             return;
                           }
 
@@ -537,7 +537,6 @@ export function EventProfile() {
               />
             ))}
           </MasonryGrid>
-
         </div>
       </section>
 

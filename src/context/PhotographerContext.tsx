@@ -6,6 +6,12 @@ import React, {
 } from 'react';
 import { assetUrl } from '../lib/utils';
 import { useAuth } from './AuthContext';
+import {
+  type ApiPhoto,
+  getApiBaseUrl,
+  resolveApiAssetUrl,
+} from '../data/apiClient';
+import { useAuth as useClerkAuth } from '@clerk/clerk-react';
 
 // --- Types ---
 
@@ -159,8 +165,8 @@ const mapToPgEvent = (e: EventData, isMyEvent: boolean): PgEvent => {
     venueName: e.name.includes('Gothenburg')
       ? 'Scandinavium'
       : e.name.includes('Falsterbo')
-        ? 'Falsterbo Arena'
-        : 'Main Arena', // Simple mock mapping or use actual data if available
+      ? 'Falsterbo Arena'
+      : 'Main Arena', // Simple mock mapping or use actual data if available
     disciplines: [e.discipline],
     city: e.city,
     assignedPhotographers: e.photographer ? [e.photographer] : [],
@@ -186,7 +192,7 @@ const MOCK_EVENTS: PgEvent[] = allMockEvents.map(e => {
           id: PHOTOGRAPHERS[1].id,
           name: `${PHOTOGRAPHERS[1].firstName} ${PHOTOGRAPHERS[1].lastName}`,
           avatar: assetUrl(
-            `images/${PHOTOGRAPHERS[1].firstName} ${PHOTOGRAPHERS[1].lastName}.jpg`,
+            `images/${PHOTOGRAPHERS[1].firstName} ${PHOTOGRAPHERS[1].lastName}.jpg`
           ),
         },
       ];
@@ -203,7 +209,7 @@ const MOCK_EVENTS: PgEvent[] = allMockEvents.map(e => {
             id: PHOTOGRAPHERS[0].id,
             name: `${PHOTOGRAPHERS[0].firstName} ${PHOTOGRAPHERS[0].lastName}`,
             avatar: assetUrl(
-              `images/${PHOTOGRAPHERS[0].firstName} ${PHOTOGRAPHERS[0].lastName}.jpg`,
+              `images/${PHOTOGRAPHERS[0].firstName} ${PHOTOGRAPHERS[0].lastName}.jpg`
             ),
           },
         ];
@@ -227,7 +233,7 @@ const MOCK_EVENTS: PgEvent[] = allMockEvents.map(e => {
           id: PHOTOGRAPHERS[0].id,
           name: `${PHOTOGRAPHERS[0].firstName} ${PHOTOGRAPHERS[0].lastName}`,
           avatar: assetUrl(
-            `images/${PHOTOGRAPHERS[0].firstName} ${PHOTOGRAPHERS[0].lastName}.jpg`,
+            `images/${PHOTOGRAPHERS[0].firstName} ${PHOTOGRAPHERS[0].lastName}.jpg`
           ),
         },
       ];
@@ -259,7 +265,7 @@ const generatePhotoCode = () => {
     'PHT-' +
     Array.from(
       { length: 5 },
-      () => chars[Math.floor(Math.random() * chars.length)],
+      () => chars[Math.floor(Math.random() * chars.length)]
     ).join('')
   );
 };
@@ -316,7 +322,7 @@ const generateMockPhotos = (eventId: string, count: number): Photo[] => {
     const riderIndex = i % 3 < 2 ? i % 2 : 2; // 2/3 of photos use first 2 riders
     const selectedRider = RIDERS[riderIndex];
     const selectedHorseMapping = RIDER_PRIMARY_HORSE.find(
-      m => m.riderId === selectedRider.id,
+      m => m.riderId === selectedRider.id
     );
     const selectedHorse =
       HORSES.find(h => h.id === selectedHorseMapping?.primaryHorseId) ||
@@ -530,16 +536,17 @@ const MOCK_PHOTOS: Photo[] = [
 // --- Context & Provider ---
 
 const PhotographerContext = createContext<PhotographerContextType | undefined>(
-  undefined,
+  undefined
 );
 
 export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
   const { user } = useAuth();
+  const { getToken: getClerkToken } = useClerkAuth();
   const photographerId = user?.id || '';
   const [events, setEvents] = useState<PgEvent[]>(
-    SHOW_EVENTS ? MOCK_EVENTS : [],
+    SHOW_EVENTS ? MOCK_EVENTS : []
   );
   const [photos, setPhotos] = useState<Photo[]>(MOCK_PHOTOS);
 
@@ -567,6 +574,118 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [photographerId]);
 
+  // Fetch events from API on mount (when not using mock data)
+  React.useEffect(() => {
+    const fetchEvents = async () => {
+      if (SHOW_EVENTS) return; // Skip if using mock data
+      const token = await getClerkToken?.();
+      if (!token) return;
+
+      try {
+        const response = await fetch(
+          `${getApiBaseUrl()}/api/v1/photographer/bookings`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (!response.ok) {
+          console.error('Failed to fetch events:', response.status);
+          return;
+        }
+        const data = await response.json();
+        console.log('Fetched events from API:', data.length, 'events');
+        // Map API events to PgEvent format
+        const mappedEvents: PgEvent[] = data.map((e: any) => ({
+          id: e.id,
+          title: e.name || e.title || 'Untitled Event',
+          date: e.start_date || e.startDate || new Date().toISOString(),
+          dateRange: e.period || e.dateRange || '',
+          location: e.location || e.city || '',
+          coverImage: e.cover_image || e.coverImage || '',
+          status: 'open' as const,
+          isRegistered: true,
+          photosCount: 0,
+          publishedCount: 0,
+          soldCount: 0,
+          logo: e.logo || '',
+          venueName: e.venue_name || e.venueName || '',
+          disciplines: e.disciplines || [],
+          city: e.city || '',
+          assignedPhotographers: [],
+          applicationsWelcomed: true,
+        }));
+        setEvents(mappedEvents);
+      } catch (error) {
+        console.error('Failed to fetch events:', error);
+      }
+    };
+
+    fetchEvents();
+  }, [SHOW_EVENTS, getClerkToken]);
+
+  // Fetch photos from API on mount (with pagination support)
+  React.useEffect(() => {
+    const fetchPhotos = async () => {
+      if (SHOW_EVENTS) return; // Skip if using mock data
+      const token = await getClerkToken?.();
+      if (!token) return;
+
+      try {
+        const allPhotos: any[] = [];
+        let page = 1;
+        const PAGE_SIZE = 100;
+
+        while (true) {
+          const response = await fetch(
+            `${getApiBaseUrl()}/api/v1/photographer/photos?page=${page}&page_size=${PAGE_SIZE}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          if (!response.ok) break;
+          const data = await response.json();
+          const items = data.items || [];
+
+          allPhotos.push(...items);
+
+          // Stop if we've fetched all photos
+          if (allPhotos.length >= data.total || items.length === 0) break;
+          page += 1;
+        }
+
+        const mappedPhotos: Photo[] = allPhotos.map((p: any) => ({
+          id: p.id,
+          // Always use preview URL - the serving endpoint falls back to original if no preview exists
+          url:
+            resolveApiAssetUrl(`/api/v1/photographer/photos/${p.id}/preview`) ||
+            '',
+          eventId: p.event_id,
+          status: p.status === 'ready' ? 'uploadedUnpublished' : 'processing',
+          soldCount: 0,
+          rider: undefined,
+          horse: undefined,
+          timestamp: new Date(p.created_at).toLocaleTimeString().slice(0, 5),
+          width: 600,
+          height: 800,
+          fileName: p.storage_key_original?.split('/').pop(),
+          photoCode: '',
+          uploadDate: p.created_at,
+          batch: '',
+          classId: '',
+          className: '',
+          isDuplicate: false,
+          storedLocation: 'Uncategorised',
+          priceStandard: 499,
+          priceHigh: 999,
+          priceCommercial: 1500,
+        }));
+
+        setPhotos(mappedPhotos);
+        console.log('Fetched photos from API:', mappedPhotos.length, 'photos');
+      } catch (error) {
+        console.error('Failed to fetch photos:', error);
+      }
+    };
+
+    fetchPhotos();
+  }, [SHOW_EVENTS, getClerkToken]);
+
   const updateHighlights = (ids: string[]) => {
     setHighlights(ids);
     // Sync to mock data for public visibility
@@ -589,8 +708,8 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
   const registerForEvent = (eventId: string) => {
     setEvents(prev =>
       prev.map(e =>
-        e.id === eventId ? { ...e, isRegistered: true, status: 'open' } : e,
-      ),
+        e.id === eventId ? { ...e, isRegistered: true, status: 'open' } : e
+      )
     );
   };
 
@@ -599,7 +718,7 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
 
   const updatePhotoStatus = (photoIds: string[], status: Photo['status']) => {
     setPhotos(prev =>
-      prev.map(p => (photoIds.includes(p.id) ? { ...p, status } : p)),
+      prev.map(p => (photoIds.includes(p.id) ? { ...p, status } : p))
     );
   };
 
@@ -623,10 +742,10 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
 
   const updatePhotoMetadata = (
     photoIds: string[],
-    metadata: Partial<Photo>,
+    metadata: Partial<Photo>
   ) => {
     setPhotos(prev =>
-      prev.map(p => (photoIds.includes(p.id) ? { ...p, ...metadata } : p)),
+      prev.map(p => (photoIds.includes(p.id) ? { ...p, ...metadata } : p))
     );
   };
 
@@ -671,7 +790,7 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
 
       // Check if removing this leaves only 1 duplicate group member
       const potentialGroup = photos.filter(
-        p => p.url === photoToRemove.url && p.isDuplicate && p.id !== photoId,
+        p => p.url === photoToRemove.url && p.isDuplicate && p.id !== photoId
       );
 
       if (potentialGroup.length === 1) {
@@ -683,8 +802,8 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
             .map(p =>
               p.id === survivor.id
                 ? { ...p, isDuplicate: false, duplicateResolved: true }
-                : p,
-            ),
+                : p
+            )
         );
       } else {
         // Remove this photo entirely from everywhere
@@ -707,7 +826,7 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
               }
               return p;
             })
-            .filter((p): p is Photo => p !== null),
+            .filter((p): p is Photo => p !== null)
         );
       }
     }
@@ -762,10 +881,14 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
     });
   };
 
-  const startUpload = (files: File[], metadata?: { classId?: string }) => {
+  const startUpload = async (
+    files: File[],
+    metadata?: { classId?: string }
+  ) => {
     if (!currentUploadEventId) return;
     const eventId = currentUploadEventId;
 
+    // Create local tracking for each file
     const newFiles: UploadFile[] = files.map(f => ({
       id: Math.random().toString(36).substr(2, 9),
       file: f,
@@ -786,99 +909,130 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
       };
     });
 
-    // Simulate upload process for each file
-    newFiles.forEach(item => {
-      simulateFileUpload(item.id, eventId, metadata);
-    });
-  };
+    // Get token for API call
+    const token = await getClerkToken?.();
+    if (!token) {
+      // No auth - mark as failed
+      setUploadSessions(prev => {
+        const session = prev[eventId];
+        if (!session) return prev;
+        return {
+          ...prev,
+          [eventId]: {
+            ...session,
+            files: session.files.map(f => ({
+              ...f,
+              status: 'failed' as const,
+              error: 'Not authenticated',
+            })),
+          },
+        };
+      });
+      return;
+    }
 
-  const simulateFileUpload = (
-    fileId: string,
-    eventId: string,
-    metadata?: { classId?: string },
-  ) => {
-    let progress = 0;
-    const interval = setInterval(() => {
-      if (Math.random() > 0.95) {
-        // Simulate occasional random failure?
-        // For now keep stable.
+    try {
+      // Upload files via FormData to the direct upload endpoint
+      const formData = new FormData();
+      formData.set('event_id', eventId);
+      files.forEach(file => formData.append('files', file));
+
+      // Update progress to "uploading"
+      setUploadSessions(prev => {
+        const session = prev[eventId];
+        if (!session) return prev;
+        return {
+          ...prev,
+          [eventId]: {
+            ...session,
+            files: session.files.map(f => ({
+              ...f,
+              status: 'uploading' as const,
+              progress: 50,
+            })),
+          },
+        };
+      });
+
+      const response = await fetch(
+        `${getApiBaseUrl()}/api/v1/photographer/uploads`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          errorData.detail || `Upload failed: ${response.status}`
+        );
       }
-      progress += Math.floor(Math.random() * 20) + 10;
 
-      if (progress >= 100) {
-        progress = 100;
-        clearInterval(interval);
-        handleFileComplete(fileId, eventId, metadata);
-      } else {
-        updateFileProgress(fileId, eventId, progress);
-      }
-    }, 800);
-  };
+      const photos: ApiPhoto[] = await response.json();
 
-  const updateFileProgress = (
-    fileId: string,
-    eventId: string,
-    progress: number,
-  ) => {
-    setUploadSessions(prev => {
-      const session = prev[eventId];
-      if (!session) return prev; // Safety
+      // Update progress to 100% and mark as completed
+      setUploadSessions(prev => {
+        const session = prev[eventId];
+        if (!session) return prev;
+        return {
+          ...prev,
+          [eventId]: {
+            ...session,
+            files: session.files.map(f => ({
+              ...f,
+              progress: 100,
+              status: 'completed' as const,
+            })),
+          },
+        };
+      });
 
-      const updatedFiles = session.files.map(f =>
-        f.id === fileId ? { ...f, progress, status: 'uploading' as const } : f,
-      );
-
-      return {
-        ...prev,
-        [eventId]: { ...session, files: updatedFiles },
-      };
-    });
-  };
-
-  const handleFileComplete = (
-    fileId: string,
-    eventId: string,
-    metadata?: { classId?: string },
-  ) => {
-    setUploadSessions(prev => {
-      const session = prev[eventId];
-      if (!session) return prev;
-
-      const updatedFiles = session.files.map(f =>
-        f.id === fileId
-          ? { ...f, progress: 100, status: 'completed' as const }
-          : f,
-      );
-
-      // Check if batch complete
-      const allComplete = updatedFiles.every(
-        f => f.status === 'completed' || f.status === 'failed',
-      );
-
-      return {
-        ...prev,
-        [eventId]: {
-          ...session,
-          files: updatedFiles,
-          status: allComplete ? 'completed' : 'uploading',
-        },
-      };
-    });
-
-    // Add to Mock Photos
-    const newPhoto: Photo = {
-      id: `new-${fileId}`,
-      url: 'https://images.unsplash.com/photo-1599056377758-4808a7e70337?auto=format&fit=crop&q=80&w=600',
-      eventId: eventId,
-      status: 'uploadedUnpublished',
-      soldCount: 0,
-      rider: 'Processing...',
-      horse: metadata?.classId ? `Class: ${metadata.classId}` : '', // Mock usage of classId
-      timestamp: new Date().toLocaleTimeString().slice(0, 5),
-      width: 400 + Math.floor(Math.random() * 200),
-      height: 300 + Math.floor(Math.random() * 200),
-    };
-    setPhotos(prev => [newPhoto, ...prev]);
+      // Add returned photos to the photo list
+      const newPhotoList: Photo[] = photos.map((p, i) => ({
+        id: newFiles[i]?.id || `api-${p.id}`,
+        url:
+          (p.status === 'ready'
+            ? resolveApiAssetUrl(`/api/v1/photographer/photos/${p.id}/preview`)
+            : '') ||
+          'https://images.unsplash.com/photo-1599056377758-4808a7e70337?auto=format&fit=crop&q=80&w=600',
+        eventId: p.event_id,
+        status: p.status === 'ready' ? 'uploadedUnpublished' : 'processing',
+        soldCount: 0,
+        rider: 'Processing...',
+        horse: metadata?.classId ? `Class: ${metadata.classId}` : '',
+        timestamp: new Date().toLocaleTimeString().slice(0, 5),
+        width: 600,
+        height: 800,
+        fileName: files[i]?.name,
+        photoCode: generatePhotoCode(),
+        uploadDate: new Date().toISOString(),
+        batch: metadata?.classId || '',
+        classId: metadata?.classId || '',
+        className: metadata?.classId || '',
+      }));
+      setPhotos(prev => [...newPhotoList, ...prev]);
+    } catch (error) {
+      // Mark files as failed
+      const errorMsg = error instanceof Error ? error.message : 'Upload failed';
+      setUploadSessions(prev => {
+        const session = prev[eventId];
+        if (!session) return prev;
+        return {
+          ...prev,
+          [eventId]: {
+            ...session,
+            files: session.files.map(f => ({
+              ...f,
+              progress: 0,
+              status: 'failed' as const,
+              error: errorMsg,
+            })),
+          },
+        };
+      });
+    }
   };
 
   return (
@@ -923,7 +1077,7 @@ export const usePhotographer = () => {
   const context = useContext(PhotographerContext);
   if (!context) {
     throw new Error(
-      'usePhotographer must be used within a PhotographerProvider',
+      'usePhotographer must be used within a PhotographerProvider'
     );
   }
   return context;
