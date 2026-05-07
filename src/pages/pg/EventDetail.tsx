@@ -21,6 +21,7 @@ import {
   Globe,
   Archive,
   ArrowLeft,
+  UploadCloud,
 } from 'lucide-react';
 import { ScopedSearchBar } from '../../components/ScopedSearchBar';
 import {
@@ -31,7 +32,6 @@ import {
 import { InfoChip } from '../../components/InfoChip';
 import { PHOTOGRAPHERS } from '../../data/mockData';
 import { FilterChip } from '../../components/FilterChip';
-import { StickyActionBar } from '../../components/StickyActionBar';
 import { assetUrl } from '../../lib/utils';
 
 // Tab type
@@ -55,15 +55,15 @@ export const EventDetail: React.FC = () => {
 
   // State
   const [activeTab, setActiveTab] = useState<TabType>('uploads');
-  const [activeFolder, setActiveFolder] = useState<FolderType>('random');
-  const [activePublishedFolder, setActivePublishedFolder] =
+  const [activeFolder, setActiveFolder] = useState<FolderType>('uncategorised');
+  const [activePublishedFolder] =
     useState<PublishedFolderType>('selling_photos');
   const [activeChip, setActiveChip] = useState<string>('all');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [previewPhoto, setPreviewPhoto] = useState<any | null>(null);
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded] = useState(false);
   const [showInfoModal, setShowInfoModal] = useState(false);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -242,15 +242,6 @@ export const EventDetail: React.FC = () => {
     return archivedPhotosRaw.filter(p => p.soldCount === 0);
   }, [archivedPhotosRaw, activePublishedFolder]);
 
-  const archivedFolderCounts = useMemo(() => {
-    const selling = archivedPhotosRaw.filter(p => p.soldCount > 0);
-    return {
-      selling_photos: selling.length,
-      totalSales: selling.reduce((sum, p) => sum + p.soldCount, 0),
-      unsold: archivedPhotosRaw.filter(p => p.soldCount === 0).length,
-    };
-  }, [archivedPhotosRaw]);
-
   const archivedChips = useMemo(() => {
     const photos = archivedPhotosByBucket;
 
@@ -361,41 +352,13 @@ export const EventDetail: React.FC = () => {
     return validIds;
   }, [uploadPhotos]);
 
-  // Folder counts
-  const folderCounts = useMemo(
-    () => ({
-      random: uploadPhotos.filter(p => p.batch === 'Random').length,
-      misc: uploadPhotos.filter(p => p.batch === 'Misc').length,
-      uncategorised: uploadPhotos.filter(
-        p => !p.batch || p.batch === '' || p.batch === 'Uncategorised'
-      ).length,
-      duplicates: validDuplicateIds.size,
-    }),
-    [uploadPhotos, validDuplicateIds]
-  );
-
-  // Photos in current folder
+  // Photos in the Uploads tab. The old Random/Misc/Uncategorised bucket filter
+  // is intentionally removed so event pages show every available upload.
   const folderPhotos = useMemo(() => {
-    let photos: Photo[] = [];
-    switch (activeFolder) {
-      case 'random':
-        photos = uploadPhotos.filter(p => p.batch === 'Random');
-        break;
-      case 'misc':
-        photos = uploadPhotos.filter(p => p.batch === 'Misc');
-        break;
-      case 'uncategorised':
-        photos = uploadPhotos.filter(
-          p => !p.batch || p.batch === '' || p.batch === 'Uncategorised'
-        );
-        break;
-      case 'duplicates':
-        // Show validated duplicates
-        photos = uploadPhotos.filter(p => validDuplicateIds.has(p.id));
-        break;
-      default:
-        photos = [];
-    }
+    let photos: Photo[] =
+      activeFolder === 'duplicates'
+        ? uploadPhotos.filter(p => validDuplicateIds.has(p.id))
+        : uploadPhotos;
 
     // Apply search filter if search term exists
     if (searchTerm.trim()) {
@@ -409,7 +372,12 @@ export const EventDetail: React.FC = () => {
     }
 
     return photos;
-  }, [uploadPhotos, activeFolder, searchTerm]);
+  }, [
+    activeFolder,
+    searchTerm,
+    uploadPhotos,
+    validDuplicateIds,
+  ]);
 
   // Determine if we're in duplicates folder
   const isDuplicatesFolder = activeFolder === 'duplicates';
@@ -429,14 +397,7 @@ export const EventDetail: React.FC = () => {
       new Set(folderPhotos.map(p => p.horse).filter(h => h && h !== 'None'))
     ) as string[];
 
-    const allChips: any[] = [
-      {
-        id: 'all',
-        label: 'All',
-        count: folderPhotos.length,
-        filterFn: () => true,
-      },
-    ];
+    const allChips: any[] = [];
 
     // Add dynamic Class chips
     uniqueClasses.sort().forEach(cls => {
@@ -466,24 +427,6 @@ export const EventDetail: React.FC = () => {
         count: folderPhotos.filter(p => p.horse === horse).length,
         filterFn: (p: Photo) => p.horse === horse,
       });
-    });
-
-    // Missing Tags logic - check ALL metadata fields
-    allChips.push({
-      id: 'missing-tags',
-      label: 'Missing tags',
-      count: folderPhotos.filter(
-        p =>
-          (!p.rider || p.rider === 'None') &&
-          (!p.horse || p.horse === 'None') &&
-          (!p.className || p.className === 'None') &&
-          (!p.isGeneric || !p.title)
-      ).length,
-      filterFn: (p: Photo) =>
-        (!p.rider || p.rider === 'None') &&
-        (!p.horse || p.horse === 'None') &&
-        (!p.className || p.className === 'None') &&
-        (!p.isGeneric || !p.title),
     });
 
     return allChips;
@@ -649,17 +592,6 @@ export const EventDetail: React.FC = () => {
   // Legacy handler for MasonryGrid fallback
   const handleKeep = (photoId: string) => {
     resolveDuplicate(photoId, 'keep');
-  };
-
-  // Handle bucket switching safely
-  const handleFolderChange = (folder: FolderType) => {
-    setActiveFolder(folder);
-    // Clear dup param if present to ensure clean state
-    if (location.search.includes('dup=')) {
-      const params = new URLSearchParams(location.search);
-      params.delete('dup');
-      navigate({ search: params.toString() }, { replace: true });
-    }
   };
 
   // Manage handler for cards in other views
@@ -846,23 +778,22 @@ export const EventDetail: React.FC = () => {
                 Uploads
                 <span className="tab-badge">{tabCounts.uploads}</span>
               </button>
-              <button
-                className={`tab-btn ${
-                  activeTab === 'published' ? 'active' : ''
-                }`}
-                onClick={() => setActiveTab('published')}
-              >
-                Published
-                <span className="tab-badge">{tabCounts.published}</span>
-              </button>
-              <button
-                className={`tab-btn ${activeTab === 'archive' ? 'active' : ''}`}
-                onClick={() => setActiveTab('archive')}
-              >
-                Archive
-                <span className="tab-badge">{tabCounts.archive}</span>
-              </button>
 
+              <div className="ml-auto flex items-center gap-3">
+                <button
+                  onClick={() =>
+                    navigate(
+                      `${basePath}/upload?eventId=${event!.id}&from=event`
+                    )
+                  }
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
+                >
+                  <UploadCloud size={16} />
+                  Upload
+                </button>
+              </div>
+
+              {/* Event title when expanded */}
               {isExpanded && (
                 <div className="ml-auto flex items-center gap-2.5">
                   <img
@@ -1369,81 +1300,6 @@ export const EventDetail: React.FC = () => {
             </div>
           </div>
         </div>
-
-        {/* Bottom Action Bar (StickyActionBar) */}
-        <StickyActionBar
-          variant={activeTab}
-          activeFolderId={
-            activeTab === 'uploads' ? activeFolder : activePublishedFolder
-          }
-          onFolderChange={id => {
-            if (activeTab === 'uploads') handleFolderChange(id);
-            else setActivePublishedFolder(id);
-          }}
-          folders={
-            activeTab === 'uploads'
-              ? [
-                  { id: 'random', label: 'Random', count: folderCounts.random },
-                  { id: 'misc', label: 'Misc', count: folderCounts.misc },
-                  {
-                    id: 'uncategorised',
-                    label: 'Uncategorised',
-                    count: folderCounts.uncategorised,
-                  },
-                  {
-                    id: 'duplicates',
-                    label: 'Duplicates',
-                    count: folderCounts.duplicates,
-                    isDuplicate: true,
-                  },
-                ]
-              : activeTab === 'published' || activeTab === 'archive'
-              ? [
-                  {
-                    id: 'selling_photos',
-                    label: activeTab === 'archive' ? 'Sold' : 'Selling',
-                    count:
-                      activeTab === 'published'
-                        ? publishedFolderCounts.selling_photos
-                        : archivedFolderCounts.selling_photos,
-                    badgeLabel:
-                      activeTab === 'published'
-                        ? `${publishedFolderCounts.selling_photos}/${publishedFolderCounts.totalSales}`
-                        : `${archivedFolderCounts.selling_photos}/${archivedFolderCounts.totalSales}`,
-                    title: 'Photos/total sales',
-                  },
-                  {
-                    id: 'unsold',
-                    label: 'Unsold',
-                    count:
-                      activeTab === 'published'
-                        ? publishedFolderCounts.unsold
-                        : archivedFolderCounts.unsold,
-                  },
-                ]
-              : []
-          }
-          searchTerm={searchTerm}
-          onSearchChange={setSearchTerm}
-          onSelect={setSearchTerm}
-          searchPlaceholder={
-            activeTab === 'published'
-              ? 'Search photo ID or client email...'
-              : 'Search riders, horses, photo ID...'
-          }
-          searchOptions={searchOptions.map((opt: any) => ({
-            id: opt.value,
-            type: opt.type,
-            title: opt.label,
-            subtitle: opt.subtitle,
-            groupLabel: opt.type === 'rider' ? 'Riders' : 'Horses',
-          }))}
-          onUploadClick={() =>
-            navigate(`${basePath}/upload?eventId=${event!.id}&from=event`)
-          }
-          onExpandToggle={() => setIsExpanded(!isExpanded)}
-          isExpanded={isExpanded}
-        />
       </>
     );
   };
