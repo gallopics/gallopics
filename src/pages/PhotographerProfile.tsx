@@ -13,6 +13,7 @@ import { ModernDropdown } from '../components/ModernDropdown';
 import {
   photos as mockPhotos,
   getActivePhotographerProfile,
+  PHOTOGRAPHERS,
 } from '../data/mockData';
 import { mockEvents, SHOW_EVENTS } from '../data/mockEvents';
 
@@ -33,6 +34,7 @@ import {
   api,
   ApiError,
   resolveApiAssetUrl,
+  type ApiPhoto,
   type ApiPhotographer,
 } from '../data/apiClient';
 
@@ -51,6 +53,9 @@ export function PhotographerProfile() {
   const [isLoading, setIsLoading] = useState(true);
   const [apiPhotographer, setApiPhotographer] =
     useState<ApiPhotographer | null>(null);
+  const [isLoadingApiPhotographer, setIsLoadingApiPhotographer] =
+    useState(true);
+  const [apiHighlightPhotos, setApiHighlightPhotos] = useState<Photo[]>([]);
   const [activeTab, setActiveTab] = useState<'highlights' | 'photos'>(
     'highlights'
   );
@@ -69,6 +74,7 @@ export function PhotographerProfile() {
 
   useEffect(() => {
     let isMounted = true;
+    setIsLoadingApiPhotographer(true);
 
     api
       .getPublicPhotographer(id)
@@ -84,6 +90,11 @@ export function PhotographerProfile() {
         if (isMounted) {
           setApiPhotographer(null);
         }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoadingApiPhotographer(false);
+        }
       });
 
     return () => {
@@ -92,6 +103,11 @@ export function PhotographerProfile() {
   }, [id]);
 
   const activeProfile = useMemo(() => {
+    const isKnownMockPhotographer = PHOTOGRAPHERS.some(p => p.id === id);
+    if (!apiPhotographer && isLoadingApiPhotographer && !isKnownMockPhotographer) {
+      return null;
+    }
+
     const baseProfile = getActivePhotographerProfile(id);
     if (apiPhotographer) {
       const [firstName = apiPhotographer.display_name, ...lastNameParts] =
@@ -108,7 +124,7 @@ export function PhotographerProfile() {
           countryCode:
             apiPhotographer.country || baseProfile.photographer.countryCode,
           avatarUrl: apiPhotographer.avatar_url,
-          highlights: [],
+          highlights: apiPhotographer.highlights || [],
           isAvailableToHire: apiPhotographer.is_available_to_hire,
         },
         dummyEvents: [],
@@ -141,6 +157,74 @@ export function PhotographerProfile() {
     };
   }, [id, apiPhotographer, isOwner, authUser, availableToHire]);
   const photographer = activeProfile?.photographer;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchHighlightPhotos = async () => {
+      if (isOwner || !apiPhotographer?.highlights?.length) {
+        if (isMounted) setApiHighlightPhotos([]);
+        return;
+      }
+
+      const responses = await Promise.allSettled(
+        apiPhotographer.highlights.slice(0, 10).map(photoId =>
+          api.getPhoto(photoId)
+        )
+      );
+
+      if (!isMounted) return;
+
+      const mappedPhotos = responses
+        .map(result => (result.status === 'fulfilled' ? result.value : null))
+        .filter((photo): photo is ApiPhoto => Boolean(photo))
+        .map(photo => {
+          const ev = contextEvents.find(e => e.id === photo.event_id);
+          return {
+            id: photo.id,
+            src:
+              resolveApiAssetUrl(`/api/v1/photographer/photos/${photo.id}/preview`) ||
+              '',
+            rider:
+              photo.tags.find(tag => tag.type === 'rider')?.value ||
+              'Unknown',
+            horse:
+              photo.tags.find(tag => tag.type === 'horse')?.value ||
+              'Unknown',
+            event: ev?.title || 'Event',
+            eventId: photo.event_id,
+            date:
+              ev?.date ||
+              new Date(photo.created_at).toLocaleDateString(undefined, {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+              }),
+            width: 600,
+            height: 800,
+            className: photo.class_name || 'Class A',
+            time: new Date(photo.created_at).toLocaleTimeString().slice(0, 5),
+            city: ev?.city || 'Sweden',
+            arena: ev?.venueName || 'Main Arena',
+            countryCode: 'SE',
+            discipline: ev?.disciplines?.[0] || 'Showjumping',
+          };
+        });
+
+      setApiHighlightPhotos(mappedPhotos);
+    };
+
+    fetchHighlightPhotos().catch(error => {
+      if (isMounted) {
+        setApiHighlightPhotos([]);
+      }
+      console.error('Failed to load photographer highlights', error);
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [apiPhotographer, contextEvents, isOwner]);
 
   const breadcrumbs = useMemo<BreadcrumbItem[]>(() => {
     const items: BreadcrumbItem[] = [
@@ -267,7 +351,7 @@ export function PhotographerProfile() {
     { label: '1.30m', value: '130' },
   ];
 
-  const totalEvents = activeProfile.dummyEvents.length + 1;
+  const totalEvents = activeProfile ? activeProfile.dummyEvents.length + 1 : 0;
   const totalPhotosCount = photos.length;
 
   // Resolve Highlights Data
@@ -298,11 +382,17 @@ export function PhotographerProfile() {
         };
       });
     }
-    // Public view: Map IDs to mockData photos
+    if (apiPhotographer) {
+      return apiHighlightPhotos;
+    }
+
+    // Public mock view: Map IDs to mockData photos
     return (photographer?.highlights || [])
       .map(id => mockPhotos.find(p => p.id === id))
       .filter((p): p is Photo => !!p);
   }, [
+    apiHighlightPhotos,
+    apiPhotographer,
     isOwner,
     contextHighlights,
     contextPhotos,

@@ -5,14 +5,19 @@ import { Footer } from '../components/Footer';
 import { EventBrowseFilter } from '../components/EventBrowseFilter';
 import { FolderEventCard } from '../components/FolderEventCard';
 import type { EventData } from '../data/mockEvents';
-import { fetchEventsFromApi } from '../data/eventsApi';
+import { api } from '../data/apiClient';
+import { fetchEventsFromApi, mapApiEventToEventData } from '../data/eventsApi';
 import { useNavigate } from 'react-router-dom';
+import { useAuth as useClerkAuth } from '@clerk/clerk-react';
+import { useAuth } from '../context/AuthContext';
 
 import './guestHome.mobile.css';
 import './mobileSearchFix.css';
 
 export function EventsPage() {
   const navigate = useNavigate();
+  const { isLoaded, isAuthenticated, user } = useAuth();
+  const { getToken } = useClerkAuth();
 
   // Filters States
   const [country, setCountry] = useState('Sweden');
@@ -21,16 +26,28 @@ export function EventsPage() {
   const [events, setEvents] = useState<EventData[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState(true);
   const [eventsError, setEventsError] = useState<string | null>(null);
+  const shouldShowBookedEvents =
+    isLoaded &&
+    isAuthenticated &&
+    user?.role === 'pg' &&
+    user.hasCompletedOnboarding;
 
   useEffect(() => {
+    if (!isLoaded) return;
+
     let isMounted = true;
 
     async function loadEvents() {
       try {
         setIsLoadingEvents(true);
         setEventsError(null);
-        const apiEvents = await fetchEventsFromApi();
-        if (isMounted) setEvents(apiEvents);
+        const nextEvents = shouldShowBookedEvents
+          ? (await api.listMyEventBookings(getToken)).map(
+              mapApiEventToEventData,
+            )
+          : await fetchEventsFromApi();
+
+        if (isMounted) setEvents(nextEvents);
       } catch (error) {
         if (isMounted) {
           setEventsError(
@@ -47,7 +64,7 @@ export function EventsPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [getToken, isLoaded, shouldShowBookedEvents]);
 
   // Filter Logic
   const filteredEvents = useMemo(() => {
@@ -109,7 +126,9 @@ export function EventsPage() {
       const isLive =
         TODAY.getTime() >= start.getTime() && TODAY.getTime() <= end.getTime();
 
-      if (period === 'Recent') {
+      if (shouldShowBookedEvents) {
+        matchPeriod = true;
+      } else if (period === 'Recent') {
         // Rules:
         // 1. Started within last 30 days: start >= (TODAY - 30) AND start <= TODAY
         // 2. OR is Live (covers long events started > 30 days ago potentially, though unlikely in mock)
@@ -145,7 +164,7 @@ export function EventsPage() {
       return 0;
     });
 
-    if (period === 'Recent') {
+    if (!shouldShowBookedEvents && period === 'Recent') {
       // Separate Live vs Others
       const liveEvents = finalResults.filter(e => {
         const { start, end } = parseEventDates(e);
@@ -175,7 +194,7 @@ export function EventsPage() {
     }
 
     return finalResults;
-  }, [country, city, period, events]);
+  }, [country, city, period, events, shouldShowBookedEvents]);
 
   const handleFilterChange = (
     key: 'country' | 'city' | 'period',
@@ -233,7 +252,11 @@ export function EventsPage() {
             </div>
           ) : (
             <div className="pg-empty-state">
-              <h3>No events available – yet</h3>
+              <h3>
+                {shouldShowBookedEvents
+                  ? 'No booked events yet'
+                  : 'No events available – yet'}
+              </h3>
             </div>
           )}
         </div>

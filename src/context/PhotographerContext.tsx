@@ -7,6 +7,8 @@ import React, {
 import { assetUrl, formatLabel } from '../lib/utils';
 import { useAuth } from './AuthContext';
 import {
+  api,
+  ApiError,
   type ApiPhoto,
   getApiBaseUrl,
   resolveApiAssetUrl,
@@ -591,6 +593,25 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
     }
   }, [photographerId]);
 
+  React.useEffect(() => {
+    const fetchHighlights = async () => {
+      if (SHOW_EVENTS) return;
+      const token = await getClerkToken?.();
+      if (!token) return;
+
+      try {
+        const response = await api.getMyHighlights(getClerkToken);
+        setHighlights(response.highlights);
+      } catch (error) {
+        if (!(error instanceof ApiError && error.status === 404)) {
+          console.error('Failed to fetch highlights:', error);
+        }
+      }
+    };
+
+    fetchHighlights();
+  }, [SHOW_EVENTS, getClerkToken]);
+
   // Fetch events from API on mount (when not using mock data)
   React.useEffect(() => {
     const fetchEvents = async () => {
@@ -708,11 +729,25 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
   }, [SHOW_EVENTS, getClerkToken]);
 
   const updateHighlights = (ids: string[]) => {
+    const previousIds = highlights;
     setHighlights(ids);
     // Sync to mock data for public visibility
     const p = PHOTOGRAPHERS.find(p => p.id === photographerId);
     if (p) {
       p.highlights = ids;
+    }
+
+    if (!SHOW_EVENTS) {
+      void api
+        .updateMyHighlights(getClerkToken, ids)
+        .then(response => setHighlights(response.highlights))
+        .catch(error => {
+          setHighlights(previousIds);
+          if (p) {
+            p.highlights = previousIds;
+          }
+          console.error('Failed to update highlights:', error);
+        });
     }
   };
 
