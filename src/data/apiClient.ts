@@ -20,6 +20,11 @@ export function resolveApiAssetUrl(path: string | null | undefined) {
   return new URL(path, getApiBaseUrl()).toString();
 }
 
+const isUuid = (value: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value
+  );
+
 export interface ApiUser {
   id: string;
   clerk_user_id: string;
@@ -182,9 +187,23 @@ export const api = {
     ),
 
   // Upload methods
-  uploadPhotos: (getToken: TokenGetter, eventId: string, files: File[]) => {
+  uploadPhotos: (
+    getToken: TokenGetter,
+    eventId: string,
+    files: File[],
+    metadata?: { classId?: string; className?: string }
+  ) => {
     const formData = new FormData();
     formData.set('event_id', eventId);
+    if (metadata?.classId && isUuid(metadata.classId)) {
+      formData.set('class_section_id', metadata.classId);
+    }
+    if (metadata?.classId) {
+      formData.set('event_class_id', metadata.classId);
+    }
+    if (metadata?.className) {
+      formData.set('class_name', metadata.className);
+    }
     files.forEach(file => formData.append('files', file));
     return request<ApiPhoto[]>(
       '/api/v1/photographer/uploads',
@@ -206,11 +225,13 @@ export const api = {
   listMyPhotos: (
     getToken: TokenGetter,
     eventId?: string,
-    visibility?: string
+    visibility?: string,
+    classId?: string
   ) => {
     const params = new URLSearchParams();
     if (eventId) params.set('event_id', eventId);
     if (visibility) params.set('visibility', visibility);
+    if (classId) params.set('class_id', classId);
     return request<PaginatedResponse<ApiPhoto>>(
       `/api/v1/photographer/photos?${params.toString()}`,
       {},
@@ -240,21 +261,34 @@ export const api = {
       getToken
     ),
 
-  getEventGallery: (eventId: string, page?: number, pageSize?: number) => {
+  getEventGallery: (
+    eventId: string,
+    page?: number,
+    pageSize?: number,
+    classId?: string
+  ) => {
     const params = new URLSearchParams();
     if (page) params.set('page', String(page));
     if (pageSize) params.set('page_size', String(pageSize));
+    if (classId) params.set('class_id', classId);
     return request<PaginatedResponse<ApiPhoto>>(
       `/api/v1/events/${eventId}/gallery?${params.toString()}`
     );
   },
 
-  searchGallery: (eventId: string, q: string, tagType?: string) =>
-    request<ApiPhoto[]>(
-      `/api/v1/events/${eventId}/gallery/search?q=${encodeURIComponent(q)}${
-        tagType ? `&tag_type=${tagType}` : ''
-      }`
-    ),
+  searchGallery: (
+    eventId: string,
+    q: string,
+    tagType?: string,
+    classId?: string
+  ) => {
+    const params = new URLSearchParams({ q });
+    if (tagType) params.set('tag_type', tagType);
+    if (classId) params.set('class_id', classId);
+    return request<ApiPhoto[]>(
+      `/api/v1/events/${eventId}/gallery/search?${params.toString()}`
+    );
+  },
 };
 
 // --- Additional Types for Upload/Gallery ---
@@ -268,6 +302,11 @@ export interface ApiPhoto {
   status: 'processing' | 'ready' | 'failed';
   visibility: 'draft' | 'published';
   tags: Array<{ type: string; value: string }>;
+  class_id?: string | null;
+  class_section_id?: string | null;
+  event_class_id?: string | null;
+  class_name?: string | null;
+  event_class_name?: string | null;
   storage_key_original?: string | null;
   storage_key_thumbnail?: string | null;
   storage_key_preview?: string | null;

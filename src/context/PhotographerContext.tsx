@@ -4,7 +4,7 @@ import React, {
   useState,
   type ReactNode,
 } from 'react';
-import { assetUrl } from '../lib/utils';
+import { assetUrl, formatLabel } from '../lib/utils';
 import { useAuth } from './AuthContext';
 import {
   type ApiPhoto,
@@ -123,7 +123,10 @@ interface PhotographerContextType {
   openUploadOverlay: (eventId: string) => void;
   closeUploadOverlay: () => void;
   setCurrentUploadEventId: (eventId: string | null) => void; // New export
-  startUpload: (files: File[], metadata?: { classId?: string }) => void; // Updated sig
+  startUpload: (
+    files: File[],
+    metadata?: { classId?: string; className?: string }
+  ) => void; // Updated sig
   clearUploadSession: (eventId: string) => void;
   removeUploadFile: (eventId: string, fileId: string) => void;
 
@@ -269,6 +272,20 @@ const generatePhotoCode = () => {
     ).join('')
   );
 };
+
+const getApiPhotoClassId = (photo: ApiPhoto) =>
+  photo.class_id ||
+  photo.class_section_id ||
+  photo.event_class_id ||
+  '';
+
+const getApiPhotoClassName = (photo: ApiPhoto) =>
+  photo.class_name || photo.event_class_name || '';
+
+const isUuid = (value: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value
+  );
 
 const generateMockPhotos = (eventId: string, count: number): Photo[] => {
   const srcPool = Array.from(new Set(basePhotos.map(p => p.src)));
@@ -607,7 +624,11 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
           soldCount: 0,
           logo: e.logo || '',
           venueName: e.venue_name || e.venueName || '',
-          disciplines: e.disciplines || [],
+          disciplines: Array.isArray(e.disciplines)
+            ? e.disciplines.map(formatLabel).filter(Boolean)
+            : e.discipline
+            ? [formatLabel(e.discipline)]
+            : [],
           city: e.city || '',
           assignedPhotographers: [],
           applicationsWelcomed: true,
@@ -667,8 +688,8 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
           photoCode: '',
           uploadDate: p.created_at,
           batch: '',
-          classId: '',
-          className: '',
+          classId: getApiPhotoClassId(p),
+          className: getApiPhotoClassName(p),
           isDuplicate: false,
           storedLocation: 'Uncategorised',
           priceStandard: 499,
@@ -883,7 +904,7 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
 
   const startUpload = async (
     files: File[],
-    metadata?: { classId?: string }
+    metadata?: { classId?: string; className?: string }
   ) => {
     if (!currentUploadEventId) return;
     const eventId = currentUploadEventId;
@@ -935,6 +956,15 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
       // Upload files via FormData to the direct upload endpoint
       const formData = new FormData();
       formData.set('event_id', eventId);
+      if (metadata?.classId && isUuid(metadata.classId)) {
+        formData.set('class_section_id', metadata.classId);
+      }
+      if (metadata?.classId) {
+        formData.set('event_class_id', metadata.classId);
+      }
+      if (metadata?.className) {
+        formData.set('class_name', metadata.className);
+      }
       files.forEach(file => formData.append('files', file));
 
       // Update progress to "uploading"
@@ -991,7 +1021,7 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
 
       // Add returned photos to the photo list
       const newPhotoList: Photo[] = photos.map((p, i) => ({
-        id: newFiles[i]?.id || `api-${p.id}`,
+        id: p.id || newFiles[i]?.id || `api-${Date.now()}-${i}`,
         url:
           (p.status === 'ready'
             ? resolveApiAssetUrl(`/api/v1/photographer/photos/${p.id}/preview`)
@@ -1001,16 +1031,24 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
         status: p.status === 'ready' ? 'uploadedUnpublished' : 'processing',
         soldCount: 0,
         rider: 'Processing...',
-        horse: metadata?.classId ? `Class: ${metadata.classId}` : '',
+        horse: metadata?.className
+          ? `Class: ${metadata.className}`
+          : metadata?.classId
+          ? `Class: ${metadata.classId}`
+          : '',
         timestamp: new Date().toLocaleTimeString().slice(0, 5),
         width: 600,
         height: 800,
         fileName: files[i]?.name,
         photoCode: generatePhotoCode(),
         uploadDate: new Date().toISOString(),
-        batch: metadata?.classId || '',
-        classId: metadata?.classId || '',
-        className: metadata?.classId || '',
+        batch: '',
+        classId: getApiPhotoClassId(p) || metadata?.classId || '',
+        className:
+          getApiPhotoClassName(p) ||
+          metadata?.className ||
+          metadata?.classId ||
+          '',
       }));
       setPhotos(prev => [...newPhotoList, ...prev]);
     } catch (error) {

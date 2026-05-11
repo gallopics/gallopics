@@ -553,8 +553,12 @@ export const EventsList: React.FC = () => {
                     <h3 className="pg-event-title-bold">{event.title}</h3>
                     <div className="pg-event-meta-row">
                       <span>{event.city}</span>
-                      <span className="meta-bullet">•</span>
-                      <span>{event.venueName}</span>
+                      {event.venueName && (
+                        <>
+                          <span className="meta-bullet">•</span>
+                          <span>{event.venueName}</span>
+                        </>
+                      )}
                       {event.disciplines && (
                         <>
                           <span className="meta-bullet">•</span>
