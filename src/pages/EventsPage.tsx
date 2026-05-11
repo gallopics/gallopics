@@ -1,11 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Header } from '../components/Header';
 import { TitleHeader } from '../components/TitleHeader';
 import { Footer } from '../components/Footer';
 import { EventBrowseFilter } from '../components/EventBrowseFilter';
 import { FolderEventCard } from '../components/FolderEventCard';
 import type { EventData } from '../data/mockEvents';
-import { api } from '../data/apiClient';
+import { api, ApiError } from '../data/apiClient';
 import { fetchEventsFromApi, mapApiEventToEventData } from '../data/eventsApi';
 import { useNavigate } from 'react-router-dom';
 import { useAuth as useClerkAuth } from '@clerk/clerk-react';
@@ -23,6 +23,11 @@ export function EventsPage() {
   const [country, setCountry] = useState('Sweden');
   const [city, setCity] = useState('All');
   const [period, setPeriod] = useState('Scheduled');
+  const [changedFilters, setChangedFilters] = useState({
+    country: false,
+    city: false,
+    period: false,
+  });
   const [events, setEvents] = useState<EventData[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState(true);
   const [eventsError, setEventsError] = useState<string | null>(null);
@@ -31,6 +36,22 @@ export function EventsPage() {
     isAuthenticated &&
     user?.role === 'pg' &&
     user.hasCompletedOnboarding;
+
+  const syncLocalPhotographerProfile = useCallback(async () => {
+    if (!user || user.role === 'admin') {
+      return;
+    }
+
+    await api.upsertMyPhotographer(getToken, {
+      slug: user.id,
+      display_name: user.displayName || 'Photographer',
+      city: user.city || null,
+      country: user.country || null,
+      avatar_url: user.avatarUrl ?? null,
+      phone: user.phone ?? null,
+      is_available_to_hire: true,
+    });
+  }, [getToken, user]);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -41,11 +62,28 @@ export function EventsPage() {
       try {
         setIsLoadingEvents(true);
         setEventsError(null);
-        const nextEvents = shouldShowBookedEvents
-          ? (await api.listMyEventBookings(getToken)).map(
+        let nextEvents: EventData[];
+        if (shouldShowBookedEvents) {
+          try {
+            nextEvents = (await api.listMyEventBookings(getToken)).map(
               mapApiEventToEventData,
-            )
-          : await fetchEventsFromApi();
+            );
+          } catch (bookingsError) {
+            if (
+              bookingsError instanceof ApiError &&
+              bookingsError.status === 403
+            ) {
+              await syncLocalPhotographerProfile();
+              nextEvents = (await api.listMyEventBookings(getToken)).map(
+                mapApiEventToEventData,
+              );
+            } else {
+              throw bookingsError;
+            }
+          }
+        } else {
+          nextEvents = await fetchEventsFromApi();
+        }
 
         if (isMounted) setEvents(nextEvents);
       } catch (error) {
@@ -64,7 +102,7 @@ export function EventsPage() {
     return () => {
       isMounted = false;
     };
-  }, [getToken, isLoaded, shouldShowBookedEvents]);
+  }, [getToken, isLoaded, shouldShowBookedEvents, syncLocalPhotographerProfile]);
 
   // Filter Logic
   const filteredEvents = useMemo(() => {
@@ -115,8 +153,16 @@ export function EventsPage() {
     TODAY.setHours(0, 0, 0, 0);
 
     const results = source.filter(event => {
-      const matchCountry = event.country === country || country === 'all';
-      const matchCity = city === 'All' || city === 'all' || event.city === city;
+      const shouldApplyCountry =
+        !shouldShowBookedEvents || changedFilters.country;
+      const shouldApplyCity = !shouldShowBookedEvents || changedFilters.city;
+      const matchCountry =
+        !shouldApplyCountry || event.country === country || country === 'all';
+      const matchCity =
+        !shouldApplyCity ||
+        city === 'All' ||
+        city === 'all' ||
+        event.city === city;
 
       // Period Logic
       let matchPeriod = true;
@@ -194,12 +240,26 @@ export function EventsPage() {
     }
 
     return finalResults;
-  }, [country, city, period, events, shouldShowBookedEvents]);
+  }, [
+    changedFilters.city,
+    changedFilters.country,
+    country,
+    city,
+    period,
+    events,
+    shouldShowBookedEvents,
+  ]);
 
   const handleFilterChange = (
     key: 'country' | 'city' | 'period',
     value: string,
   ) => {
+    setChangedFilters(prev => ({
+      ...prev,
+      [key]:
+        value !==
+        (key === 'country' ? 'Sweden' : key === 'city' ? 'All' : 'Scheduled'),
+    }));
     if (key === 'country') setCountry(value);
     if (key === 'city') setCity(value);
     if (key === 'period') setPeriod(value);
