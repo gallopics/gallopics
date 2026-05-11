@@ -35,8 +35,10 @@ import {
   ActionCluster,
 } from '../components/HeaderActions';
 import { ScopedSearchBar } from '../components/ScopedSearchBar';
-import type { Photo, ClassSection, EventDetail, Meeting } from '../types';
+import { PageTabs } from '../components/PageTabs';
+import type { Photo as EventPhoto, ClassSection, EventDetail, Meeting } from '../types';
 import { assetUrl } from '../lib/utils';
+import { usePhotographer } from '../context/PhotographerContext';
 
 // Helpers for randomization
 function pick<T>(arr: T[]): T {
@@ -52,7 +54,7 @@ const generateEventPhotos = (
   discipline?: string,
   meetingOverride?: Meeting,
   eventClasses: ClassSection[] = []
-): Photo[] => {
+): EventPhoto[] => {
   const srcPool = Array.from(new Set(basePhotos.map(p => p.src)));
   const comp =
     meetingOverride || eventDetails.find(e => e.meetingId === eventId)?.meeting;
@@ -109,6 +111,7 @@ export function EventProfile() {
   const { eventId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const { getPhotosByEvent } = usePhotographer();
   const fromPath =
     typeof location.state === 'object' &&
     location.state !== null &&
@@ -123,6 +126,13 @@ export function EventProfile() {
     typeof location.state.fromTab === 'string'
       ? location.state.fromTab
       : undefined;
+  const initialEventTab =
+    typeof location.state === 'object' &&
+    location.state !== null &&
+    'eventTab' in location.state &&
+    location.state.eventTab === 'classes'
+      ? 'classes'
+      : 'uploads';
   const isPhotographerMyEventView =
     fromPath === '/pg/events' && fromTab === 'my';
   const navigateBackToEvents = () => {
@@ -141,11 +151,14 @@ export function EventProfile() {
     [eventId]
   );
 
-  const [photos, setPhotos] = useState<Photo[]>([]);
+  const [photos, setPhotos] = useState<EventPhoto[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [eventClass, setEventClass] = useState('All');
+  const [activeEventTab, setActiveEventTab] = useState<'uploads' | 'classes'>(
+    initialEventTab
+  );
 
   useEffect(() => {
     if (localEventDetail || !eventId) {
@@ -247,12 +260,41 @@ export function EventProfile() {
     ];
   }, [allEventClasses]);
 
+  const uploadedPhotos = useMemo<EventPhoto[]>(() => {
+    if (!isPhotographerMyEventView || !eventId || !eventDetail) return [];
+
+    return getPhotosByEvent(eventId).map(photo => ({
+      id: photo.id,
+      src: photo.url,
+      rider: photo.rider || 'Unassigned',
+      horse: photo.horse || photo.className || photo.fileName || 'Uploaded photo',
+      event: eventDetail.meeting.name,
+      eventId,
+      date: photo.uploadDate || eventDetail.meeting.period.startDate,
+      width: photo.width,
+      height: photo.height,
+      className: photo.className || 'Uploaded',
+      time: photo.timestamp || '',
+      city: eventDetail.meeting.city,
+      arena: photo.className || 'Uploaded',
+      countryCode: eventDetail.meeting.country.code.toLowerCase(),
+      photographer: eventDetail.meeting.photographer?.name || 'Gallopics',
+      photographerId: eventDetail.meeting.photographer?.id,
+    }));
+  }, [eventDetail, eventId, getPhotosByEvent, isPhotographerMyEventView]);
+
+  const uploadPhotos = isPhotographerMyEventView ? uploadedPhotos : photos;
+
   const combinedOptions = useMemo(() => {
-    const uniqueRiders = Array.from(new Set(photos.map(p => p.rider))).sort();
-    const uniqueHorses = Array.from(new Set(photos.map(p => p.horse))).sort();
+    const uniqueRiders = Array.from(
+      new Set(uploadPhotos.map(p => p.rider).filter(Boolean))
+    ).sort();
+    const uniqueHorses = Array.from(
+      new Set(uploadPhotos.map(p => p.horse).filter(Boolean))
+    ).sort();
 
     const riderOptions = uniqueRiders.map(r => {
-      const photo = photos.find(p => p.rider === r);
+      const photo = uploadPhotos.find(p => p.rider === r);
       return {
         label: r,
         value: r,
@@ -262,7 +304,7 @@ export function EventProfile() {
     });
 
     const horseOptions = uniqueHorses.map(h => {
-      const photo = photos.find(p => p.horse === h);
+      const photo = uploadPhotos.find(p => p.horse === h);
       return {
         label: h,
         value: h,
@@ -272,23 +314,26 @@ export function EventProfile() {
     });
 
     return [...riderOptions, ...horseOptions];
-  }, [photos]);
+  }, [uploadPhotos]);
 
   // 3. Absolute Totals for Header (Stable)
   const totalRiders = useMemo(
-    () => new Set(photos.map(p => p.rider)).size,
-    [photos]
+    () => new Set(uploadPhotos.map(p => p.rider).filter(Boolean)).size,
+    [uploadPhotos]
   );
   const totalHorses = useMemo(
-    () => new Set(photos.map(p => p.horse)).size,
-    [photos]
+    () => new Set(uploadPhotos.map(p => p.horse).filter(Boolean)).size,
+    [uploadPhotos]
   );
 
   // 4. Final Photo Filtering
   const activePhotos = useMemo(() => {
-    if (!photos.length) return [];
-    return photos.filter(p => {
-      const matchClass = eventClass === 'All' || p.arena === eventClass;
+    if (!uploadPhotos.length) return [];
+    return uploadPhotos.filter(p => {
+      const matchClass =
+        eventClass === 'All' ||
+        p.arena === eventClass ||
+        p.className === eventClass;
 
       // Search Query Logic: Matches either Rider OR Horse
       let matchSearch = true;
@@ -301,7 +346,7 @@ export function EventProfile() {
 
       return matchClass && matchSearch;
     });
-  }, [photos, searchQuery, eventClass]);
+  }, [uploadPhotos, searchQuery, eventClass]);
 
   if (isLoadingEvent)
     return <div className="container pt-[120px]">Loading event...</div>;
@@ -366,7 +411,9 @@ export function EventProfile() {
               {meeting.country.code === 'SE' && <span>🇸🇪</span>}
               <span>{meeting.city}</span>
             </span>
-            <span className="meta-item">{meeting.venueName}</span>
+            {meeting.venueName && (
+              <span className="meta-item">{meeting.venueName}</span>
+            )}
             <span className="meta-item">{meeting.disciplines.join(', ')}</span>
           </div>
         }
@@ -404,139 +451,159 @@ export function EventProfile() {
 
       <section className="grid-section">
         <div className="container">
-          <div className="filters-wrapper">
-            <div className="filter-container">
-              <div className="filter-group">
-                <ModernDropdown
-                  value={eventClass}
-                  options={classOptions}
-                  onChange={setEventClass}
-                  label="Class"
-                  placeholder="Class"
-                  variant="pill"
-                />
-                <button
-                  className="filter-reset-btn"
-                  onClick={() => {
-                    setEventClass('All');
-                    setSearchQuery('');
-                  }}
-                  title="Reset filters"
-                  disabled={isResetDisabled}
-                >
-                  <RotateCcw size={18} />
-                </button>
-              </div>
+          <PageTabs
+            tabs={[
+              { id: 'uploads', label: 'Uploads' },
+              { id: 'classes', label: 'Classes' },
+            ]}
+            activeTab={activeEventTab}
+            onChange={tabId =>
+              setActiveEventTab(tabId === 'classes' ? 'classes' : 'uploads')
+            }
+          />
 
-              <div className="search-group">
-                <ScopedSearchBar
-                  placeholder="Search by riders or horses..."
-                  options={combinedOptions}
-                  currentValue={searchQuery}
-                  onSelect={val => setSearchQuery(val)}
-                  onSearchChange={val => setSearchQuery(val)}
-                  variant="v2"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div className="event-classes-section">
-            <div className="event-classes-header">
-              <div>
-                <h2>Classes</h2>
-                <p>{allEventClasses.length} classes scheduled for this event</p>
-              </div>
-            </div>
-
-            <div className="event-classes-days">
-              {classesByDay.map(day => (
-                <div className="event-classes-day" key={day.date}>
-                  <div className="event-classes-date">
-                    <CalendarDays size={16} />
-                    <span>
-                      {new Date(`${day.date}T00:00:00`).toLocaleDateString(
-                        'en-GB',
-                        {
-                          weekday: 'short',
-                          day: 'numeric',
-                          month: 'short',
-                        }
-                      )}
-                    </span>
+          {activeEventTab === 'uploads' ? (
+            <>
+              <div className="filters-wrapper">
+                <div className="filter-container">
+                  <div className="filter-group">
+                    <ModernDropdown
+                      value={eventClass}
+                      options={classOptions}
+                      onChange={setEventClass}
+                      label="Class"
+                      placeholder="Class"
+                      variant="pill"
+                    />
+                    <button
+                      className="filter-reset-btn"
+                      onClick={() => {
+                        setEventClass('All');
+                        setSearchQuery('');
+                      }}
+                      title="Reset filters"
+                      disabled={isResetDisabled}
+                    >
+                      <RotateCcw size={18} />
+                    </button>
                   </div>
 
-                  <div className="event-classes-list">
-                    {day.classes.map(competition => (
-                      <button
-                        key={competition.classSectionId}
-                        className={`event-class-row ${
-                          eventClass === competition.name ? 'active' : ''
-                        }`}
-                        onClick={() => {
-                          if (isPhotographerMyEventView) {
-                            // Navigate to EventDetail with the class pre-selected
-                            navigate(`/pg/events/${meeting.id}`, {
-                              state: {
-                                selectedClassId: competition.classSectionId,
-                                selectedClassName: competition.name,
-                                selectedArenaName: competition.arenaName,
-                                fromUpload: true,
-                              },
-                            });
-                            return;
+                  <div className="search-group">
+                    <ScopedSearchBar
+                      placeholder="Search by riders or horses..."
+                      options={combinedOptions}
+                      currentValue={searchQuery}
+                      onSelect={val => setSearchQuery(val)}
+                      onSearchChange={val => setSearchQuery(val)}
+                      variant="v2"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <MasonryGrid
+                isLoading={loading}
+                renderSkeleton={() => (
+                  <div className="photo-card skeleton-card">
+                    <div className="card-image-wrapper aspect-[3/4] bg-[var(--ui-bg-subtle)]"></div>
+                    <div className="card-content">
+                      <div className="h-4 w-[70%] bg-[var(--color-border)] mb-1.5 rounded-[4px]"></div>
+                      <div className="h-3 w-[40%] bg-[var(--color-border)] rounded-[4px]"></div>
+                    </div>
+                  </div>
+                )}
+              >
+                {activePhotos.map(photo => (
+                  <PhotoCard
+                    key={photo.id}
+                    photo={photo}
+                    onClick={p =>
+                      navigate(
+                        `/photo/${p.id}?from=epro&eventId=${meeting.id}`
+                      )
+                    }
+                  />
+                ))}
+              </MasonryGrid>
+            </>
+          ) : (
+            <div className="event-classes-section">
+              <div className="event-classes-header">
+                <div>
+                  <h2>Classes</h2>
+                  <p>
+                    {allEventClasses.length} classes scheduled for this event
+                  </p>
+                </div>
+              </div>
+
+              <div className="event-classes-days">
+                {classesByDay.map(day => (
+                  <div className="event-classes-day" key={day.date}>
+                    <div className="event-classes-date">
+                      <CalendarDays size={16} />
+                      <span>
+                        {new Date(`${day.date}T00:00:00`).toLocaleDateString(
+                          'en-GB',
+                          {
+                            weekday: 'short',
+                            day: 'numeric',
+                            month: 'short',
                           }
-
-                          setEventClass(competition.name);
-                        }}
-                      >
-                        <span className="event-class-time">
-                          <Clock size={14} />
-                          {competition.startTime}
-                        </span>
-                        <span className="event-class-name">
-                          {competition.name}
-                        </span>
-                        <span className="event-class-arena">
-                          <MapPin size={14} />
-                          {competition.arenaName}
-                        </span>
-                        {isPhotographerMyEventView && (
-                          <span className="event-class-upload">
-                            <UploadCloud size={14} />
-                            Upload
-                          </span>
                         )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+                      </span>
+                    </div>
 
-          <MasonryGrid
-            isLoading={loading}
-            renderSkeleton={() => (
-              <div className="photo-card skeleton-card">
-                <div className="card-image-wrapper aspect-[3/4] bg-[var(--ui-bg-subtle)]"></div>
-                <div className="card-content">
-                  <div className="h-4 w-[70%] bg-[var(--color-border)] mb-1.5 rounded-[4px]"></div>
-                  <div className="h-3 w-[40%] bg-[var(--color-border)] rounded-[4px]"></div>
-                </div>
+                    <div className="event-classes-list">
+                      {day.classes.map(competition => (
+                        <button
+                          key={competition.classSectionId}
+                          className={`event-class-row ${
+                            eventClass === competition.name ? 'active' : ''
+                          }`}
+                          onClick={() => {
+                            if (isPhotographerMyEventView) {
+                              navigate(`/pg/events/${meeting.id}`, {
+                                state: {
+                                  selectedClassId: competition.classSectionId,
+                                  selectedClassName: competition.name,
+                                  selectedArenaName: competition.arenaName,
+                                  fromTab,
+                                  fromUpload: true,
+                                },
+                              });
+                              return;
+                            }
+
+                            setEventClass(competition.name);
+                            setActiveEventTab('uploads');
+                          }}
+                        >
+                          <span className="event-class-time">
+                            <Clock size={14} />
+                            {competition.startTime}
+                          </span>
+                          <span className="event-class-name">
+                            {competition.name}
+                          </span>
+                          <span className="event-class-arena">
+                            <MapPin size={14} />
+                            {competition.arenaName}
+                          </span>
+                          {isPhotographerMyEventView && (
+                            <span className="event-class-upload">
+                              <UploadCloud size={14} />
+                              Upload
+                            </span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
-            )}
-          >
-            {activePhotos.map(photo => (
-              <PhotoCard
-                key={photo.id}
-                photo={photo}
-                onClick={p =>
-                  navigate(`/photo/${p.id}?from=epro&eventId=${meeting.id}`)
-                }
-              />
-            ))}
-          </MasonryGrid>
+            </div>
+          )}
         </div>
       </section>
 

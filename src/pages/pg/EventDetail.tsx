@@ -51,7 +51,60 @@ export const EventDetail: React.FC = () => {
   const { getEvent, getPhotosByEvent, resolveDuplicate } = usePhotographer();
 
   const event = eventId ? getEvent(eventId) : undefined;
-  const allPhotos = eventId ? getPhotosByEvent(eventId) : [];
+  const allEventPhotos = eventId ? getPhotosByEvent(eventId) : [];
+  const selectedClassContext = useMemo(() => {
+    const state = location.state as
+      | {
+          selectedClassId?: string;
+          selectedClassName?: string;
+          selectedArenaName?: string;
+        }
+      | null
+      | undefined;
+
+    return {
+      id: state?.selectedClassId || '',
+      name: state?.selectedClassName || '',
+      arenaName: state?.selectedArenaName || '',
+    };
+  }, [location.state]);
+
+  const hasSelectedClassContext = Boolean(
+    selectedClassContext.id || selectedClassContext.name
+  );
+
+  const handleBack = React.useCallback(() => {
+    if (hasSelectedClassContext && eventId) {
+      navigate(`/event/${eventId}`, {
+        state: {
+          from: '/pg/events',
+          fromTab: fromTab || 'my',
+          eventTab: 'classes',
+        },
+      });
+      return;
+    }
+
+    navigate(`${basePath}/events`, { state: { tab: fromTab } });
+  }, [basePath, eventId, fromTab, hasSelectedClassContext, navigate]);
+
+  const matchesSelectedClass = React.useCallback(
+    (photo: Photo) => {
+      if (!hasSelectedClassContext) return true;
+
+      return Boolean(
+        (selectedClassContext.id && photo.classId === selectedClassContext.id) ||
+          (selectedClassContext.name &&
+            photo.className === selectedClassContext.name)
+      );
+    },
+    [hasSelectedClassContext, selectedClassContext.id, selectedClassContext.name]
+  );
+
+  const allPhotos = useMemo(
+    () => allEventPhotos.filter(matchesSelectedClass),
+    [allEventPhotos, matchesSelectedClass]
+  );
 
   // State
   const [activeTab, setActiveTab] = useState<TabType>('uploads');
@@ -781,11 +834,22 @@ export const EventDetail: React.FC = () => {
 
               <div className="ml-auto flex items-center gap-3">
                 <button
-                  onClick={() =>
-                    navigate(
-                      `${basePath}/upload?eventId=${event!.id}&from=event`
-                    )
-                  }
+                  onClick={() => {
+                    const params = new URLSearchParams({
+                      eventId: event!.id,
+                      from: 'event',
+                    });
+                    if (selectedClassContext.id) {
+                      params.set('classId', selectedClassContext.id);
+                    }
+                    if (selectedClassContext.name) {
+                      params.set('className', selectedClassContext.name);
+                    }
+                    if (selectedClassContext.arenaName) {
+                      params.set('arenaName', selectedClassContext.arenaName);
+                    }
+                    navigate(`${basePath}/upload?${params.toString()}`);
+                  }}
                   className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
                 >
                   <UploadCloud size={16} />
@@ -1352,11 +1416,9 @@ export const EventDetail: React.FC = () => {
           title={
             <div className="flex items-center gap-2">
               <button
-                onClick={() =>
-                  navigate(`${basePath}/events`, { state: { tab: fromTab } })
-                }
+                onClick={handleBack}
                 className="p-1 flex items-center rounded-full transition-[background] duration-200 text-[var(--color-text-secondary)] hover:bg-black/5"
-                title="Back to events"
+                title={hasSelectedClassContext ? 'Back to classes' : 'Back to events'}
               >
                 <ArrowLeft size={18} />
               </button>
@@ -1612,10 +1674,12 @@ export const EventDetail: React.FC = () => {
                     <label className="event-info-label">City</label>
                     <div className="event-info-value">{event.city}</div>
                   </div>
-                  <div>
-                    <label className="event-info-label">Venue</label>
-                    <div className="event-info-value">{event.venueName}</div>
-                  </div>
+                  {event.venueName && (
+                    <div>
+                      <label className="event-info-label">Venue</label>
+                      <div className="event-info-value">{event.venueName}</div>
+                    </div>
+                  )}
                   <div>
                     <label className="event-info-label">County</label>
                     <div className="event-info-value">Stockholm County</div>

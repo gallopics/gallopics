@@ -6,6 +6,7 @@ import type {
   EventDetail,
   Meeting,
 } from '../types';
+import { formatLabel } from '../lib/utils';
 
 export interface ApiEvent {
   id: string;
@@ -112,7 +113,7 @@ export function mapApiEventToEventData(event: ApiEvent): EventData {
     endDate: event.end_date || event.start_date,
     flag: country === 'Sweden' ? '🇸🇪' : '',
     city: event.city || event.venue_name || event.organizer_name || 'Sweden',
-    discipline: event.discipline || 'Equestrian',
+    discipline: formatLabel(event.discipline) || 'Equestrian',
     country,
     logo: '',
     photographer: null,
@@ -170,7 +171,7 @@ export function mapApiScheduleToDailySchedule(
         name: eventClass.name,
         startTime: eventClass.start_time || 'TBD',
         position: eventClass.position,
-        discipline: eventClass.discipline || 'Equestrian',
+        discipline: formatLabel(eventClass.discipline) || 'Equestrian',
         entriesCount: 0,
       });
     });
@@ -194,7 +195,7 @@ export function buildApiEventDetail(
   schedule?: DailySchedule[]
 ): EventDetail {
   const endDate = event.end_date || event.start_date;
-  const discipline = event.discipline || 'Equestrian';
+  const discipline = formatLabel(event.discipline) || 'Equestrian';
   const countryCode = event.country === 'Sweden' ? 'SE' : event.country;
   const meeting: Meeting = {
     id: event.id,
@@ -204,7 +205,7 @@ export function buildApiEventDetail(
       code: countryCode,
     },
     city: event.city || event.venue_name || event.organizer_name || 'Sweden',
-    venueName: event.venue_name || event.organizer_name || 'Venue pending',
+    venueName: event.venue_name || event.organizer_name || '',
     clubName: event.organizer_name || 'Gallopics',
     period: { startDate: event.start_date, endDate },
     disciplines: [discipline],
@@ -226,7 +227,7 @@ export function buildApiEventDetail(
               arenas: [
                 {
                   id: `${event.id}-arena`,
-                  name: meeting.venueName,
+                  name: meeting.venueName || 'Main Arena',
                   position: 1,
                   competitions: [
                     {

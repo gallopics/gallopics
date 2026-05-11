@@ -31,7 +31,6 @@ export const UploadPage: React.FC = () => {
   const [selectedEventId, setSelectedEventId] = useState<string>(
     urlEventId || '',
   );
-  const [selectedBatch] = useState<string>(urlClassName || 'Random');
   const [isDragActive, setIsDragActive] = useState(false);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -136,9 +135,9 @@ export const UploadPage: React.FC = () => {
       );
     }
 
-    // Pass the selected batch as classId metadata
     startUpload(filesToUpload, {
-      classId: urlClassId || selectedBatch || undefined,
+      classId: urlClassId || undefined,
+      className: urlClassName || undefined,
     });
   };
 
@@ -155,8 +154,11 @@ export const UploadPage: React.FC = () => {
     }
   };
 
-  const handleViewPhotos = () =>
-    selectedEventId && navigate(`${basePath}/events/${selectedEventId}`);
+  const handleViewPhotos = () => {
+    if (!selectedEventId) return;
+    clearUploadSession(selectedEventId);
+    navigate(`${basePath}/events/${selectedEventId}`);
+  };
 
   return (
     <div className="pg-upload-page">
@@ -274,8 +276,8 @@ export const UploadPage: React.FC = () => {
                 </div>
                 <h3>Your queue is empty</h3>
                 <p>
-                  Select an event and batch, then drag photos into the sidebar
-                  to start uploading.
+                  Select an event, then drag photos into the sidebar to start
+                  uploading.
                 </p>
               </div>
             )}
