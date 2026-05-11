@@ -44,6 +44,7 @@ export interface ApiPhotographer {
   avatar_url: string | null;
   phone: string | null;
   is_available_to_hire: boolean;
+  highlights: string[];
   status: 'pending' | 'approved' | 'suspended';
   created_at: string;
   updated_at: string;
@@ -171,6 +172,21 @@ export const api = {
     request<ApiPhotographer>(
       `/api/v1/photographers/${encodeURIComponent(slugOrId)}`
     ),
+  getMyHighlights: (getToken: TokenGetter) =>
+    request<{ highlights: string[] }>(
+      '/api/v1/photographer/highlights',
+      {},
+      getToken
+    ),
+  updateMyHighlights: (getToken: TokenGetter, photoIds: string[]) =>
+    request<{ highlights: string[] }>(
+      '/api/v1/photographer/highlights',
+      {
+        method: 'PUT',
+        body: JSON.stringify({ photo_ids: photoIds }),
+      },
+      getToken
+    ),
   listMyEventBookings: (getToken: TokenGetter) =>
     request<ApiEvent[]>('/api/v1/photographer/bookings', {}, getToken),
   bookEvent: (getToken: TokenGetter, eventId: string) =>
@@ -289,6 +305,9 @@ export const api = {
       `/api/v1/events/${eventId}/gallery/search?${params.toString()}`
     );
   },
+
+  getPhoto: (photoId: string) =>
+    request<ApiPhoto>(`/api/v1/photos/${encodeURIComponent(photoId)}`),
 };
 
 // --- Additional Types for Upload/Gallery ---
