@@ -104,7 +104,11 @@ export function PhotographerProfile() {
 
   const activeProfile = useMemo(() => {
     const isKnownMockPhotographer = PHOTOGRAPHERS.some(p => p.id === id);
-    if (!apiPhotographer && isLoadingApiPhotographer && !isKnownMockPhotographer) {
+    if (
+      !apiPhotographer &&
+      isLoadingApiPhotographer &&
+      !isKnownMockPhotographer
+    ) {
       return null;
     }
 
@@ -168,9 +172,9 @@ export function PhotographerProfile() {
       }
 
       const responses = await Promise.allSettled(
-        apiPhotographer.highlights.slice(0, 10).map(photoId =>
-          api.getPhoto(photoId)
-        )
+        apiPhotographer.highlights
+          .slice(0, 10)
+          .map(photoId => api.getPhoto(photoId))
       );
 
       if (!isMounted) return;
@@ -183,14 +187,13 @@ export function PhotographerProfile() {
           return {
             id: photo.id,
             src:
-              resolveApiAssetUrl(`/api/v1/photographer/photos/${photo.id}/preview`) ||
-              '',
+              resolveApiAssetUrl(
+                `/api/v1/photographer/photos/${photo.id}/preview`
+              ) || '',
             rider:
-              photo.tags.find(tag => tag.type === 'rider')?.value ||
-              'Unknown',
+              photo.tags.find(tag => tag.type === 'rider')?.value || 'Unknown',
             horse:
-              photo.tags.find(tag => tag.type === 'horse')?.value ||
-              'Unknown',
+              photo.tags.find(tag => tag.type === 'horse')?.value || 'Unknown',
             event: ev?.title || 'Event',
             eventId: photo.event_id,
             date:
@@ -401,13 +404,24 @@ export function PhotographerProfile() {
   ]);
 
   // Guard after all hooks
+  if (isLoadingApiPhotographer) {
+    return (
+      <div className="page-wrapper">
+        <Header />
+        <div className="container flex justify-center items-center py-20">
+          <div className="loading-spinner">Loading...</div>
+        </div>
+      </div>
+    );
+  }
+
   if (!activeProfile || !photographer) {
     return <div>Photographer not found</div>;
   }
 
   const photographerAvatar =
     resolveApiAssetUrl(
-      'avatarUrl' in photographer ? photographer.avatarUrl : null,
+      'avatarUrl' in photographer ? photographer.avatarUrl : null
     ) ??
     assetUrl(`images/${photographer.firstName} ${photographer.lastName}.jpg`);
 
