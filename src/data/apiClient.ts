@@ -5,7 +5,7 @@ export function getApiBaseUrl() {
     return import.meta.env.VITE_API_BASE_URL;
   }
 
-  return import.meta.env.DEV ? window.location.origin : RENDER_API_BASE_URL;
+  return RENDER_API_BASE_URL;
 }
 
 export function resolveApiAssetUrl(path: string | null | undefined) {
@@ -81,6 +81,32 @@ export interface UpsertPhotographerProfile {
   avatar_url?: string | null;
   phone?: string | null;
   is_available_to_hire?: boolean;
+}
+
+export interface CheckoutLineItem {
+  name: string;
+  quantity: number;
+  unit_price: number;
+  total_amount: number;
+  reference?: string;
+  type?: string;
+  tax_rate?: number;
+  total_tax_amount?: number;
+}
+
+export interface CheckoutSession {
+  session_id: string;
+  client_token: string;
+  order_id: string;
+}
+
+export interface CheckoutOrder {
+  id: string;
+  user_id: string;
+  status: 'pending' | 'authorized' | 'captured' | 'refunded' | 'cancelled';
+  amount: number;
+  currency: string;
+  klarna_order_id: string | null;
 }
 
 type TokenGetter = () => Promise<string | null>;
@@ -308,6 +334,24 @@ export const api = {
 
   getPhoto: (photoId: string) =>
     request<ApiPhoto>(`/api/v1/photos/${encodeURIComponent(photoId)}`),
+
+  createCheckoutSession: (lineItems: CheckoutLineItem[]) =>
+    request<CheckoutSession>('/api/v1/checkout/sessions', {
+      method: 'POST',
+      body: JSON.stringify({
+        line_items: lineItems,
+        idempotency_key: `checkout-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      }),
+    }),
+
+  authorizeCheckout: (orderId: string, authorizationToken: string) =>
+    request<CheckoutOrder>('/api/v1/checkout/authorize', {
+      method: 'POST',
+      body: JSON.stringify({
+        order_id: orderId,
+        authorization_token: authorizationToken,
+      }),
+    }),
 };
 
 // --- Additional Types for Upload/Gallery ---

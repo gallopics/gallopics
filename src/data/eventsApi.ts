@@ -1,11 +1,13 @@
 import type { EventData } from './mockEvents';
-import { getApiBaseUrl } from './apiClient';
+import { getApiBaseUrl, resolveApiAssetUrl } from './apiClient';
 import type {
   ClassSection,
   DailySchedule,
   EventDetail,
   Meeting,
+  Photo,
 } from '../types';
+import type { ApiPhoto } from './apiClient';
 import { formatLabel } from '../lib/utils';
 
 export interface ApiEvent {
@@ -27,6 +29,16 @@ export interface ApiEvent {
   is_sustainable: boolean;
   match_status: 'unmatched' | 'matched' | 'manual' | 'rejected';
   match_score?: number | null;
+  photo_count?: number | null;
+  photos_count?: number | null;
+  published_photo_count?: number | null;
+  photoCount?: number | null;
+  photosCount?: number | null;
+  publishedPhotoCount?: number | null;
+  cover_image?: string | null;
+  coverImage?: string | null;
+  logo_url?: string | null;
+  logoUrl?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -37,6 +49,15 @@ interface PaginatedApiResponse<T> {
   page: number;
   page_size: number;
 }
+
+type ApiPhotoWithUrls = ApiPhoto & {
+  preview_url?: string | null;
+  thumbnail_url?: string | null;
+  url?: string | null;
+  width?: number | null;
+  height?: number | null;
+  event_class_name?: string | null;
+};
 
 interface ApiEventClass {
   id: string;
@@ -64,12 +85,19 @@ export interface ApiEventSchedule {
 function normalizeCountry(country: string) {
   const countryMap: Record<string, string> = {
     SE: 'Sweden',
+    SWE: 'Sweden',
     NO: 'Norway',
+    NOR: 'Norway',
     DK: 'Denmark',
+    DNK: 'Denmark',
     FI: 'Finland',
+    FIN: 'Finland',
     DE: 'Germany',
+    DEU: 'Germany',
     FR: 'France',
+    FRA: 'France',
     NL: 'Netherlands',
+    NLD: 'Netherlands',
   };
 
   return countryMap[country] || country;
@@ -103,11 +131,20 @@ function formatEventPeriod(startDate: string, endDate?: string | null) {
 
 export function mapApiEventToEventData(event: ApiEvent): EventData {
   const country = normalizeCountry(event.country);
+  const photoCount =
+    event.published_photo_count ??
+    event.publishedPhotoCount ??
+    event.photo_count ??
+    event.photoCount ??
+    event.photos_count ??
+    event.photosCount;
+  const coverImage = resolveApiAssetUrl(event.cover_image ?? event.coverImage);
+  const logo = resolveApiAssetUrl(event.logo_url ?? event.logoUrl);
 
   return {
     id: event.id,
     name: event.name,
-    coverImage: '',
+    coverImage: coverImage ?? '',
     period: formatEventPeriod(event.start_date, event.end_date),
     startDate: event.start_date,
     endDate: event.end_date || event.start_date,
@@ -115,13 +152,16 @@ export function mapApiEventToEventData(event: ApiEvent): EventData {
     city: event.city || event.venue_name || event.organizer_name || 'Sweden',
     discipline: formatLabel(event.discipline) || 'Equestrian',
     country,
-    logo: '',
+    logo: logo ?? '',
     photographer: null,
+    photoCount: typeof photoCount === 'number' ? photoCount : undefined,
     status: event.status === 'cancelled' ? 'disabled' : 'active',
   };
 }
 
-export async function fetchEventsFromApi(): Promise<EventData[]> {
+export async function fetchEventsFromApi(options?: {
+  hasPhotos?: boolean;
+}): Promise<EventData[]> {
   const pageSize = 100;
   const items: ApiEvent[] = [];
   let page = 1;
@@ -131,6 +171,9 @@ export async function fetchEventsFromApi(): Promise<EventData[]> {
     const url = new URL('/api/v1/events', getApiBaseUrl());
     url.searchParams.set('page', String(page));
     url.searchParams.set('page_size', String(pageSize));
+    if (options?.hasPhotos) {
+      url.searchParams.set('has_photos', 'true');
+    }
 
     const response = await fetch(url);
 
@@ -145,6 +188,70 @@ export async function fetchEventsFromApi(): Promise<EventData[]> {
   } while (items.length < total);
 
   return items.map(mapApiEventToEventData);
+}
+
+export async function fetchEventsWithPhotosFromApi(): Promise<EventData[]> {
+  return fetchEventsFromApi({ hasPhotos: true });
+}
+
+function getPhotoTag(photo: ApiPhoto, type: string) {
+  return photo.tags?.find(tag => tag.type === type)?.value;
+}
+
+function getPhotoImageUrl(photo: ApiPhotoWithUrls) {
+  return (
+    resolveApiAssetUrl(photo.preview_url) ??
+    resolveApiAssetUrl(photo.thumbnail_url) ??
+    resolveApiAssetUrl(photo.url) ??
+    resolveApiAssetUrl(`/api/v1/photographer/photos/${photo.id}/preview`) ??
+    ''
+  );
+}
+
+function mapApiPhotoToPhoto(photo: ApiPhotoWithUrls, event: EventData): Photo {
+  const createdAt = photo.created_at ? new Date(photo.created_at) : new Date();
+  const className =
+    photo.event_class_name || photo.class_name || photo.class_id || 'Uploaded';
+
+  return {
+    id: photo.id,
+    src: getPhotoImageUrl(photo),
+    rider: getPhotoTag(photo, 'rider') || 'Unassigned',
+    horse: getPhotoTag(photo, 'horse') || className || 'Uploaded photo',
+    event: event.name,
+    eventId: event.id,
+    date: photo.created_at || event.startDate || new Date().toISOString(),
+    width: photo.width || 600,
+    height: photo.height || 800,
+    className,
+    time: createdAt.toLocaleTimeString().slice(0, 5),
+    city: event.city,
+    arena: className,
+    countryCode: event.country === 'Sweden' ? 'se' : event.country.toLowerCase(),
+    photographer: 'Gallopics',
+    photographerId: photo.photographer_id,
+  };
+}
+
+export async function fetchPublicEventPhotosFromApi(
+  event: EventData,
+  pageSize = 100
+): Promise<Photo[]> {
+  const url = new URL(
+    `/api/v1/events/${encodeURIComponent(event.id)}/gallery`,
+    getApiBaseUrl()
+  );
+  url.searchParams.set('page', '1');
+  url.searchParams.set('page_size', String(pageSize));
+
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`Failed to load event photos: ${response.status}`);
+  }
+
+  const data = (await response.json()) as PaginatedApiResponse<ApiPhotoWithUrls>;
+  return data.items.map(photo => mapApiPhotoToPhoto(photo, event));
 }
 
 export async function fetchEventFromApi(eventId: string): Promise<ApiEvent> {
@@ -196,12 +303,21 @@ export function buildApiEventDetail(
 ): EventDetail {
   const endDate = event.end_date || event.start_date;
   const discipline = formatLabel(event.discipline) || 'Equestrian';
-  const countryCode = event.country === 'Sweden' ? 'SE' : event.country;
+  const countryName = normalizeCountry(event.country);
+  const countryCode = countryName === 'Sweden' ? 'SE' : event.country;
+  const photoCount =
+    event.published_photo_count ??
+    event.publishedPhotoCount ??
+    event.photo_count ??
+    event.photoCount ??
+    event.photos_count ??
+    event.photosCount ??
+    0;
   const meeting: Meeting = {
     id: event.id,
     name: event.name,
     country: {
-      name: event.country,
+      name: countryName,
       code: countryCode,
     },
     city: event.city || event.venue_name || event.organizer_name || 'Sweden',
@@ -210,9 +326,10 @@ export function buildApiEventDetail(
     period: { startDate: event.start_date, endDate },
     disciplines: [discipline],
     timezone: 'Europe/Stockholm',
-    photoCount: 0,
-    coverImage: '',
-    logo: '',
+    photoCount,
+    coverImage:
+      resolveApiAssetUrl(event.cover_image ?? event.coverImage) ?? '',
+    logo: resolveApiAssetUrl(event.logo_url ?? event.logoUrl) ?? '',
   };
 
   return {

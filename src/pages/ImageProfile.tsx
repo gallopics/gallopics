@@ -1,6 +1,11 @@
 import { useMemo, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import {
+  useParams,
+  useNavigate,
+  useSearchParams,
+  useLocation,
+} from 'react-router-dom';
 import { Header } from '../components/Header';
 import { Breadcrumbs } from '../components/Breadcrumbs';
 import type { BreadcrumbItem } from '../components/Breadcrumbs';
@@ -28,6 +33,13 @@ import { CheckoutPanel } from '../components/CheckoutPanel';
 import { WatermarkedPhotoPreview } from '../components/WatermarkedPhotoPreview';
 import { ContactSupportModal } from '../components/ContactSupportModal';
 import { assetUrl } from '../lib/utils';
+import {
+  api,
+  resolveApiAssetUrl,
+  type ApiPhoto,
+  type CheckoutLineItem,
+} from '../data/apiClient';
+import type { Photo } from '../types';
 
 import { QUALITY_TIERS, getPriceByTierId } from '../constants/qualityTiers';
 
@@ -36,6 +48,7 @@ const getPrice = (quality: string) => getPriceByTierId(quality);
 export function ImageProfile() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const [selectedQuality, setSelectedQuality] = useState('web');
   const { cart, addToCart, removeFromCartByPhotoId } = useCart();
@@ -50,10 +63,72 @@ export function ImageProfile() {
 
   const from = searchParams.get('from');
   const eventIdParam = searchParams.get('eventId');
+  const routePhoto =
+    typeof location.state === 'object' &&
+    location.state !== null &&
+    'photo' in location.state
+      ? (location.state.photo as Photo)
+      : null;
+  const eventReturnState =
+    typeof location.state === 'object' &&
+    location.state !== null &&
+    'eventReturnState' in location.state
+      ? (location.state.eventReturnState as Record<string, unknown>)
+      : undefined;
+  const [apiPhoto, setApiPhoto] = useState<Photo | null>(null);
+
+  useEffect(() => {
+    if (!id || routePhoto?.id === id) {
+      setApiPhoto(null);
+      return;
+    }
+
+    let isMounted = true;
+    api
+      .getPhoto(id)
+      .then((photo: ApiPhoto) => {
+        if (!isMounted) return;
+        setApiPhoto({
+          id: photo.id,
+          src:
+            resolveApiAssetUrl(`/api/v1/photographer/photos/${photo.id}/preview`) ||
+            '',
+          rider:
+            photo.tags.find(tag => tag.type === 'rider')?.value || 'Unassigned',
+          horse:
+            photo.tags.find(tag => tag.type === 'horse')?.value ||
+            photo.class_name ||
+            'Uploaded photo',
+          event: photo.event_class_name || photo.class_name || 'Event',
+          eventId: photo.event_id,
+          date: new Date(photo.created_at).toLocaleDateString(undefined, {
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+          }),
+          width: 600,
+          height: 800,
+          className: photo.class_name || 'Uploaded',
+          time: new Date(photo.created_at).toLocaleTimeString().slice(0, 5),
+          city: 'Sweden',
+          arena: photo.class_name || 'Uploaded',
+          countryCode: 'se',
+          photographer: 'Gallopics',
+          photographerId: photo.photographer_id,
+        });
+      })
+      .catch(() => {
+        if (isMounted) setApiPhoto(null);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [id, routePhoto?.id]);
 
   const photo = useMemo(
-    () => mockPhotos.find(p => p.id === id) || mockPhotos[0],
-    [id, mockPhotos],
+    () => routePhoto || apiPhoto || mockPhotos.find(p => p.id === id) || mockPhotos[0],
+    [apiPhoto, id, routePhoto],
   );
   const event = useMemo(
     () => COMPETITIONS.find(c => c.id === photo.eventId),
@@ -108,6 +183,23 @@ export function ImageProfile() {
     );
   }, [cart, photo.id, selectedQuality]);
 
+  const checkoutLineItems = useMemo<CheckoutLineItem[]>(() => {
+    const selected = QUALITY_TIERS.find(t => t.id === selectedQuality);
+    const amount = Math.round(getPrice(selectedQuality) * 100);
+    return [
+      {
+        name: `${photo.rider} / ${photo.horse} - ${selected?.label || 'Photo'}`,
+        quantity: 1,
+        unit_price: amount,
+        total_amount: amount,
+        reference: photo.id,
+        type: 'digital',
+        tax_rate: 0,
+        total_tax_amount: 0,
+      },
+    ];
+  }, [photo.horse, photo.id, photo.rider, selectedQuality]);
+
   // Track recently viewed
   useEffect(() => {
     if (!photo.id) return;
@@ -133,7 +225,11 @@ export function ImageProfile() {
     if (from === 'epro' && eventIdParam) {
       items.push({
         label: photo.event,
-        onClick: () => navigate(`/event/${eventIdParam}`),
+        onClick: () =>
+          navigate(
+            `/event/${eventIdParam}`,
+            eventReturnState ? { state: eventReturnState } : undefined
+          ),
       });
     } else if (from === 'ppro') {
       items.push({ label: 'Back to photos', onClick: () => navigate(-1) });
@@ -412,6 +508,8 @@ export function ImageProfile() {
                     ) : (
                       <CheckoutPanel
                         total={getPrice(selectedQuality)}
+                        lineItems={checkoutLineItems}
+                        onPaymentSuccess={() => setIsSuccess(true)}
                         onPay={() => setIsSuccess(true)}
                       />
                     )}

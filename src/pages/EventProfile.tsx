@@ -19,9 +19,11 @@ import { eventDetails } from '../data/mockEventDetails';
 import {
   buildApiEventDetail,
   fetchEventFromApi,
+  fetchPublicEventPhotosFromApi,
   fetchEventScheduleFromApi,
   mapApiScheduleToDailySchedule,
 } from '../data/eventsApi';
+import type { EventData } from '../data/mockEvents';
 import {
   photos as basePhotos,
   RIDERS,
@@ -159,6 +161,14 @@ export function EventProfile() {
   const [activeEventTab, setActiveEventTab] = useState<'uploads' | 'classes'>(
     initialEventTab
   );
+  const eventReturnState = useMemo(
+    () => ({
+      from: fromPath,
+      fromTab,
+      eventTab: activeEventTab,
+    }),
+    [activeEventTab, fromPath, fromTab]
+  );
 
   useEffect(() => {
     if (localEventDetail || !eventId) {
@@ -206,11 +216,40 @@ export function EventProfile() {
 
   useEffect(() => {
     if (eventDetail) {
+      let isMounted = true;
+
       setLoading(true);
-      setTimeout(() => {
+      const loadPhotos = async () => {
         const eventClasses = eventDetail.schedule.flatMap(day =>
           day.arenas.flatMap(arena => arena.competitions)
         );
+
+        if (!isPhotographerMyEventView && !localEventDetail) {
+          const eventForPhotos: EventData = {
+            id: eventDetail.meetingId,
+            name: eventDetail.meeting.name,
+            coverImage: eventDetail.meeting.coverImage,
+            period: `${eventDetail.meeting.period.startDate} – ${eventDetail.meeting.period.endDate}`,
+            startDate: eventDetail.meeting.period.startDate,
+            endDate: eventDetail.meeting.period.endDate,
+            flag: eventDetail.meeting.country.code === 'SE' ? '🇸🇪' : '',
+            city: eventDetail.meeting.city,
+            discipline: eventDetail.meeting.disciplines[0] || 'Equestrian',
+            country: eventDetail.meeting.country.name,
+            photoCount: eventDetail.meeting.photoCount,
+            logo: eventDetail.meeting.logo,
+            photographer: eventDetail.meeting.photographer || null,
+            status: 'active',
+          };
+
+          const apiPhotos = await fetchPublicEventPhotosFromApi(eventForPhotos);
+          if (isMounted) {
+            setPhotos(apiPhotos);
+            setLoading(false);
+          }
+          return;
+        }
+
         const generated = generateEventPhotos(
           eventDetail.meetingId,
           eventDetail.meeting.photoCount,
@@ -218,11 +257,19 @@ export function EventProfile() {
           eventDetail.meeting,
           eventClasses
         );
-        setPhotos(generated);
-        setLoading(false);
-      }, 600);
+        if (isMounted) {
+          setPhotos(generated);
+          setLoading(false);
+        }
+      };
+
+      void loadPhotos();
+
+      return () => {
+        isMounted = false;
+      };
     }
-  }, [eventDetail]);
+  }, [eventDetail, isPhotographerMyEventView, localEventDetail]);
 
   const isResetDisabled = eventClass === 'All' && searchQuery === '';
 
@@ -325,6 +372,7 @@ export function EventProfile() {
     () => new Set(uploadPhotos.map(p => p.horse).filter(Boolean)).size,
     [uploadPhotos]
   );
+  const displayedPhotoCount = uploadPhotos.length;
 
   // 4. Final Photo Filtering
   const activePhotos = useMemo(() => {
@@ -421,7 +469,7 @@ export function EventProfile() {
           <div className="event-stats-row">
             <span className="meta-item">{totalRiders} riders</span>
             <span className="meta-item">{totalHorses} horses</span>
-            <span className="meta-item">{meeting.photoCount} photos</span>
+            <span className="meta-item">{displayedPhotoCount} photos</span>
           </div>
         }
         rightContent={
@@ -519,7 +567,8 @@ export function EventProfile() {
                     photo={photo}
                     onClick={p =>
                       navigate(
-                        `/photo/${p.id}?from=epro&eventId=${meeting.id}`
+                        `/photo/${p.id}?from=epro&eventId=${meeting.id}`,
+                        { state: { photo: p, eventReturnState } }
                       )
                     }
                   />

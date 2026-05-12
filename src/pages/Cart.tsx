@@ -10,6 +10,7 @@ import { CheckoutPanel } from '../components/CheckoutPanel';
 import { photos as mockPhotos, COMPETITIONS } from '../data/mockData';
 import { PhotoCard } from '../components/PhotoCard';
 import { QUALITY_TIERS } from '../constants/qualityTiers';
+import type { CheckoutLineItem } from '../data/apiClient';
 
 export function Cart() {
   const { cart, addToCart, removeFromCart, total, clearCart } = useCart();
@@ -104,6 +105,24 @@ export function Cart() {
     setIsSuccess(true);
     clearCart();
   };
+
+  const checkoutLineItems = useMemo<CheckoutLineItem[]>(
+    () =>
+      cart.map(item => {
+        const amount = Math.round(item.price * 100);
+        return {
+          name: `${item.photo.rider} / ${item.photo.horse} - ${item.qualityLabel}`,
+          quantity: 1,
+          unit_price: amount,
+          total_amount: amount,
+          reference: item.photoId,
+          type: 'digital',
+          tax_rate: 0,
+          total_tax_amount: 0,
+        };
+      }),
+    [cart]
+  );
 
   const recentPhotos = useMemo(() => {
     const saved = localStorage.getItem('gallopics_recent');
@@ -253,6 +272,7 @@ export function Cart() {
                       onClick={() =>
                         navigate(
                           `/photo/${item.photoId}?from=cart&eventId=${item.photo.eventId}`,
+                          { state: { photo: item.photo } }
                         )
                       }
                     >
@@ -342,7 +362,12 @@ export function Cart() {
 
               <div className="cart-summary-section max-lg:order-2 max-lg:mt-6 max-md:order-[2] max-md:mt-6 max-md:mb-0">
                 <div className="bg-white rounded-[var(--radius-lg)] border border-[var(--color-border)] p-6 max-lg:static sticky top-[100px]">
-                  <CheckoutPanel total={total} onPay={handlePay} />
+                  <CheckoutPanel
+                    total={total}
+                    lineItems={checkoutLineItems}
+                    onPaymentSuccess={handlePay}
+                    onPay={handlePay}
+                  />
                 </div>
               </div>
             </div>

@@ -43,6 +43,7 @@ export const EventBrowseFilter: React.FC<EventBrowseFilterProps> = ({
   ];
 
   const periodOptions = [
+    { label: 'All', value: 'All' },
     { label: 'Scheduled', value: 'Scheduled' },
     { label: 'Recent', value: 'Recent' },
     { label: 'Live', value: 'Live', disabled: true },
@@ -51,7 +52,7 @@ export const EventBrowseFilter: React.FC<EventBrowseFilterProps> = ({
   ];
 
   const isResetDisabled =
-    country === 'all' && city === 'all' && period === 'Scheduled';
+    country === 'all' && city === 'all' && period === 'All';
 
   return (
     <div
@@ -92,7 +93,7 @@ export const EventBrowseFilter: React.FC<EventBrowseFilterProps> = ({
             onClick={() => {
               onFilterChange('country', 'all');
               onFilterChange('city', 'all');
-              onFilterChange('period', 'Scheduled');
+              onFilterChange('period', 'All');
             }}
             title="Reset filters"
             disabled={isResetDisabled}

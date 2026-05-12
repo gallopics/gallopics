@@ -562,7 +562,12 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
   const { user } = useAuth();
-  const { getToken: getClerkToken } = useClerkAuth();
+  const {
+    getToken: getClerkToken,
+    isLoaded: isClerkLoaded,
+    isSignedIn,
+    userId: clerkUserId,
+  } = useClerkAuth();
   const photographerId = user?.id || '';
   const [events, setEvents] = useState<PgEvent[]>(
     SHOW_EVENTS ? MOCK_EVENTS : []
@@ -596,6 +601,11 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
   React.useEffect(() => {
     const fetchHighlights = async () => {
       if (SHOW_EVENTS) return;
+      if (!isClerkLoaded) return;
+      if (!isSignedIn) {
+        setHighlights([]);
+        return;
+      }
       const token = await getClerkToken?.();
       if (!token) return;
 
@@ -610,12 +620,19 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
     };
 
     fetchHighlights();
-  }, [SHOW_EVENTS, getClerkToken]);
+  }, [SHOW_EVENTS, getClerkToken, isClerkLoaded, isSignedIn, clerkUserId]);
 
   // Fetch events from API on mount (when not using mock data)
   React.useEffect(() => {
+    let isMounted = true;
+
     const fetchEvents = async () => {
       if (SHOW_EVENTS) return; // Skip if using mock data
+      if (!isClerkLoaded) return;
+      if (!isSignedIn) {
+        setEvents([]);
+        return;
+      }
       const token = await getClerkToken?.();
       if (!token) return;
 
@@ -625,8 +642,7 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
           { headers: { Authorization: `Bearer ${token}` } }
         );
         if (!response.ok) {
-          console.error('Failed to fetch events:', response.status);
-          return;
+          throw new Error(`Failed to fetch events: ${response.status}`);
         }
         const data = await response.json();
         console.log('Fetched events from API:', data.length, 'events');
@@ -654,19 +670,30 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
           assignedPhotographers: [],
           applicationsWelcomed: true,
         }));
-        setEvents(mappedEvents);
+        if (isMounted) setEvents(mappedEvents);
       } catch (error) {
         console.error('Failed to fetch events:', error);
       }
     };
 
     fetchEvents();
-  }, [SHOW_EVENTS, getClerkToken]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [SHOW_EVENTS, getClerkToken, isClerkLoaded, isSignedIn, clerkUserId]);
 
   // Fetch photos from API on mount (with pagination support)
   React.useEffect(() => {
+    let isMounted = true;
+
     const fetchPhotos = async () => {
       if (SHOW_EVENTS) return; // Skip if using mock data
+      if (!isClerkLoaded) return;
+      if (!isSignedIn) {
+        setPhotos([]);
+        return;
+      }
       const token = await getClerkToken?.();
       if (!token) return;
 
@@ -680,7 +707,9 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
             `${getApiBaseUrl()}/api/v1/photographer/photos?page=${page}&page_size=${PAGE_SIZE}`,
             { headers: { Authorization: `Bearer ${token}` } }
           );
-          if (!response.ok) break;
+          if (!response.ok) {
+            throw new Error(`Failed to fetch photos: ${response.status}`);
+          }
           const data = await response.json();
           const items = data.items || [];
 
@@ -718,7 +747,7 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
           priceCommercial: 1500,
         }));
 
-        setPhotos(mappedPhotos);
+        if (isMounted) setPhotos(mappedPhotos);
         console.log('Fetched photos from API:', mappedPhotos.length, 'photos');
       } catch (error) {
         console.error('Failed to fetch photos:', error);
@@ -726,7 +755,11 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
     };
 
     fetchPhotos();
-  }, [SHOW_EVENTS, getClerkToken]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [SHOW_EVENTS, getClerkToken, isClerkLoaded, isSignedIn, clerkUserId]);
 
   const updateHighlights = (ids: string[]) => {
     const previousIds = highlights;

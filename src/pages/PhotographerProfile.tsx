@@ -659,7 +659,11 @@ export function PhotographerProfile() {
                   <PhotoCard
                     key={photo.id}
                     photo={photo}
-                    onClick={p => navigate(`/photo/${p.id}?from=ppro`)}
+                    onClick={p =>
+                      navigate(`/photo/${p.id}?from=ppro`, {
+                        state: { photo: p },
+                      })
+                    }
                   />
                 ))}
               </MasonryGrid>
