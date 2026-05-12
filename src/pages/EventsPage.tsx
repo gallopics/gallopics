@@ -6,7 +6,11 @@ import { EventBrowseFilter } from '../components/EventBrowseFilter';
 import { FolderEventCard } from '../components/FolderEventCard';
 import type { EventData } from '../data/mockEvents';
 import { api, ApiError } from '../data/apiClient';
-import { fetchEventsFromApi, mapApiEventToEventData } from '../data/eventsApi';
+import {
+  fetchEventsFromApi,
+  fetchEventsWithPhotosFromApi,
+  mapApiEventToEventData,
+} from '../data/eventsApi';
 import { useNavigate } from 'react-router-dom';
 import { useAuth as useClerkAuth } from '@clerk/clerk-react';
 import { useAuth } from '../context/AuthContext';
@@ -22,7 +26,7 @@ export function EventsPage() {
   // Filters States
   const [country, setCountry] = useState('Sweden');
   const [city, setCity] = useState('All');
-  const [period, setPeriod] = useState('Scheduled');
+  const [period, setPeriod] = useState('All');
   const [changedFilters, setChangedFilters] = useState({
     country: false,
     city: false,
@@ -82,7 +86,9 @@ export function EventsPage() {
             }
           }
         } else {
-          nextEvents = await fetchEventsFromApi();
+          nextEvents = isAuthenticated
+            ? await fetchEventsFromApi()
+            : await fetchEventsWithPhotosFromApi();
         }
 
         if (isMounted) setEvents(nextEvents);
@@ -258,7 +264,7 @@ export function EventsPage() {
       ...prev,
       [key]:
         value !==
-        (key === 'country' ? 'Sweden' : key === 'city' ? 'All' : 'Scheduled'),
+        (key === 'country' ? 'Sweden' : key === 'city' ? 'All' : 'All'),
     }));
     if (key === 'country') setCountry(value);
     if (key === 'city') setCity(value);

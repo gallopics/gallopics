@@ -1,30 +1,85 @@
 import React, { useState } from 'react';
-import {
-  Check,
-  Zap,
-  CreditCard,
-  Smartphone,
-  SmartphoneNfc,
-} from 'lucide-react';
+import { Check, Loader2, ShieldCheck, Zap } from 'lucide-react';
+import { api, type CheckoutLineItem, type CheckoutOrder } from '../data/apiClient';
+
+declare global {
+  interface Window {
+    Klarna?: {
+      Payments: {
+        init: (config: { client_token: string }) => void;
+        load: (
+          options: {
+            container: string;
+            payment_method_category?: string;
+          },
+          data: Record<string, never>,
+          callback: (response: { show_form?: boolean; error?: unknown }) => void
+        ) => void;
+        authorize: (
+          options: { payment_method_category?: string },
+          data: Record<string, never>,
+          callback: (response: {
+            approved?: boolean;
+            authorization_token?: string;
+            error?: unknown;
+          }) => void
+        ) => void;
+      };
+    };
+  }
+}
 
 interface CheckoutPanelProps {
   total: number;
+  lineItems?: CheckoutLineItem[];
+  onPaymentSuccess?: (order: CheckoutOrder) => void;
   onPay?: (email: string, method: string) => void;
 }
 
 export const CheckoutPanel: React.FC<CheckoutPanelProps> = ({
   total,
+  lineItems,
+  onPaymentSuccess,
   onPay,
 }) => {
   const [email, setEmail] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('swish');
   const [otp, setOtp] = useState('');
   const [step, setStep] = useState<'input' | 'verify' | 'verified'>('input');
   const [countdown, setCountdown] = useState(0);
+  const [klarnaStep, setKlarnaStep] = useState<
+    'idle' | 'loading' | 'ready' | 'authorizing' | 'complete'
+  >('idle');
+  const [klarnaOrderId, setKlarnaOrderId] = useState<string | null>(null);
+  const [klarnaError, setKlarnaError] = useState<string | null>(null);
+  const [scriptReady, setScriptReady] = useState(false);
 
   const [secretCode, setSecretCode] = useState('');
   const [attempts, setAttempts] = useState(0);
   const [otpError, setOtpError] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (window.Klarna?.Payments) {
+      setScriptReady(true);
+      return;
+    }
+
+    const existing = document.querySelector<HTMLScriptElement>(
+      'script[src="https://x.klarnacdn.net/kp/lib/v1/api.js"]'
+    );
+    if (existing) {
+      existing.addEventListener('load', () => setScriptReady(true), {
+        once: true,
+      });
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://x.klarnacdn.net/kp/lib/v1/api.js';
+    script.async = true;
+    script.onload = () => setScriptReady(true);
+    script.onerror = () => setKlarnaError('Could not load Klarna checkout.');
+    document.head.appendChild(script);
+  }, []);
 
   // Check storage for verified email
   React.useEffect(() => {
@@ -102,15 +157,90 @@ export const CheckoutPanel: React.FC<CheckoutPanelProps> = ({
     }
   }, [countdown]);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (onPay) {
-      onPay(email, paymentMethod);
-    } else {
-      alert(
-        `Processing ${paymentMethod} payment for ${total} SEK\nReceipt sent to: ${email}`,
+  const handleStartKlarna = async () => {
+    if (!lineItems?.length) {
+      onPay?.(email, 'klarna');
+      return;
+    }
+
+    setKlarnaError(null);
+    setKlarnaStep('loading');
+
+    try {
+      const session = await api.createCheckoutSession(lineItems);
+      setKlarnaOrderId(session.order_id);
+
+      if (!window.Klarna?.Payments) {
+        throw new Error('Klarna is still loading. Try again in a moment.');
+      }
+
+      window.Klarna.Payments.init({ client_token: session.client_token });
+      window.Klarna.Payments.load(
+        {
+          container: '#klarna-payments-container',
+          payment_method_category: 'pay_now',
+        },
+        {},
+        response => {
+          if (response.show_form) {
+            setKlarnaStep('ready');
+          } else {
+            setKlarnaStep('idle');
+            setKlarnaError('Klarna is not available for this checkout.');
+          }
+        }
+      );
+    } catch (error) {
+      setKlarnaStep('idle');
+      setKlarnaError(
+        error instanceof Error
+          ? error.message
+          : 'Could not start Klarna checkout.'
       );
     }
+  };
+
+  const handleAuthorizeKlarna = () => {
+    if (!klarnaOrderId || !window.Klarna?.Payments) return;
+
+    setKlarnaError(null);
+    setKlarnaStep('authorizing');
+    window.Klarna.Payments.authorize(
+      { payment_method_category: 'pay_now' },
+      {},
+      async response => {
+        if (!response.approved || !response.authorization_token) {
+          setKlarnaStep('ready');
+          setKlarnaError('Klarna did not approve this payment.');
+          return;
+        }
+
+        try {
+          const order = await api.authorizeCheckout(
+            klarnaOrderId,
+            response.authorization_token
+          );
+          setKlarnaStep('complete');
+          onPaymentSuccess?.(order);
+        } catch (error) {
+          setKlarnaStep('ready');
+          setKlarnaError(
+            error instanceof Error
+              ? error.message
+              : 'Payment was approved by Klarna but could not be completed.'
+          );
+        }
+      }
+    );
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (klarnaStep === 'ready') {
+      handleAuthorizeKlarna();
+      return;
+    }
+    void handleStartKlarna();
   };
 
   const isVerified = step === 'verified';
@@ -228,151 +358,63 @@ export const CheckoutPanel: React.FC<CheckoutPanelProps> = ({
           </div>
         </div>
 
-        <div
-          className={`payment-methods ${!isVerified ? 'disabled-section opacity-50 pointer-events-none' : 'opacity-100 pointer-events-auto'}`}
-        >
+        <div className={!isVerified ? 'opacity-50 pointer-events-none' : ''}>
           <label className="block text-[0.875rem] font-semibold mb-3">
-            Select payment method
+            Payment
           </label>
-
-          <div className="flex flex-col gap-[10px]">
-            {/* Swish */}
-            <label className={`relative cursor-pointer`}>
-              <input
-                type="radio"
-                name="payment"
-                value="swish"
-                checked={paymentMethod === 'swish'}
-                onChange={() => setPaymentMethod('swish')}
-                className="absolute opacity-0"
-              />
-              <div
-                className={`flex items-center gap-4 py-[14px] px-4 border border-[var(--color-border)] rounded-[var(--radius-md)] transition-all duration-200 ease-[cubic-bezier(0.2,0,0.2,1)] bg-white hover:border-[var(--color-border)] hover:bg-[var(--ui-bg-subtle)] ${paymentMethod === 'swish' ? 'border-black bg-[var(--color-bg)] shadow-[0_2px_8px_rgba(0,0,0,0.04)]' : ''}`}
-              >
-                <div className="w-10 h-10 rounded-[var(--radius-md)] bg-[var(--color-bg)] text-[#ff2b44] flex items-center justify-center flex-shrink-0">
-                  <Smartphone size={20} />
-                </div>
-                <div className="flex-1 flex flex-col gap-0.5">
-                  <span className="text-[0.875rem] font-bold text-[var(--color-text-primary)]">
-                    Swish
-                  </span>
-                  <span className="text-[0.75rem] text-[var(--color-text-secondary)] font-normal">
-                    Fastest
-                  </span>
-                </div>
-                <div
-                  className={`w-5 h-5 rounded-full border border-[var(--color-border)] flex items-center justify-center transition-all duration-200 ${paymentMethod === 'swish' ? 'bg-black border-black text-white' : 'text-transparent'}`}
-                >
-                  <Check size={16} />
-                </div>
-              </div>
-            </label>
-
-            {/* Klarna */}
-            <label className={`relative cursor-pointer`}>
-              <input
-                type="radio"
-                name="payment"
-                value="klarna"
-                checked={paymentMethod === 'klarna'}
-                onChange={() => setPaymentMethod('klarna')}
-                className="absolute opacity-0"
-              />
-              <div
-                className={`flex items-center gap-4 py-[14px] px-4 border border-[var(--color-border)] rounded-[var(--radius-md)] transition-all duration-200 ease-[cubic-bezier(0.2,0,0.2,1)] bg-white hover:border-[var(--color-border)] hover:bg-[var(--ui-bg-subtle)] ${paymentMethod === 'klarna' ? 'border-black bg-[var(--color-bg)] shadow-[0_2px_8px_rgba(0,0,0,0.04)]' : ''}`}
-              >
-                <div className="w-10 h-10 rounded-[var(--radius-md)] bg-[#ffb3c7] text-black flex items-center justify-center flex-shrink-0">
-                  <span className="font-black text-[1.2rem] tracking-[-1px]">
-                    K.
-                  </span>
-                </div>
-                <div className="flex-1 flex flex-col gap-0.5">
-                  <span className="text-[0.875rem] font-bold text-[var(--color-text-primary)]">
-                    Klarna
-                  </span>
-                  <span className="text-[0.75rem] text-[var(--color-text-secondary)] font-normal">
-                    Pay later
-                  </span>
-                </div>
-                <div
-                  className={`w-5 h-5 rounded-full border border-[var(--color-border)] flex items-center justify-center transition-all duration-200 ${paymentMethod === 'klarna' ? 'bg-black border-black text-white' : 'text-transparent'}`}
-                >
-                  <Check size={16} />
-                </div>
-              </div>
-            </label>
-
-            {/* Card */}
-            <label className={`relative cursor-pointer`}>
-              <input
-                type="radio"
-                name="payment"
-                value="card"
-                checked={paymentMethod === 'card'}
-                onChange={() => setPaymentMethod('card')}
-                className="absolute opacity-0"
-              />
-              <div
-                className={`flex items-center gap-4 py-[14px] px-4 border border-[var(--color-border)] rounded-[var(--radius-md)] transition-all duration-200 ease-[cubic-bezier(0.2,0,0.2,1)] bg-white hover:border-[var(--color-border)] hover:bg-[var(--ui-bg-subtle)] ${paymentMethod === 'card' ? 'border-black bg-[var(--color-bg)] shadow-[0_2px_8px_rgba(0,0,0,0.04)]' : ''}`}
-              >
-                <div className="w-10 h-10 rounded-[var(--radius-md)] bg-[var(--ui-bg-subtle)] flex items-center justify-center flex-shrink-0">
-                  <CreditCard size={20} />
-                </div>
-                <div className="flex-1 flex flex-col gap-0.5">
-                  <span className="text-[0.875rem] font-bold text-[var(--color-text-primary)]">
-                    Card
-                  </span>
-                  <span className="text-[0.75rem] text-[var(--color-text-secondary)] font-normal">
-                    Visa, MC
-                  </span>
-                </div>
-                <div
-                  className={`w-5 h-5 rounded-full border border-[var(--color-border)] flex items-center justify-center transition-all duration-200 ${paymentMethod === 'card' ? 'bg-black border-black text-white' : 'text-transparent'}`}
-                >
-                  <Check size={16} />
-                </div>
-              </div>
-            </label>
-
-            {/* Apple / Google */}
-            <label className={`relative cursor-pointer`}>
-              <input
-                type="radio"
-                name="payment"
-                value="digital"
-                checked={paymentMethod === 'digital'}
-                onChange={() => setPaymentMethod('digital')}
-                className="absolute opacity-0"
-              />
-              <div
-                className={`flex items-center gap-4 py-[14px] px-4 border border-[var(--color-border)] rounded-[var(--radius-md)] transition-all duration-200 ease-[cubic-bezier(0.2,0,0.2,1)] bg-white hover:border-[var(--color-border)] hover:bg-[var(--ui-bg-subtle)] ${paymentMethod === 'digital' ? 'border-black bg-[var(--color-bg)] shadow-[0_2px_8px_rgba(0,0,0,0.04)]' : ''}`}
-              >
-                <div className="w-10 h-10 rounded-[var(--radius-md)] bg-[var(--ui-bg-subtle)] flex items-center justify-center flex-shrink-0">
-                  <SmartphoneNfc size={20} />
-                </div>
-                <div className="flex-1 flex flex-col gap-0.5">
-                  <span className="text-[0.875rem] font-bold text-[var(--color-text-primary)]">
-                    Apple / Google
-                  </span>
-                  <span className="text-[0.75rem] text-[var(--color-text-secondary)] font-normal">
-                    One-tap
-                  </span>
-                </div>
-                <div
-                  className={`w-5 h-5 rounded-full border border-[var(--color-border)] flex items-center justify-center transition-all duration-200 ${paymentMethod === 'digital' ? 'bg-black border-black text-white' : 'text-transparent'}`}
-                >
-                  <Check size={16} />
-                </div>
-              </div>
-            </label>
+          <div className="flex items-center gap-4 py-[14px] px-4 border border-black rounded-[var(--radius-md)] bg-[var(--color-bg)] shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+            <div className="w-10 h-10 rounded-[var(--radius-md)] bg-[#ffb3c7] text-black flex items-center justify-center flex-shrink-0">
+              <span className="font-black text-[1.2rem] tracking-[-1px]">
+                K.
+              </span>
+            </div>
+            <div className="flex-1 flex flex-col gap-0.5">
+              <span className="text-[0.875rem] font-bold text-[var(--color-text-primary)]">
+                Klarna
+              </span>
+              <span className="text-[0.75rem] text-[var(--color-text-secondary)] font-normal">
+                Secure checkout, instant capture
+              </span>
+            </div>
+            <ShieldCheck size={20} className="text-[var(--color-success)]" />
           </div>
+
+          <div id="klarna-payments-container" className="mt-4" />
+
+          {klarnaError && (
+            <p className="text-[0.8125rem] text-[var(--color-danger)] mt-3 font-medium">
+              {klarnaError}
+            </p>
+          )}
+
+          {klarnaStep === 'complete' && (
+            <p className="text-[0.8125rem] text-[var(--color-success)] mt-3 font-semibold">
+              Payment captured.
+            </p>
+          )}
         </div>
 
         <button
           type="submit"
+          disabled={
+            !isVerified ||
+            !scriptReady ||
+            klarnaStep === 'loading' ||
+            klarnaStep === 'authorizing' ||
+            klarnaStep === 'complete'
+          }
           className="w-full py-4 bg-[var(--color-brand-primary)] text-white border-none rounded-[var(--radius-full)] font-bold text-[1.1rem] cursor-pointer transition-all duration-200 ease-[var(--ease-hover)] mt-2 disabled:bg-[var(--ui-bg-subtle)] disabled:text-[var(--color-text-secondary)] disabled:cursor-not-allowed disabled:shadow-none disabled:transform-none hover:bg-[var(--color-brand-primary-hover)] hover:-translate-y-px hover:shadow-[0_4px_20px_rgba(0,0,0,0.15)]"
         >
-          Pay {total} SEK
+          {klarnaStep === 'loading' || klarnaStep === 'authorizing' ? (
+            <span className="inline-flex items-center justify-center gap-2">
+              <Loader2 size={18} className="animate-spin" />
+              {klarnaStep === 'loading' ? 'Loading Klarna' : 'Completing payment'}
+            </span>
+          ) : klarnaStep === 'ready' ? (
+            `Complete payment ${total} SEK`
+          ) : (
+            `Pay ${total} SEK with Klarna`
+          )}
         </button>
 
         <div className="mt-2 border-t border-[var(--color-border)] pt-6">
