@@ -1,18 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Header } from '../components/Header';
 import { TitleHeader } from '../components/TitleHeader';
 import { Footer } from '../components/Footer';
 import { EventBrowseFilter } from '../components/EventBrowseFilter';
 import { FolderEventCard } from '../components/FolderEventCard';
 import type { EventData } from '../data/mockEvents';
-import { api, ApiError } from '../data/apiClient';
 import {
   fetchEventsFromApi,
   fetchEventsWithPhotosFromApi,
-  mapApiEventToEventData,
 } from '../data/eventsApi';
 import { useNavigate } from 'react-router-dom';
-import { useAuth as useClerkAuth } from '@clerk/clerk-react';
 import { useAuth } from '../context/AuthContext';
 
 import './guestHome.mobile.css';
@@ -21,41 +18,16 @@ import './mobileSearchFix.css';
 export function EventsPage() {
   const navigate = useNavigate();
   const { isLoaded, isAuthenticated, user } = useAuth();
-  const { getToken } = useClerkAuth();
 
   // Filters States
   const [country, setCountry] = useState('Sweden');
   const [city, setCity] = useState('All');
   const [period, setPeriod] = useState('All');
-  const [changedFilters, setChangedFilters] = useState({
-    country: false,
-    city: false,
-    period: false,
-  });
   const [events, setEvents] = useState<EventData[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState(true);
   const [eventsError, setEventsError] = useState<string | null>(null);
-  const shouldShowBookedEvents =
-    isLoaded &&
-    isAuthenticated &&
-    user?.role === 'pg' &&
-    user.hasCompletedOnboarding;
-
-  const syncLocalPhotographerProfile = useCallback(async () => {
-    if (!user || user.role === 'admin') {
-      return;
-    }
-
-    await api.upsertMyPhotographer(getToken, {
-      slug: user.id,
-      display_name: user.displayName || 'Photographer',
-      city: user.city || null,
-      country: user.country || null,
-      avatar_url: user.avatarUrl ?? null,
-      phone: user.phone ?? null,
-      is_available_to_hire: true,
-    });
-  }, [getToken, user]);
+  const shouldShowPhotoBackedEvents =
+    !isAuthenticated || user?.role === 'pg';
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -66,30 +38,9 @@ export function EventsPage() {
       try {
         setIsLoadingEvents(true);
         setEventsError(null);
-        let nextEvents: EventData[];
-        if (shouldShowBookedEvents) {
-          try {
-            nextEvents = (await api.listMyEventBookings(getToken)).map(
-              mapApiEventToEventData,
-            );
-          } catch (bookingsError) {
-            if (
-              bookingsError instanceof ApiError &&
-              bookingsError.status === 403
-            ) {
-              await syncLocalPhotographerProfile();
-              nextEvents = (await api.listMyEventBookings(getToken)).map(
-                mapApiEventToEventData,
-              );
-            } else {
-              throw bookingsError;
-            }
-          }
-        } else {
-          nextEvents = isAuthenticated
-            ? await fetchEventsFromApi()
-            : await fetchEventsWithPhotosFromApi();
-        }
+        const nextEvents = shouldShowPhotoBackedEvents
+          ? await fetchEventsWithPhotosFromApi()
+          : await fetchEventsFromApi();
 
         if (isMounted) setEvents(nextEvents);
       } catch (error) {
@@ -108,7 +59,7 @@ export function EventsPage() {
     return () => {
       isMounted = false;
     };
-  }, [getToken, isLoaded, shouldShowBookedEvents, syncLocalPhotographerProfile]);
+  }, [isLoaded, shouldShowPhotoBackedEvents]);
 
   // Filter Logic
   const filteredEvents = useMemo(() => {
@@ -159,13 +110,9 @@ export function EventsPage() {
     TODAY.setHours(0, 0, 0, 0);
 
     const results = source.filter(event => {
-      const shouldApplyCountry =
-        !shouldShowBookedEvents || changedFilters.country;
-      const shouldApplyCity = !shouldShowBookedEvents || changedFilters.city;
       const matchCountry =
-        !shouldApplyCountry || event.country === country || country === 'all';
+        event.country === country || country === 'all';
       const matchCity =
-        !shouldApplyCity ||
         city === 'All' ||
         city === 'all' ||
         event.city === city;
@@ -178,9 +125,7 @@ export function EventsPage() {
       const isLive =
         TODAY.getTime() >= start.getTime() && TODAY.getTime() <= end.getTime();
 
-      if (shouldShowBookedEvents) {
-        matchPeriod = true;
-      } else if (period === 'Recent') {
+      if (period === 'Recent') {
         // Rules:
         // 1. Started within last 30 days: start >= (TODAY - 30) AND start <= TODAY
         // 2. OR is Live (covers long events started > 30 days ago potentially, though unlikely in mock)
@@ -216,7 +161,7 @@ export function EventsPage() {
       return 0;
     });
 
-    if (!shouldShowBookedEvents && period === 'Recent') {
+    if (period === 'Recent') {
       // Separate Live vs Others
       const liveEvents = finalResults.filter(e => {
         const { start, end } = parseEventDates(e);
@@ -246,26 +191,12 @@ export function EventsPage() {
     }
 
     return finalResults;
-  }, [
-    changedFilters.city,
-    changedFilters.country,
-    country,
-    city,
-    period,
-    events,
-    shouldShowBookedEvents,
-  ]);
+  }, [country, city, period, events]);
 
   const handleFilterChange = (
     key: 'country' | 'city' | 'period',
     value: string,
   ) => {
-    setChangedFilters(prev => ({
-      ...prev,
-      [key]:
-        value !==
-        (key === 'country' ? 'Sweden' : key === 'city' ? 'All' : 'All'),
-    }));
     if (key === 'country') setCountry(value);
     if (key === 'city') setCity(value);
     if (key === 'period') setPeriod(value);
@@ -319,9 +250,7 @@ export function EventsPage() {
           ) : (
             <div className="pg-empty-state">
               <h3>
-                {shouldShowBookedEvents
-                  ? 'No booked events yet'
-                  : 'No events available – yet'}
+                No events available – yet
               </h3>
             </div>
           )}

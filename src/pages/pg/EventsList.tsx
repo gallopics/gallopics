@@ -67,9 +67,13 @@ const mapBackendEventToPgEvent = (
 
 export const EventsList: React.FC = () => {
   const { isAdmin } = useWorkspace();
-  const { user } = useAuth();
+  const { isLoaded: isAuthProfileLoaded, user } = useAuth();
   const { events } = usePhotographer();
-  const { getToken } = useClerkAuth();
+  const {
+    getToken,
+    isLoaded: isClerkLoaded,
+    isSignedIn,
+  } = useClerkAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const initialTab = (location.state as any)?.tab;
@@ -101,12 +105,25 @@ export const EventsList: React.FC = () => {
     event: any;
   } | null>(null);
 
+  const getSessionToken = useCallback(async () => {
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const token = await getToken({ skipCache: attempt > 0 });
+      if (token) {
+        return token;
+      }
+
+      await new Promise(resolve => window.setTimeout(resolve, 250));
+    }
+
+    return null;
+  }, [getToken]);
+
   const syncLocalPhotographerProfile = useCallback(async () => {
     if (!user || user.role === 'admin') {
       return;
     }
 
-    await api.upsertMyPhotographer(getToken, {
+    await api.upsertMyPhotographer(getSessionToken, {
       slug: user.id,
       display_name: user.displayName || 'Photographer',
       city: user.city || null,
@@ -116,7 +133,7 @@ export const EventsList: React.FC = () => {
       is_available_to_hire: true,
     });
   }, [
-    getToken,
+    getSessionToken,
     user?.avatarUrl,
     user?.city,
     user?.country,
@@ -128,6 +145,7 @@ export const EventsList: React.FC = () => {
 
   useEffect(() => {
     if (isAdmin) return;
+    if (!isClerkLoaded || !isSignedIn || !isAuthProfileLoaded) return;
 
     let isMounted = true;
 
@@ -139,14 +157,14 @@ export const EventsList: React.FC = () => {
         let bookings: ApiEvent[] = [];
 
         try {
-          bookings = await api.listMyEventBookings(getToken);
+          bookings = await api.listMyEventBookings(getSessionToken);
         } catch (bookingsError) {
           if (
             bookingsError instanceof ApiError &&
             bookingsError.status === 403
           ) {
             await syncLocalPhotographerProfile();
-            bookings = await api.listMyEventBookings(getToken);
+            bookings = await api.listMyEventBookings(getSessionToken);
           } else {
             console.warn('Failed to load event bookings', bookingsError);
           }
@@ -186,7 +204,14 @@ export const EventsList: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [getToken, isAdmin, syncLocalPhotographerProfile]);
+  }, [
+    getSessionToken,
+    isAdmin,
+    isAuthProfileLoaded,
+    isClerkLoaded,
+    isSignedIn,
+    syncLocalPhotographerProfile,
+  ]);
 
   // Filter Logic
   const bookedEventIds = useMemo(
@@ -237,14 +262,14 @@ export const EventsList: React.FC = () => {
       setBookingEventId(event.id);
       let booked: ApiEvent;
       try {
-        booked = await api.bookEvent(getToken, event.id);
+        booked = await api.bookEvent(getSessionToken, event.id);
       } catch (bookingError) {
         if (!(bookingError instanceof ApiError) || bookingError.status !== 403) {
           throw bookingError;
         }
 
         await syncLocalPhotographerProfile();
-        booked = await api.bookEvent(getToken, event.id);
+        booked = await api.bookEvent(getSessionToken, event.id);
       }
       const bookedPgEvent = mapBackendEventToPgEvent(booked, true);
       setBookedEvents(prev => [
@@ -274,7 +299,7 @@ export const EventsList: React.FC = () => {
     e?.stopPropagation();
     try {
       setBookingEventId(event.id);
-      await api.cancelEventBooking(getToken, event.id);
+      await api.cancelEventBooking(getSessionToken, event.id);
       setBookedEvents(prev => prev.filter(item => item.id !== event.id));
       setApiUpcomingEvents(prev =>
         prev.map(item =>
@@ -337,7 +362,13 @@ export const EventsList: React.FC = () => {
   ]);
   const isPhotographerUpcomingView = !isAdmin && view === 'upcoming';
   const isPhotographerMyEventsLoading =
-    !isAdmin && view === 'my' && isLoadingUpcomingEvents && myEvents.length === 0;
+    !isAdmin &&
+    view === 'my' &&
+    (!isClerkLoaded ||
+      !isSignedIn ||
+      !isAuthProfileLoaded ||
+      isLoadingUpcomingEvents) &&
+    myEvents.length === 0;
 
   return (
     <div className="pg-events-container" onClick={() => setActiveMenuId(null)}>
