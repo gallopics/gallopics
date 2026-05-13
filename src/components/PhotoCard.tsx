@@ -50,6 +50,7 @@ interface PhotoCardProps {
   // Sales-only control flags
   selectable?: boolean;
   showEdit?: boolean;
+  showCartActions?: boolean;
 }
 
 export const PhotoCard: React.FC<PhotoCardProps> = ({
@@ -66,6 +67,7 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({
   onEditPrice,
   selectable = true,
   showEdit = true,
+  showCartActions = true,
 }) => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -141,20 +143,22 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({
 
             {showMobileMenu && (
               <div className="mobile-menu-popup">
-                <button
-                  onClick={handleToggleCart}
-                  style={isAdded ? { color: 'var(--color-success)' } : {}}
-                >
-                  {isAdded ? (
-                    <>
-                      <Check size={16} /> Added
-                    </>
-                  ) : (
-                    <>
-                      <Plus size={16} /> Add to Cart
-                    </>
-                  )}
-                </button>
+                {showCartActions && (
+                  <button
+                    onClick={handleToggleCart}
+                    style={isAdded ? { color: 'var(--color-success)' } : {}}
+                  >
+                    {isAdded ? (
+                      <>
+                        <Check size={16} /> Added
+                      </>
+                    ) : (
+                      <>
+                        <Plus size={16} /> Add to Cart
+                      </>
+                    )}
+                  </button>
+                )}
                 <button
                   onClick={e => {
                     e.stopPropagation();
@@ -314,13 +318,15 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({
               >
                 <Share2 size={18} />
               </button>
-              <button
-                className={`icon-btn-glass primary ${isAdded ? 'added' : ''}`}
-                onClick={handleToggleCart}
-                title={isAdded ? 'Remove from cart' : 'Add to cart'}
-              >
-                {isAdded ? <Check size={18} /> : <Plus size={18} />}
-              </button>
+              {showCartActions && (
+                <button
+                  className={`icon-btn-glass primary ${isAdded ? 'added' : ''}`}
+                  onClick={handleToggleCart}
+                  title={isAdded ? 'Remove from cart' : 'Add to cart'}
+                >
+                  {isAdded ? <Check size={18} /> : <Plus size={18} />}
+                </button>
+              )}
             </div>
           </div>
         )}

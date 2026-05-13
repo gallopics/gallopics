@@ -54,6 +54,9 @@ export function ImageProfile() {
   const { cart, addToCart, removeFromCartByPhotoId } = useCart();
   const [showCheckout, setShowCheckout] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [capturedOrderId, setCapturedOrderId] = useState<string | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
   const [toast, setToast] = useState<{
@@ -75,6 +78,12 @@ export function ImageProfile() {
     'eventReturnState' in location.state
       ? (location.state.eventReturnState as Record<string, unknown>)
       : undefined;
+  const isOwnerProfilePhoto =
+    searchParams.get('owner') === '1' ||
+    typeof location.state === 'object' &&
+    location.state !== null &&
+    'isOwnerProfile' in location.state &&
+    location.state.isOwnerProfile === true;
   const [apiPhoto, setApiPhoto] = useState<Photo | null>(null);
 
   useEffect(() => {
@@ -196,9 +205,29 @@ export function ImageProfile() {
         type: 'digital',
         tax_rate: 0,
         total_tax_amount: 0,
+        photo_id: photo.id,
+        quality: selectedQuality,
       },
     ];
   }, [photo.horse, photo.id, photo.rider, selectedQuality]);
+
+  const handleDownloadOriginal = async () => {
+    if (!capturedOrderId) return;
+    setDownloadError(null);
+    setIsDownloading(true);
+    try {
+      const download = await api.createPhotoDownload(photo.id, capturedOrderId);
+      window.location.assign(download.url);
+    } catch (error) {
+      setDownloadError(
+        error instanceof Error
+          ? error.message
+          : 'Could not create download link.'
+      );
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   // Track recently viewed
   useEffect(() => {
@@ -377,8 +406,9 @@ export function ImageProfile() {
 
             {/* Right: Purchase and Details Panel */}
             <div className="w-[360px] flex-shrink-0 flex flex-col gap-4 sticky top-[100px] max-lg:w-full max-lg:static">
-              <div className="bg-white rounded-[var(--radius-md)] border border-[var(--color-border)] p-6 max-md:p-5 max-md:box-border max-md:w-full shadow-[var(--shadow-sm)] purchase-card">
-                {!showCheckout ? (
+              {!isOwnerProfilePhoto && (
+                <div className="bg-white rounded-[var(--radius-md)] border border-[var(--color-border)] p-6 max-md:p-5 max-md:box-border max-md:w-full shadow-[var(--shadow-sm)] purchase-card">
+                  {!showCheckout ? (
                   <>
                     <div className="flex justify-between mb-2">
                       <span className="text-[0.75rem] text-[var(--color-text-secondary)] font-medium">
@@ -491,13 +521,24 @@ export function ImageProfile() {
                           We've sent a download link to your email. You can also
                           download your photo directly below.
                         </p>
+                        {capturedOrderId && (
+                          <p className="mt-3 break-all text-[0.75rem] text-[var(--color-text-secondary)]">
+                            Order ID: {capturedOrderId}
+                          </p>
+                        )}
                         <button
                           className="btn-primary full-width w-full mt-3"
-                          onClick={() => alert('Download started...')}
+                          onClick={handleDownloadOriginal}
+                          disabled={!capturedOrderId || isDownloading}
                         >
                           <Zap size={18} />
-                          Download Original
+                          {isDownloading ? 'Preparing download...' : 'Download Original'}
                         </button>
+                        {downloadError && (
+                          <p className="text-[0.8125rem] text-[var(--color-danger)] mt-3">
+                            {downloadError}
+                          </p>
+                        )}
                         <button
                           className="btn-secondary full-width w-full mt-3"
                           onClick={() => navigate('/')}
@@ -509,13 +550,17 @@ export function ImageProfile() {
                       <CheckoutPanel
                         total={getPrice(selectedQuality)}
                         lineItems={checkoutLineItems}
-                        onPaymentSuccess={() => setIsSuccess(true)}
+                        onPaymentSuccess={order => {
+                          setCapturedOrderId(order.id);
+                          setIsSuccess(true);
+                        }}
                         onPay={() => setIsSuccess(true)}
                       />
                     )}
                   </div>
-                )}
-              </div>
+                  )}
+                </div>
+              )}
 
               <div className="bg-white rounded-[var(--radius-md)] border border-[var(--color-border)] p-6 max-md:p-5 max-md:box-border max-md:w-full shadow-[var(--shadow-sm)] details-card">
                 <h3 className="text-[1rem] font-semibold mb-4">Details</h3>

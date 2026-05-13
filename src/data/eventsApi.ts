@@ -10,6 +10,30 @@ import type {
 import type { ApiPhoto } from './apiClient';
 import { formatLabel } from '../lib/utils';
 
+const EVENTS_REQUEST_TIMEOUT_MS = 15000;
+
+async function fetchWithTimeout(url: URL, options: RequestInit = {}) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(
+    () => controller.abort(),
+    EVENTS_REQUEST_TIMEOUT_MS
+  );
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('The events API took too long to respond. Please retry.');
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
 export interface ApiEvent {
   id: string;
   tdb_id?: string | null;
@@ -175,7 +199,7 @@ export async function fetchEventsFromApi(options?: {
       url.searchParams.set('has_photos', 'true');
     }
 
-    const response = await fetch(url);
+    const response = await fetchWithTimeout(url);
 
     if (!response.ok) {
       throw new Error(`Failed to load events: ${response.status}`);

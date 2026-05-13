@@ -92,6 +92,8 @@ export interface CheckoutLineItem {
   type?: string;
   tax_rate?: number;
   total_tax_amount?: number;
+  photo_id?: string;
+  quality?: string;
 }
 
 export interface CheckoutSession {
@@ -109,7 +111,17 @@ export interface CheckoutOrder {
   klarna_order_id: string | null;
 }
 
+export interface PhotoDownloadResponse {
+  url: string;
+  expires_in: number;
+}
+
 type TokenGetter = () => Promise<string | null>;
+
+type ApiRequestInit = RequestInit & {
+  timeoutMs?: number;
+  retryNetworkErrors?: number;
+};
 
 export class ApiError extends Error {
   status: number;
@@ -123,9 +135,10 @@ export class ApiError extends Error {
 
 async function request<T>(
   path: string,
-  options: RequestInit = {},
+  options: ApiRequestInit = {},
   getToken?: TokenGetter
 ): Promise<T> {
+  const { timeoutMs = 30000, retryNetworkErrors = 0, ...fetchOptions } = options;
   const headers = new Headers(options.headers);
   headers.set('Accept', 'application/json');
 
@@ -147,27 +160,54 @@ async function request<T>(
     }
   }
 
-  const response = await fetch(new URL(path, getApiBaseUrl()), {
-    ...options,
-    headers,
-  });
+  const url = new URL(path, getApiBaseUrl());
+  let lastNetworkError: unknown;
+  for (let attempt = 0; attempt <= retryNetworkErrors; attempt += 1) {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
 
-  if (!response.ok) {
-    let message = `Request failed: ${response.status}`;
     try {
-      const body = await response.json();
-      message = body.detail || body.message || message;
-    } catch {
-      // Keep the status-based message for non-JSON errors.
+      const response = await fetch(url, {
+        ...fetchOptions,
+        headers,
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        let message = `Request failed: ${response.status}`;
+        try {
+          const body = await response.json();
+          message = body.detail || body.message || message;
+        } catch {
+          // Keep the status-based message for non-JSON errors.
+        }
+        throw new ApiError(response.status, message);
+      }
+
+      if (response.status === 204) {
+        return undefined as T;
+      }
+
+      return (await response.json()) as T;
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+
+      lastNetworkError = error;
+      if (attempt === retryNetworkErrors) {
+        break;
+      }
+    } finally {
+      window.clearTimeout(timeoutId);
     }
-    throw new ApiError(response.status, message);
   }
 
-  if (response.status === 204) {
-    return undefined as T;
+  if (lastNetworkError instanceof DOMException && lastNetworkError.name === 'AbortError') {
+    throw new Error(`The API took too long to respond: ${url.toString()}`);
   }
 
-  return (await response.json()) as T;
+  throw new Error(`Could not reach the API: ${url.toString()}`);
 }
 
 export const api = {
@@ -352,6 +392,16 @@ export const api = {
         authorization_token: authorizationToken,
       }),
     }),
+
+  createPhotoDownload: (photoId: string, orderId: string) =>
+    request<PhotoDownloadResponse>(
+      `/api/v1/photos/${encodeURIComponent(photoId)}/download`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ order_id: orderId }),
+        retryNetworkErrors: 1,
+      }
+    ),
 };
 
 // --- Additional Types for Upload/Gallery ---

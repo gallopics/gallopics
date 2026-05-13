@@ -10,13 +10,18 @@ import { CheckoutPanel } from '../components/CheckoutPanel';
 import { photos as mockPhotos, COMPETITIONS } from '../data/mockData';
 import { PhotoCard } from '../components/PhotoCard';
 import { QUALITY_TIERS } from '../constants/qualityTiers';
-import type { CheckoutLineItem } from '../data/apiClient';
+import { api, type CheckoutLineItem, type CheckoutOrder } from '../data/apiClient';
+import type { CartItem } from '../types';
 
 export function Cart() {
   const { cart, addToCart, removeFromCart, total, clearCart } = useCart();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [isSuccess, setIsSuccess] = useState(false);
+  const [capturedOrderId, setCapturedOrderId] = useState<string | null>(null);
+  const [purchasedItems, setPurchasedItems] = useState<CartItem[]>([]);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [downloadingPhotoId, setDownloadingPhotoId] = useState<string | null>(null);
   const [toast, setToast] = useState<{
     message: string;
     action?: { label: string; onClick: () => void };
@@ -101,9 +106,35 @@ export function Cart() {
     return items;
   }, [fromPath, navigate]);
 
-  const handlePay = () => {
+  const handlePay = (order?: CheckoutOrder) => {
+    setPurchasedItems(cart);
+    setCapturedOrderId(order?.id ?? null);
+    setDownloadError(null);
     setIsSuccess(true);
     clearCart();
+  };
+
+  const handleDownload = async (item: CartItem) => {
+    if (!capturedOrderId) {
+      setDownloadError('Download is not ready yet. Please try again in a moment.');
+      return;
+    }
+
+    setDownloadingPhotoId(item.photoId);
+    setDownloadError(null);
+
+    try {
+      const download = await api.createPhotoDownload(item.photoId, capturedOrderId);
+      window.location.assign(download.url);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Could not prepare the download.';
+      setDownloadError(message);
+    } finally {
+      setDownloadingPhotoId(null);
+    }
   };
 
   const checkoutLineItems = useMemo<CheckoutLineItem[]>(
@@ -119,6 +150,8 @@ export function Cart() {
           type: 'digital',
           tax_rate: 0,
           total_tax_amount: 0,
+          photo_id: item.photoId,
+          quality: item.quality,
         };
       }),
     [cart]
@@ -162,9 +195,48 @@ export function Cart() {
                     Payment Successful!
                   </h1>
                   <p className="text-[var(--color-text-secondary)] leading-[1.6] mb-10">
-                    Thank you for your purchase. We've sent a delivery email
-                    with your download links to your inbox.
+                    Thank you for your purchase. Your download links are ready.
                   </p>
+                  {capturedOrderId && (
+                    <p className="mb-6 break-all text-[0.75rem] text-[var(--color-text-secondary)]">
+                      Order ID: {capturedOrderId}
+                    </p>
+                  )}
+
+                  {purchasedItems.length > 0 && (
+                    <div className="mb-8 flex flex-col gap-3 text-left">
+                      {purchasedItems.map(item => (
+                        <div
+                          key={item.cartId}
+                          className="flex items-center justify-between gap-4 rounded-[var(--radius-md)] border border-[var(--color-border)] p-3"
+                        >
+                          <div className="min-w-0">
+                            <div className="truncate text-[0.875rem] font-semibold text-[var(--color-text-primary)]">
+                              {item.photo.rider} / {item.photo.horse}
+                            </div>
+                            <div className="text-[0.75rem] text-[var(--color-text-secondary)]">
+                              {item.qualityLabel}
+                            </div>
+                          </div>
+                          <button
+                            className="shrink-0 rounded-[var(--radius-full)] bg-black px-4 py-2 text-[0.8125rem] font-semibold text-white transition-all duration-200 ease-in-out hover:bg-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-60"
+                            onClick={() => handleDownload(item)}
+                            disabled={downloadingPhotoId === item.photoId}
+                          >
+                            {downloadingPhotoId === item.photoId
+                              ? 'Preparing'
+                              : 'Download'}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {downloadError && (
+                    <div className="mb-6 rounded-[var(--radius-md)] border border-[var(--color-danger)] bg-[var(--color-danger-tint)] p-3 text-left text-[0.875rem] text-[var(--color-danger)]">
+                      {downloadError}
+                    </div>
+                  )}
 
                   <div className="flex flex-col gap-4">
                     <button
@@ -366,7 +438,7 @@ export function Cart() {
                     total={total}
                     lineItems={checkoutLineItems}
                     onPaymentSuccess={handlePay}
-                    onPay={handlePay}
+                    onPay={() => handlePay()}
                   />
                 </div>
               </div>

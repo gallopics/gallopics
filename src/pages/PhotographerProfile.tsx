@@ -660,10 +660,11 @@ export function PhotographerProfile() {
                     key={photo.id}
                     photo={photo}
                     onClick={p =>
-                      navigate(`/photo/${p.id}?from=ppro`, {
-                        state: { photo: p },
+                      navigate(`/photo/${p.id}?from=ppro${isOwner ? '&owner=1' : ''}`, {
+                        state: { photo: p, isOwnerProfile: isOwner },
                       })
                     }
+                    showCartActions={!isOwner}
                   />
                 ))}
               </MasonryGrid>
