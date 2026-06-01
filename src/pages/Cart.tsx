@@ -19,6 +19,8 @@ export function Cart() {
   const [searchParams] = useSearchParams();
   const [isSuccess, setIsSuccess] = useState(false);
   const [capturedOrderId, setCapturedOrderId] = useState<string | null>(null);
+  const [buyerEmail, setBuyerEmail] = useState<string | null>(null);
+  const [invoiceEmailSent, setInvoiceEmailSent] = useState(false);
   const [purchasedItems, setPurchasedItems] = useState<CartItem[]>([]);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [downloadingPhotoId, setDownloadingPhotoId] = useState<string | null>(null);
@@ -106,9 +108,15 @@ export function Cart() {
     return items;
   }, [fromPath, navigate]);
 
-  const handlePay = (order?: CheckoutOrder) => {
+  const handlePay = (
+    order?: CheckoutOrder,
+    email?: string,
+    invoiceSent = false
+  ) => {
     setPurchasedItems(cart);
     setCapturedOrderId(order?.id ?? null);
+    setBuyerEmail(email ?? null);
+    setInvoiceEmailSent(invoiceSent);
     setDownloadError(null);
     setIsSuccess(true);
     clearCart();
@@ -197,6 +205,13 @@ export function Cart() {
                   <p className="text-[var(--color-text-secondary)] leading-[1.6] mb-10">
                     Thank you for your purchase. Your download links are ready.
                   </p>
+                  {buyerEmail && (
+                    <p className="mb-6 text-[0.875rem] text-[var(--color-text-secondary)]">
+                      {invoiceEmailSent
+                        ? `Invoice sent to ${buyerEmail}.`
+                        : `Payment completed, but the invoice email to ${buyerEmail} could not be confirmed. Contact support if it does not arrive.`}
+                    </p>
+                  )}
                   {capturedOrderId && (
                     <p className="mb-6 break-all text-[0.75rem] text-[var(--color-text-secondary)]">
                       Order ID: {capturedOrderId}
@@ -438,7 +453,7 @@ export function Cart() {
                     total={total}
                     lineItems={checkoutLineItems}
                     onPaymentSuccess={handlePay}
-                    onPay={() => handlePay()}
+                    onPay={email => handlePay(undefined, email, false)}
                   />
                 </div>
               </div>

@@ -32,7 +32,11 @@ declare global {
 interface CheckoutPanelProps {
   total: number;
   lineItems?: CheckoutLineItem[];
-  onPaymentSuccess?: (order: CheckoutOrder) => void;
+  onPaymentSuccess?: (
+    order: CheckoutOrder,
+    email: string,
+    invoiceEmailSent: boolean
+  ) => void;
   onPay?: (email: string, method: string) => void;
 }
 
@@ -51,6 +55,7 @@ export const CheckoutPanel: React.FC<CheckoutPanelProps> = ({
   >('idle');
   const [klarnaOrderId, setKlarnaOrderId] = useState<string | null>(null);
   const [klarnaError, setKlarnaError] = useState<string | null>(null);
+  const [invoiceError, setInvoiceError] = useState<string | null>(null);
   const [scriptReady, setScriptReady] = useState(false);
 
   const [secretCode, setSecretCode] = useState('');
@@ -164,6 +169,7 @@ export const CheckoutPanel: React.FC<CheckoutPanelProps> = ({
     }
 
     setKlarnaError(null);
+    setInvoiceError(null);
     setKlarnaStep('loading');
 
     try {
@@ -204,6 +210,7 @@ export const CheckoutPanel: React.FC<CheckoutPanelProps> = ({
     if (!klarnaOrderId || !window.Klarna?.Payments) return;
 
     setKlarnaError(null);
+    setInvoiceError(null);
     setKlarnaStep('authorizing');
     window.Klarna.Payments.authorize(
       { payment_method_category: 'pay_now' },
@@ -220,8 +227,25 @@ export const CheckoutPanel: React.FC<CheckoutPanelProps> = ({
             klarnaOrderId,
             response.authorization_token
           );
+          let invoiceEmailSent = false;
+
+          try {
+            await api.sendCheckoutInvoiceEmail(
+              order.id,
+              email,
+              lineItems ?? []
+            );
+            invoiceEmailSent = true;
+          } catch (invoiceEmailError) {
+            setInvoiceError(
+              invoiceEmailError instanceof Error
+                ? invoiceEmailError.message
+                : 'Payment succeeded, but the invoice email could not be sent.'
+            );
+          }
+
           setKlarnaStep('complete');
-          onPaymentSuccess?.(order);
+          onPaymentSuccess?.(order, email, invoiceEmailSent);
         } catch (error) {
           setKlarnaStep('ready');
           setKlarnaError(
@@ -387,9 +411,18 @@ export const CheckoutPanel: React.FC<CheckoutPanelProps> = ({
             </p>
           )}
 
+          {invoiceError && (
+            <p className="text-[0.8125rem] text-[var(--color-danger)] mt-3 font-medium">
+              {invoiceError}
+            </p>
+          )}
+
           {klarnaStep === 'complete' && (
             <p className="text-[0.8125rem] text-[var(--color-success)] mt-3 font-semibold">
-              Payment captured.
+              Payment captured.{' '}
+              {invoiceError
+                ? 'Invoice email needs to be resent by support.'
+                : 'Invoice email sent.'}
             </p>
           )}
         </div>

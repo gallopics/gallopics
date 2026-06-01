@@ -61,6 +61,8 @@ export function ImageProfile() {
   const [showCheckout, setShowCheckout] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [capturedOrderId, setCapturedOrderId] = useState<string | null>(null);
+  const [buyerEmail, setBuyerEmail] = useState<string | null>(null);
+  const [invoiceEmailSent, setInvoiceEmailSent] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
@@ -559,9 +561,18 @@ export function ImageProfile() {
                         </div>
                         <h2 className="mt-4">Payment successful!</h2>
                         <p>
-                          We've sent a download link to your email. You can also
-                          download your photo directly below.
+                          {buyerEmail && invoiceEmailSent
+                            ? `We've sent your invoice to ${buyerEmail}. `
+                            : ''}
+                          You can download your photo directly below.
                         </p>
+                        {buyerEmail && !invoiceEmailSent && (
+                          <p className="mt-3 text-[0.8125rem] text-[var(--color-danger)]">
+                            Payment completed, but the invoice email to{' '}
+                            {buyerEmail} could not be confirmed. Contact support
+                            if it does not arrive.
+                          </p>
+                        )}
                         {capturedOrderId && (
                           <p className="mt-3 break-all text-[0.75rem] text-[var(--color-text-secondary)]">
                             Order ID: {capturedOrderId}
@@ -591,11 +602,17 @@ export function ImageProfile() {
                       <CheckoutPanel
                         total={getPrice(selectedQuality)}
                         lineItems={checkoutLineItems}
-                        onPaymentSuccess={order => {
+                        onPaymentSuccess={(order, email, invoiceSent) => {
                           setCapturedOrderId(order.id);
+                          setBuyerEmail(email);
+                          setInvoiceEmailSent(invoiceSent);
                           setIsSuccess(true);
                         }}
-                        onPay={() => setIsSuccess(true)}
+                        onPay={email => {
+                          setBuyerEmail(email);
+                          setInvoiceEmailSent(false);
+                          setIsSuccess(true);
+                        }}
                       />
                     )}
                   </div>

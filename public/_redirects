@@ -1,2 +1,2 @@
-/api/* https://gallopics-api.onrender.com/api/:splat 200
+/api/* http://82.96.43.103:8081/api/:splat 200
 /* /index.html 200

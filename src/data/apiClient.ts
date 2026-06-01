@@ -1,11 +1,11 @@
-const RENDER_API_BASE_URL = 'https://gallopics-api.onrender.com';
+const SERVER_API_BASE_URL = 'http://82.96.43.103:8081';
 
 export function getApiBaseUrl() {
   if (import.meta.env.VITE_API_BASE_URL) {
     return import.meta.env.VITE_API_BASE_URL;
   }
 
-  return RENDER_API_BASE_URL;
+  return SERVER_API_BASE_URL;
 }
 
 export function resolveApiAssetUrl(path: string | null | undefined) {
@@ -109,6 +109,11 @@ export interface CheckoutOrder {
   amount: number;
   currency: string;
   klarna_order_id: string | null;
+}
+
+export interface CheckoutInvoiceEmail {
+  status: 'queued' | 'sent';
+  recipient_email: string;
 }
 
 export interface PhotoDownloadResponse {
@@ -392,6 +397,23 @@ export const api = {
         authorization_token: authorizationToken,
       }),
     }),
+
+  sendCheckoutInvoiceEmail: (
+    orderId: string,
+    customerEmail: string,
+    lineItems: CheckoutLineItem[]
+  ) =>
+    request<CheckoutInvoiceEmail>(
+      `/api/v1/checkout/orders/${encodeURIComponent(orderId)}/invoice-email`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          customer_email: customerEmail,
+          line_items: lineItems,
+        }),
+        retryNetworkErrors: 1,
+      }
+    ),
 
   createPhotoDownload: (photoId: string, orderId: string) =>
     request<PhotoDownloadResponse>(
