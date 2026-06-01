@@ -8,6 +8,7 @@ import type { EventData } from '../data/mockEvents';
 import {
   fetchEventsFromApi,
   fetchEventsWithPhotosFromApi,
+  fetchLatestPublicEventPhotoUrl,
 } from '../data/eventsApi';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -24,6 +25,9 @@ export function EventsPage() {
   const [city, setCity] = useState('All');
   const [period, setPeriod] = useState('All');
   const [events, setEvents] = useState<EventData[]>([]);
+  const [latestPhotoCoverUrls, setLatestPhotoCoverUrls] = useState<
+    Record<string, string | null>
+  >({});
   const [isLoadingEvents, setIsLoadingEvents] = useState(true);
   const [eventsError, setEventsError] = useState<string | null>(null);
   const shouldShowPhotoBackedEvents =
@@ -193,6 +197,69 @@ export function EventsPage() {
     return finalResults;
   }, [country, city, period, events]);
 
+  useEffect(() => {
+    const eventsMissingCovers = filteredEvents.filter(
+      event =>
+        !event.coverImage &&
+        event.photoCount !== 0 &&
+        !Object.prototype.hasOwnProperty.call(latestPhotoCoverUrls, event.id),
+    );
+
+    if (eventsMissingCovers.length === 0) return;
+
+    let isMounted = true;
+
+    async function loadLatestPhotoCovers() {
+      const coverEntries = await Promise.all(
+        eventsMissingCovers.map(async event => {
+          try {
+            const url = await fetchLatestPublicEventPhotoUrl(event.id);
+            return [event.id, url] as const;
+          } catch (error) {
+            console.warn(
+              `Failed to load fallback cover for event ${event.id}`,
+              error,
+            );
+            return [event.id, null] as const;
+          }
+        }),
+      );
+
+      if (!isMounted) return;
+
+      setLatestPhotoCoverUrls(prev => {
+        const next = { ...prev };
+        coverEntries.forEach(([eventId, url]) => {
+          next[eventId] = url;
+        });
+        return next;
+      });
+    }
+
+    void loadLatestPhotoCovers();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [filteredEvents, latestPhotoCoverUrls]);
+
+  const displayEvents = useMemo(
+    () =>
+      filteredEvents.map(event => {
+        const latestPhotoCoverUrl = latestPhotoCoverUrls[event.id];
+
+        if (event.coverImage || !latestPhotoCoverUrl) {
+          return event;
+        }
+
+        return {
+          ...event,
+          coverImage: latestPhotoCoverUrl,
+        };
+      }),
+    [filteredEvents, latestPhotoCoverUrls],
+  );
+
   const handleFilterChange = (
     key: 'country' | 'city' | 'period',
     value: string,
@@ -224,7 +291,7 @@ export function EventsPage() {
               period={period}
               onFilterChange={handleFilterChange}
               isSticky={false}
-              resultsCount={filteredEvents.length}
+              resultsCount={displayEvents.length}
             />
           </div>
 
@@ -237,9 +304,9 @@ export function EventsPage() {
               <h3>Events could not be loaded</h3>
               <p>{eventsError}</p>
             </div>
-          ) : filteredEvents.length > 0 ? (
+          ) : displayEvents.length > 0 ? (
             <div className="events-folders-grid">
-              {filteredEvents.map(event => (
+              {displayEvents.map(event => (
                 <FolderEventCard
                   key={event.id}
                   event={event}

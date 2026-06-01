@@ -1,12 +1,13 @@
 import React from 'react';
-import { assetUrl } from '../lib/utils';
 
 interface WatermarkedThumbnailProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   photographer?: string;
 }
 
+const PREVIEW_WATERMARK_TEXT =
+  'This image is a preview and may not be used or published without purchase';
+
 export const WatermarkedThumbnail: React.FC<WatermarkedThumbnailProps> = ({
-  photographer = 'Gallopics',
   className,
   alt,
   ...props
@@ -18,23 +19,18 @@ export const WatermarkedThumbnail: React.FC<WatermarkedThumbnailProps> = ({
       <img className="w-full h-full object-cover block" alt={alt} {...props} />
       <div
         className={[
-          'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2',
+          'absolute bottom-3 left-1/2 -translate-x-1/2',
           'flex flex-col items-center justify-center',
           'pointer-events-none z-[2] opacity-40 w-full',
         ].join(' ')}
       >
-        <img
-          src={assetUrl('images/logo1.svg')}
-          alt=""
-          className="w-[45%] max-w-[100px] h-auto brightness-0 invert mb-[6px]"
-        />
         <span
           className={[
-            'text-white text-[0.75rem] font-medium text-center',
-            'shadow-[0_1px_2px_rgba(0,0,0,0.5)] whitespace-nowrap tracking-[0.02em]',
+            'max-w-[82%] text-white text-[0.7rem] font-semibold leading-[1.25] text-center',
+            'shadow-[0_1px_2px_rgba(0,0,0,0.65)] tracking-[0.02em]',
           ].join(' ')}
         >
-          © {photographer}
+          {PREVIEW_WATERMARK_TEXT}
         </span>
       </div>
     </div>
