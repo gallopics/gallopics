@@ -153,7 +153,9 @@ export const EventsList: React.FC = () => {
       try {
         setIsLoadingUpcomingEvents(true);
         setUpcomingEventsError(null);
-        const apiEvents = await fetchEventsFromApi({ hasPhotos: true });
+        const apiEvents = await fetchEventsFromApi(
+          view === 'upcoming' ? undefined : { hasPhotos: true },
+        );
         let bookings: ApiEvent[] = [];
 
         try {
@@ -211,6 +213,7 @@ export const EventsList: React.FC = () => {
     isClerkLoaded,
     isSignedIn,
     syncLocalPhotographerProfile,
+    view,
   ]);
 
   // Filter Logic
@@ -381,9 +384,10 @@ export const EventsList: React.FC = () => {
       if (view === 'upcoming') return upcomingEvents.slice(3);
       return upcomingEvents;
     }
-    return view === 'upcoming' ? upcomingEvents : myEvents;
+    return view === 'upcoming' ? filteredEvents : myEvents;
   }, [
     archivedEvents,
+    filteredEvents,
     isAdmin,
     liveEvents,
     myEvents,
