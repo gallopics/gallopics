@@ -1,14 +1,16 @@
 import React, { useMemo } from 'react';
-import { assetUrl } from '../lib/utils';
 
 interface WatermarkedPhotoPreviewProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   photographer?: string;
   onLoad?: (e: React.SyntheticEvent<HTMLImageElement, Event>) => void;
 }
 
+const PREVIEW_WATERMARK_TEXT =
+  'This image is a preview and may not be used or published without purchase';
+
 export const WatermarkedPhotoPreview: React.FC<
   WatermarkedPhotoPreviewProps
-> = ({ photographer = 'Gallopics', onLoad, className, alt, ...props }) => {
+> = ({ onLoad, className, alt, ...props }) => {
   // Generate SVG Data URI for the repeating pattern
   const patternBg = useMemo(() => {
     // SVG with Logo Icon Only (180x180 grid for balanced density)
@@ -43,17 +45,12 @@ export const WatermarkedPhotoPreview: React.FC<
       {/* Center Standard Mark */}
       <div
         className={[
-          'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2',
-          'z-[11] pointer-events-none flex flex-col items-center opacity-50',
+          'absolute bottom-6 left-1/2 -translate-x-1/2',
+          'z-[11] pointer-events-none flex max-w-[80%] items-center justify-center opacity-60',
         ].join(' ')}
       >
-        <img
-          src={assetUrl('images/logo1.svg')}
-          alt=""
-          className="w-40 h-auto brightness-0 invert mb-[6px]"
-        />
-        <span className="text-white text-[1.125rem] font-semibold [text-shadow:0_2px_4px_rgba(0,0,0,0.5)]">
-          © {photographer}
+        <span className="text-center text-white text-[1rem] font-semibold leading-[1.35] [text-shadow:0_2px_4px_rgba(0,0,0,0.65)]">
+          {PREVIEW_WATERMARK_TEXT}
         </span>
       </div>
     </div>

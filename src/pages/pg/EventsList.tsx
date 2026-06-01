@@ -68,7 +68,7 @@ const mapBackendEventToPgEvent = (
 export const EventsList: React.FC = () => {
   const { isAdmin } = useWorkspace();
   const { isLoaded: isAuthProfileLoaded, user } = useAuth();
-  const { events } = usePhotographer();
+  const { events, allPhotos } = usePhotographer();
   const {
     getToken,
     isLoaded: isClerkLoaded,
@@ -153,7 +153,7 @@ export const EventsList: React.FC = () => {
       try {
         setIsLoadingUpcomingEvents(true);
         setUpcomingEventsError(null);
-        const apiEvents = await fetchEventsFromApi();
+        const apiEvents = await fetchEventsFromApi({ hasPhotos: true });
         let bookings: ApiEvent[] = [];
 
         try {
@@ -245,6 +245,37 @@ export const EventsList: React.FC = () => {
 
   const myEvents = filteredEvents.filter(
     e => e.isRegistered || e.status === 'open'
+  );
+  const latestPhotoUrlByEventId = useMemo(() => {
+    const latestByEvent = new Map<string, { url: string; uploadedAt: number }>();
+
+    allPhotos.forEach(photo => {
+      if (!photo.eventId || !photo.url) return;
+
+      const uploadTime = photo.uploadDate
+        ? new Date(photo.uploadDate).getTime()
+        : 0;
+      const uploadedAt = Number.isFinite(uploadTime) ? uploadTime : 0;
+      const current = latestByEvent.get(photo.eventId);
+
+      if (!current || uploadedAt > current.uploadedAt) {
+        latestByEvent.set(photo.eventId, {
+          url: photo.url,
+          uploadedAt,
+        });
+      }
+    });
+
+    return latestByEvent;
+  }, [allPhotos]);
+  const myEventsWithDisplayCovers = useMemo(
+    () =>
+      myEvents.map(event => ({
+        ...event,
+        coverImage:
+          event.coverImage || latestPhotoUrlByEventId.get(event.id)?.url || '',
+      })),
+    [latestPhotoUrlByEventId, myEvents],
   );
   const liveEvents = filteredEvents.filter(e => e.status === 'open');
   const pastEvents = filteredEvents.slice(2, 4); // Mock: slice some distinct ones for past
@@ -843,7 +874,7 @@ export const EventsList: React.FC = () => {
               <p>Events you've joined or been assigned to will appear here.</p>
             </div>
           ) : (
-            myEvents.map(event => (
+            myEventsWithDisplayCovers.map(event => (
               <PgEventCard
                 key={event.id}
                 event={event}

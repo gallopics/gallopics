@@ -36,6 +36,7 @@ import { assetUrl } from '../lib/utils';
 import {
   api,
   resolveApiAssetUrl,
+  type ApiPhotographer,
   type ApiPhoto,
   type CheckoutLineItem,
 } from '../data/apiClient';
@@ -44,6 +45,11 @@ import type { Photo } from '../types';
 import { QUALITY_TIERS, getPriceByTierId } from '../constants/qualityTiers';
 
 const getPrice = (quality: string) => getPriceByTierId(quality);
+
+const isUuid = (value: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
 
 export function ImageProfile() {
   const { id } = useParams();
@@ -59,6 +65,8 @@ export function ImageProfile() {
   const [isDownloading, setIsDownloading] = useState(false);
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
+  const [apiPhotographer, setApiPhotographer] =
+    useState<ApiPhotographer | null>(null);
   const [toast, setToast] = useState<{
     message: string;
     action?: { label: string; onClick: () => void };
@@ -149,6 +157,42 @@ export function ImageProfile() {
       PHOTOGRAPHERS[0];
     return p;
   }, [photo.eventId]);
+  const displayedPhotographer = useMemo(() => {
+    const fallbackName =
+      photo.photographer && photo.photographer !== 'Gallopics'
+        ? photo.photographer
+        : `${photographer.firstName} ${photographer.lastName}`;
+
+    return {
+      id: apiPhotographer?.slug || apiPhotographer?.id || photographer.id,
+      name: apiPhotographer?.display_name || fallbackName,
+      avatarUrl:
+        resolveApiAssetUrl(apiPhotographer?.avatar_url) ||
+        assetUrl(`images/${photographer.firstName} ${photographer.lastName}.jpg`),
+    };
+  }, [apiPhotographer, photo.photographer, photographer]);
+
+  useEffect(() => {
+    if (!photo.photographerId || !isUuid(photo.photographerId)) {
+      setApiPhotographer(null);
+      return;
+    }
+
+    let isMounted = true;
+
+    api
+      .getPublicPhotographer(photo.photographerId)
+      .then(profile => {
+        if (isMounted) setApiPhotographer(profile);
+      })
+      .catch(() => {
+        if (isMounted) setApiPhotographer(null);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [photo.photographerId]);
 
   // Prevent body scroll when full screen is active
   useEffect(() => {
@@ -326,7 +370,6 @@ export function ImageProfile() {
                       const img = e.currentTarget;
                       setDetectedPortrait(img.naturalHeight > img.naturalWidth);
                     }}
-                    photographer={`${photographer.firstName} ${photographer.lastName}`}
                   />
                 </div>
 
@@ -364,14 +407,12 @@ export function ImageProfile() {
 
                     <InfoChip
                       label="Photographer"
-                      name={`${photographer.firstName} ${photographer.lastName}`}
+                      name={displayedPhotographer.name}
                       variant="photographer"
-                      avatarUrl={assetUrl(
-                        `images/${photographer.firstName} ${photographer.lastName}.jpg`,
-                      )}
+                      avatarUrl={displayedPhotographer.avatarUrl}
                       onClick={() =>
                         navigate(
-                          `/photographer/${photographer.id}?from=ipro&eventId=${photo.eventId}`,
+                          `/photographer/${displayedPhotographer.id}?from=ipro&eventId=${photo.eventId}`,
                         )
                       }
                     />
@@ -670,7 +711,6 @@ export function ImageProfile() {
               <WatermarkedPhotoPreview
                 src={photo.src}
                 alt={photo.rider}
-                photographer={`${photographer.firstName} ${photographer.lastName}`}
                 className="!bg-transparent max-w-[95vw] max-h-[95vh]"
               />
             </div>

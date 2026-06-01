@@ -278,6 +278,36 @@ export async function fetchPublicEventPhotosFromApi(
   return data.items.map(photo => mapApiPhotoToPhoto(photo, event));
 }
 
+export async function fetchLatestPublicEventPhotoUrl(
+  eventId: string,
+  pageSize = 20
+): Promise<string | null> {
+  const url = new URL(
+    `/api/v1/events/${encodeURIComponent(eventId)}/gallery`,
+    getApiBaseUrl()
+  );
+  url.searchParams.set('page', '1');
+  url.searchParams.set('page_size', String(pageSize));
+
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`Failed to load event photos: ${response.status}`);
+  }
+
+  const data = (await response.json()) as PaginatedApiResponse<ApiPhotoWithUrls>;
+  const latestPhoto = [...data.items].sort((a, b) => {
+    const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+    const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+    const timeA = Number.isFinite(dateA) ? dateA : 0;
+    const timeB = Number.isFinite(dateB) ? dateB : 0;
+
+    return timeB - timeA;
+  })[0];
+
+  return latestPhoto ? getPhotoImageUrl(latestPhoto) || null : null;
+}
+
 export async function fetchEventFromApi(eventId: string): Promise<ApiEvent> {
   const url = new URL(`/api/v1/events/${eventId}`, getApiBaseUrl());
   const response = await fetch(url);
