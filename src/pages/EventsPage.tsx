@@ -30,8 +30,7 @@ export function EventsPage() {
   >({});
   const [isLoadingEvents, setIsLoadingEvents] = useState(true);
   const [eventsError, setEventsError] = useState<string | null>(null);
-  const shouldShowPhotoBackedEvents =
-    !isAuthenticated || user?.role === 'pg';
+  const shouldShowPhotoBackedEvents = !isAuthenticated || user?.role === 'pg';
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -50,7 +49,7 @@ export function EventsPage() {
       } catch (error) {
         if (isMounted) {
           setEventsError(
-            error instanceof Error ? error.message : 'Failed to load events',
+            error instanceof Error ? error.message : 'Failed to load events'
           );
         }
       } finally {
@@ -114,12 +113,8 @@ export function EventsPage() {
     TODAY.setHours(0, 0, 0, 0);
 
     const results = source.filter(event => {
-      const matchCountry =
-        event.country === country || country === 'all';
-      const matchCity =
-        city === 'All' ||
-        city === 'all' ||
-        event.city === city;
+      const matchCountry = event.country === country || country === 'all';
+      const matchCity = city === 'All' || city === 'all' || event.city === city;
 
       // Period Logic
       let matchPeriod = true;
@@ -202,7 +197,7 @@ export function EventsPage() {
       event =>
         !event.coverImage &&
         event.photoCount !== 0 &&
-        !Object.prototype.hasOwnProperty.call(latestPhotoCoverUrls, event.id),
+        !Object.prototype.hasOwnProperty.call(latestPhotoCoverUrls, event.id)
     );
 
     if (eventsMissingCovers.length === 0) return;
@@ -218,11 +213,11 @@ export function EventsPage() {
           } catch (error) {
             console.warn(
               `Failed to load fallback cover for event ${event.id}`,
-              error,
+              error
             );
             return [event.id, null] as const;
           }
-        }),
+        })
       );
 
       if (!isMounted) return;
@@ -257,12 +252,12 @@ export function EventsPage() {
           coverImage: latestPhotoCoverUrl,
         };
       }),
-    [filteredEvents, latestPhotoCoverUrls],
+    [filteredEvents, latestPhotoCoverUrls]
   );
 
   const handleFilterChange = (
     key: 'country' | 'city' | 'period',
-    value: string,
+    value: string
   ) => {
     if (key === 'country') setCountry(value);
     if (key === 'city') setCity(value);
@@ -285,14 +280,14 @@ export function EventsPage() {
         <div className="container">
           <h2 className="section-title">Browse events</h2>
           <div className="filters-wrapper">
-            <EventBrowseFilter
+            {/* <EventBrowseFilter
               country={country}
               city={city}
               period={period}
               onFilterChange={handleFilterChange}
               isSticky={false}
               resultsCount={displayEvents.length}
-            />
+            /> */}
           </div>
 
           {isLoadingEvents ? (
@@ -316,9 +311,7 @@ export function EventsPage() {
             </div>
           ) : (
             <div className="pg-empty-state">
-              <h3>
-                No events available – yet
-              </h3>
+              <h3>No events available – yet</h3>
             </div>
           )}
         </div>
