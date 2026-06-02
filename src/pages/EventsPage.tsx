@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Header } from '../components/Header';
 import { TitleHeader } from '../components/TitleHeader';
 import { Footer } from '../components/Footer';
-import { EventBrowseFilter } from '../components/EventBrowseFilter';
 import { FolderEventCard } from '../components/FolderEventCard';
+//import { EventBrowseFilter } from '../components/EventBrowseFilter';
 import type { EventData } from '../data/mockEvents';
 import {
   fetchEventsFromApi,
@@ -255,14 +255,14 @@ export function EventsPage() {
     [filteredEvents, latestPhotoCoverUrls]
   );
 
-  const handleFilterChange = (
-    key: 'country' | 'city' | 'period',
-    value: string
-  ) => {
-    if (key === 'country') setCountry(value);
-    if (key === 'city') setCity(value);
-    if (key === 'period') setPeriod(value);
-  };
+  // const handleFilterChange = (
+  //   key: 'country' | 'city' | 'period',
+  //   value: string
+  // ) => {
+  //   if (key === 'country') setCountry(value);
+  //   if (key === 'city') setCity(value);
+  //   if (key === 'period') setPeriod(value);
+  // };
 
   return (
     <div className="page-wrapper ehome-page guestHome">
