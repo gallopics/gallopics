@@ -3,18 +3,16 @@ import { RotateCcw } from 'lucide-react';
 import { ModernDropdown } from './ModernDropdown';
 
 interface EventBrowseFilterProps {
-  country: string;
   city: string;
 
   period: string;
 
-  onFilterChange: (type: 'country' | 'city' | 'period', value: string) => void;
+  onFilterChange: (type: 'city' | 'period', value: string) => void;
   isSticky: boolean;
   resultsCount: number;
 }
 
 export const EventBrowseFilter: React.FC<EventBrowseFilterProps> = ({
-  country,
   city,
   period,
   onFilterChange,
@@ -22,17 +20,6 @@ export const EventBrowseFilter: React.FC<EventBrowseFilterProps> = ({
   resultsCount,
 }) => {
   // Options Data (Ideally could come from props/global data, but hardcoded here as per original file)
-  const countryOptions = [
-    { label: 'All Countries', value: 'all', icon: '🌍' },
-    { label: 'Sweden', value: 'Sweden', icon: '🇸🇪' },
-    { label: 'Norway', value: 'Norway', icon: '🇳🇴' },
-    { label: 'Denmark', value: 'Denmark', icon: '🇩🇰' },
-    { label: 'Finland', value: 'Finland', icon: '🇫🇮' },
-    { label: 'Germany', value: 'Germany', icon: '🇩🇪' },
-    { label: 'France', value: 'France', icon: '🇫🇷' },
-    { label: 'Netherlands', value: 'Netherlands', icon: '🇳🇱' },
-  ];
-
   const cityOptions = [
     { label: 'All Cities', value: 'all' },
     { label: 'Stockholm', value: 'Stockholm' },
@@ -51,8 +38,7 @@ export const EventBrowseFilter: React.FC<EventBrowseFilterProps> = ({
     { label: 'Last 1 year', value: 'Last 1 year', disabled: true },
   ];
 
-  const isResetDisabled =
-    country === 'all' && city === 'all' && period === 'All';
+  const isResetDisabled = (city === 'All' || city === 'all') && period === 'All';
 
   return (
     <div
@@ -60,16 +46,6 @@ export const EventBrowseFilter: React.FC<EventBrowseFilterProps> = ({
     >
       <div className="filter-container">
         <div className="flex gap-3 items-center flex-wrap">
-          <ModernDropdown
-            value={country}
-            options={countryOptions}
-            onChange={val => onFilterChange('country', val)}
-            icon="🇸🇪"
-            placeholder="Country"
-            label="Country"
-            variant="pill"
-          />
-
           <ModernDropdown
             value={city}
             options={cityOptions}
@@ -91,7 +67,6 @@ export const EventBrowseFilter: React.FC<EventBrowseFilterProps> = ({
           <button
             className="filter-reset-btn"
             onClick={() => {
-              onFilterChange('country', 'all');
               onFilterChange('city', 'all');
               onFilterChange('period', 'All');
             }}
