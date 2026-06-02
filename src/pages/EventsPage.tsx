@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Header } from '../components/Header';
 import { TitleHeader } from '../components/TitleHeader';
 import { Footer } from '../components/Footer';
+import { EventBrowseFilter } from '../components/EventBrowseFilter';
 import { FolderEventCard } from '../components/FolderEventCard';
 import type { EventData } from '../data/mockEvents';
 import {
@@ -19,6 +20,10 @@ export function EventsPage() {
   const navigate = useNavigate();
   const { isLoaded, isAuthenticated, user } = useAuth();
 
+  // Filters States
+  const [country, setCountry] = useState('Sweden');
+  const [city, setCity] = useState('All');
+  const [period, setPeriod] = useState('All');
   const [events, setEvents] = useState<EventData[]>([]);
   const [latestPhotoCoverUrls, setLatestPhotoCoverUrls] = useState<
     Record<string, string | null>
