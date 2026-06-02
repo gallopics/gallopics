@@ -1,11 +1,11 @@
-const RENDER_API_BASE_URL = 'https://gallopics-api.onrender.com';
+const SERVER_API_BASE_URL = 'http://82.96.43.103:8081';
 
 export function getApiBaseUrl() {
   if (import.meta.env.VITE_API_BASE_URL) {
     return import.meta.env.VITE_API_BASE_URL;
   }
 
-  return RENDER_API_BASE_URL;
+  return SERVER_API_BASE_URL;
 }
 
 export function resolveApiAssetUrl(path: string | null | undefined) {
@@ -375,11 +375,12 @@ export const api = {
   getPhoto: (photoId: string) =>
     request<ApiPhoto>(`/api/v1/photos/${encodeURIComponent(photoId)}`),
 
-  createCheckoutSession: (lineItems: CheckoutLineItem[]) =>
+  createCheckoutSession: (lineItems: CheckoutLineItem[], customerEmail?: string) =>
     request<CheckoutSession>('/api/v1/checkout/sessions', {
       method: 'POST',
       body: JSON.stringify({
         line_items: lineItems,
+        customer_email: customerEmail,
         idempotency_key: `checkout-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       }),
     }),
@@ -410,6 +411,8 @@ export interface ApiPhoto {
   id: string;
   event_id: string;
   photographer_id: string;
+  photographer_display_name?: string | null;
+  photographer_avatar_url?: string | null;
   price: number;
   currency: string;
   status: 'processing' | 'ready' | 'failed';

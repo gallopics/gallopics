@@ -43,19 +43,12 @@ export const CheckoutPanel: React.FC<CheckoutPanelProps> = ({
   onPay,
 }) => {
   const [email, setEmail] = useState('');
-  const [otp, setOtp] = useState('');
-  const [step, setStep] = useState<'input' | 'verify' | 'verified'>('input');
-  const [countdown, setCountdown] = useState(0);
   const [klarnaStep, setKlarnaStep] = useState<
     'idle' | 'loading' | 'ready' | 'authorizing' | 'complete'
   >('idle');
   const [klarnaOrderId, setKlarnaOrderId] = useState<string | null>(null);
   const [klarnaError, setKlarnaError] = useState<string | null>(null);
   const [scriptReady, setScriptReady] = useState(false);
-
-  const [secretCode, setSecretCode] = useState('');
-  const [attempts, setAttempts] = useState(0);
-  const [otpError, setOtpError] = useState<string | null>(null);
 
   React.useEffect(() => {
     if (window.Klarna?.Payments) {
@@ -81,81 +74,15 @@ export const CheckoutPanel: React.FC<CheckoutPanelProps> = ({
     document.head.appendChild(script);
   }, []);
 
-  // Check storage for verified email
+  // Check storage for the last receipt email.
   React.useEffect(() => {
     const saved =
-      sessionStorage.getItem('gallopics_verified_email') ||
-      localStorage.getItem('gallopics_verified_email');
+      sessionStorage.getItem('gallopics_receipt_email') ||
+      localStorage.getItem('gallopics_receipt_email');
     if (saved) {
       setEmail(saved);
-      setStep('verified');
     }
   }, []);
-
-  const generateCode = () => {
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    setSecretCode(code);
-    console.log('Gallopics Mock OTP:', code); // For demo purposes
-    return code;
-  };
-
-  const handleSendCode = () => {
-    if (!email) return;
-    generateCode();
-    setStep('verify');
-    setCountdown(30);
-    setAttempts(0);
-    setOtpError(null);
-  };
-
-  const handleVerify = () => {
-    if (attempts >= 5) {
-      setOtpError('Too many failed attempts. Please resend code.');
-      return;
-    }
-
-    if (otp === secretCode || otp === '123456') {
-      // Allow 123456 as easy fallback
-      setStep('verified');
-      setOtpError(null);
-      // Save to storage
-      sessionStorage.setItem('gallopics_verified_email', email);
-      localStorage.setItem('gallopics_verified_email', email);
-    } else {
-      setAttempts(prev => prev + 1);
-      setOtpError('Incorrect code. Try again.');
-    }
-  };
-
-  const handleChangeEmail = () => {
-    setStep('input');
-    setOtp('');
-    setOtpError(null);
-    setAttempts(0);
-  };
-
-  const handleClearVerified = () => {
-    setStep('input');
-    setEmail('');
-    setOtp('');
-    sessionStorage.removeItem('gallopics_verified_email');
-    localStorage.removeItem('gallopics_verified_email');
-  };
-
-  const handleResend = () => {
-    generateCode();
-    setCountdown(30);
-    setAttempts(0);
-    setOtpError(null);
-  };
-
-  // Countdown effect
-  React.useEffect(() => {
-    if (countdown > 0) {
-      const timer = setTimeout(() => setCountdown(c => c - 1), 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [countdown]);
 
   const handleStartKlarna = async () => {
     if (!lineItems?.length) {
@@ -167,7 +94,7 @@ export const CheckoutPanel: React.FC<CheckoutPanelProps> = ({
     setKlarnaStep('loading');
 
     try {
-      const session = await api.createCheckoutSession(lineItems);
+      const session = await api.createCheckoutSession(lineItems, email);
       setKlarnaOrderId(session.order_id);
 
       if (!window.Klarna?.Payments) {
@@ -236,6 +163,9 @@ export const CheckoutPanel: React.FC<CheckoutPanelProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isEmailValid) return;
+    sessionStorage.setItem('gallopics_receipt_email', email);
+    localStorage.setItem('gallopics_receipt_email', email);
     if (klarnaStep === 'ready') {
       handleAuthorizeKlarna();
       return;
@@ -243,7 +173,7 @@ export const CheckoutPanel: React.FC<CheckoutPanelProps> = ({
     void handleStartKlarna();
   };
 
-  const isVerified = step === 'verified';
+  const isEmailValid = /\S+@\S+\.\S+/.test(email);
 
   // Shared input class
   const emailInputClass =
@@ -257,108 +187,22 @@ export const CheckoutPanel: React.FC<CheckoutPanelProps> = ({
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-6">
         <div className="form-group">
-          <label htmlFor="email">Email verification</label>
-          <div className="flex flex-col gap-4">
-            {step === 'input' && (
-              <div className="flex gap-3">
-                <input
-                  type="email"
-                  id="email"
-                  placeholder="your@email.com"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  required
-                  className={emailInputClass}
-                />
-                <button
-                  type="button"
-                  className="px-4 bg-[var(--color-brand-primary)] text-white border-none rounded-[var(--radius-full)] font-semibold text-[0.875rem] cursor-pointer whitespace-nowrap transition-all duration-200 ease-linear disabled:bg-[var(--ui-bg-subtle)] disabled:text-[var(--color-text-secondary)] disabled:cursor-not-allowed hover:not-disabled:bg-[var(--color-brand-primary-hover)] hover:not-disabled:-translate-y-px"
-                  onClick={handleSendCode}
-                  disabled={!email.includes('@')}
-                >
-                  Send code
-                </button>
-              </div>
-            )}
-
-            {step === 'verify' && (
-              <div className="verify-step">
-                <div className="flex gap-3">
-                  <input
-                    type="text"
-                    placeholder="6-digit code"
-                    value={otp}
-                    onChange={e => setOtp(e.target.value)}
-                    maxLength={6}
-                    className={emailInputClass}
-                    autoFocus
-                  />
-                  <button
-                    type="button"
-                    className="px-4 bg-[var(--color-brand-primary)] text-white border-none rounded-[var(--radius-full)] font-semibold text-[0.875rem] cursor-pointer whitespace-nowrap transition-all duration-200 ease-linear disabled:bg-[var(--ui-bg-subtle)] disabled:text-[var(--color-text-secondary)] disabled:cursor-not-allowed hover:not-disabled:bg-[var(--color-brand-primary-hover)] hover:not-disabled:-translate-y-px"
-                    onClick={handleVerify}
-                    disabled={otp.length !== 6}
-                  >
-                    Verify
-                  </button>
-                </div>
-                <div className="flex justify-between items-center text-[0.75rem] mt-2">
-                  <button
-                    type="button"
-                    className="bg-none border-none p-0 text-[var(--color-text-secondary)] font-medium cursor-pointer underline transition-[color] duration-200 disabled:text-[var(--color-text-secondary)] disabled:cursor-not-allowed disabled:no-underline hover:text-[var(--color-text-primary)]"
-                    onClick={handleResend}
-                    disabled={countdown > 0}
-                  >
-                    {countdown > 0 ? `Resend in ${countdown}s` : 'Resend code'}
-                  </button>
-                  <button
-                    type="button"
-                    className="bg-none border-none p-0 text-[var(--color-text-secondary)] font-medium cursor-pointer underline transition-[color] duration-200 hover:text-[var(--color-text-primary)]"
-                    onClick={handleChangeEmail}
-                  >
-                    Change email
-                  </button>
-                </div>
-                {otpError ? (
-                  <p className="text-[0.75rem] text-[var(--color-danger)] mt-[6px] font-medium">
-                    {otpError}
-                  </p>
-                ) : (
-                  <p className="text-[0.75rem] text-[var(--color-text-secondary)] mt-[6px]">
-                    Enter the code sent to {email}. Code expires in 10 minutes.
-                  </p>
-                )}
-              </div>
-            )}
-
-            {step === 'verified' && (
-              <div className="relative">
-                <div className="flex gap-3">
-                  <input
-                    type="email"
-                    value={email}
-                    disabled
-                    className={`${emailInputClass} verified`}
-                  />
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-[6px] text-[var(--color-success)] font-semibold text-[0.875rem] pointer-events-none">
-                    Verified <Check size={14} />
-                  </div>
-                </div>
-                <div className="flex justify-end items-center text-[0.75rem] mt-2">
-                  <button
-                    type="button"
-                    className="bg-none border-none p-0 text-[var(--color-text-secondary)] font-medium cursor-pointer underline transition-[color] duration-200 hover:text-[var(--color-text-primary)]"
-                    onClick={handleClearVerified}
-                  >
-                    Not you?
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+          <label htmlFor="email">Receipt email</label>
+          <input
+            type="email"
+            id="email"
+            placeholder="your@email.com"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            required
+            className={emailInputClass}
+          />
+          <p className="text-[0.75rem] text-[var(--color-text-secondary)] mt-2">
+            We will send your Gallopics receipt and photo links to this email.
+          </p>
         </div>
 
-        <div className={!isVerified ? 'opacity-50 pointer-events-none' : ''}>
+        <div className={!isEmailValid ? 'opacity-50 pointer-events-none' : ''}>
           <label className="block text-[0.875rem] font-semibold mb-3">
             Payment
           </label>
@@ -389,7 +233,7 @@ export const CheckoutPanel: React.FC<CheckoutPanelProps> = ({
 
           {klarnaStep === 'complete' && (
             <p className="text-[0.8125rem] text-[var(--color-success)] mt-3 font-semibold">
-              Payment captured.
+              Payment captured. Your Gallopics receipt has been sent by email.
             </p>
           )}
         </div>
@@ -397,7 +241,7 @@ export const CheckoutPanel: React.FC<CheckoutPanelProps> = ({
         <button
           type="submit"
           disabled={
-            !isVerified ||
+            !isEmailValid ||
             !scriptReady ||
             klarnaStep === 'loading' ||
             klarnaStep === 'authorizing' ||
@@ -429,8 +273,8 @@ export const CheckoutPanel: React.FC<CheckoutPanelProps> = ({
             </div>
           </div>
           <div className="text-[0.75rem] text-[var(--color-text-secondary)] leading-[1.5] text-center px-4 opacity-70">
-            We'll send the download link to your verified email after payment
-            (valid 24h). JPEG format.
+            Your Gallopics receipt is sent after payment. Download links are
+            available immediately. JPEG format.
           </div>
         </div>
       </form>

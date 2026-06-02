@@ -252,7 +252,7 @@ function mapApiPhotoToPhoto(photo: ApiPhotoWithUrls, event: EventData): Photo {
     city: event.city,
     arena: className,
     countryCode: event.country === 'Sweden' ? 'se' : event.country.toLowerCase(),
-    photographer: 'Gallopics',
+    photographer: photo.photographer_display_name || 'Gallopics',
     photographerId: photo.photographer_id,
   };
 }

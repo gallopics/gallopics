@@ -95,7 +95,7 @@ export function ImageProfile() {
   const [apiPhoto, setApiPhoto] = useState<Photo | null>(null);
 
   useEffect(() => {
-    if (!id || routePhoto?.id === id) {
+    if (!id) {
       setApiPhoto(null);
       return;
     }
@@ -130,7 +130,7 @@ export function ImageProfile() {
           city: 'Sweden',
           arena: photo.class_name || 'Uploaded',
           countryCode: 'se',
-          photographer: 'Gallopics',
+          photographer: photo.photographer_display_name || 'Gallopics',
           photographerId: photo.photographer_id,
         });
       })
@@ -141,10 +141,10 @@ export function ImageProfile() {
     return () => {
       isMounted = false;
     };
-  }, [id, routePhoto?.id]);
+  }, [id]);
 
   const photo = useMemo(
-    () => routePhoto || apiPhoto || mockPhotos.find(p => p.id === id) || mockPhotos[0],
+    () => apiPhoto || routePhoto || mockPhotos.find(p => p.id === id) || mockPhotos[0],
     [apiPhoto, id, routePhoto],
   );
   const event = useMemo(
@@ -158,19 +158,26 @@ export function ImageProfile() {
     return p;
   }, [photo.eventId]);
   const displayedPhotographer = useMemo(() => {
-    const fallbackName =
-      photo.photographer && photo.photographer !== 'Gallopics'
-        ? photo.photographer
-        : `${photographer.firstName} ${photographer.lastName}`;
+    const hasMockPhotographer = Boolean(
+      !isUuid(photo.photographerId || '') &&
+      photo.photographer &&
+      photo.photographer !== 'Gallopics',
+    );
+    const fallbackName: string = hasMockPhotographer && photo.photographer
+      ? photo.photographer
+      : photo.photographer || 'Gallopics';
+    const fallbackAvatarUrl = hasMockPhotographer
+      ? assetUrl(`images/${photographer.firstName} ${photographer.lastName}.jpg`)
+      : undefined;
 
     return {
-      id: apiPhotographer?.slug || apiPhotographer?.id || photographer.id,
+      id: apiPhotographer?.slug || apiPhotographer?.id || photo.photographerId || photographer.id,
       name: apiPhotographer?.display_name || fallbackName,
       avatarUrl:
         resolveApiAssetUrl(apiPhotographer?.avatar_url) ||
-        assetUrl(`images/${photographer.firstName} ${photographer.lastName}.jpg`),
+        fallbackAvatarUrl,
     };
-  }, [apiPhotographer, photo.photographer, photographer]);
+  }, [apiPhotographer, photo.photographer, photo.photographerId, photographer]);
 
   useEffect(() => {
     if (!photo.photographerId || !isUuid(photo.photographerId)) {
@@ -528,8 +535,9 @@ export function ImageProfile() {
                       </div>
 
                       <div className="mt-4 text-[0.75rem] text-[var(--color-text-secondary)] leading-[1.4]">
-                        We'll send you a download link after payment (valid for
-                        24 hours). Images are delivered as JPEG.
+                        Klarna sends the invoice confirmation after payment.
+                        Download links are available immediately and valid for
+                        24 hours. Images are delivered as JPEG.
                       </div>
 
                       <button
@@ -559,7 +567,7 @@ export function ImageProfile() {
                         </div>
                         <h2 className="mt-4">Payment successful!</h2>
                         <p>
-                          We've sent a download link to your email. You can also
+                          Klarna will send your invoice confirmation. You can
                           download your photo directly below.
                         </p>
                         {capturedOrderId && (

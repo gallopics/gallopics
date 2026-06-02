@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useClerk, useSignIn, useSignUp } from '@clerk/clerk-react';
-import { X, Camera, Monitor, Link, Check } from 'lucide-react';
+import { X, Monitor, Link, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { PROTOTYPE_USER } from '../context/AuthContext';
 
@@ -259,20 +259,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
             ) : (
               <>
-                {activeTab === 'register' && (
-                  <div className="auth-account-type-wrapper">
-                    <button
-                      className={`auth-type-btn ${
-                        accountType === 'photographer' ? 'active' : ''
-                      }`}
-                      onClick={() => setAccountType('photographer')}
-                    >
-                      <Camera size={16} />
-                      <span>I'm a photographer</span>
-                    </button>
-                  </div>
-                )}
-
                 {activeTab === 'signin' ? (
                   <SignInForm
                     isLoading={isLoading}
