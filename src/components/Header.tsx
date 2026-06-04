@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useUser } from '@clerk/clerk-react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { User, Camera, LayoutDashboard } from 'lucide-react';
-// import { ShoppingBag } from 'lucide-react';
+import { User, Camera, LayoutDashboard, ShoppingBag } from 'lucide-react';
 import { ModernSearchBar } from './ModernSearchBar';
-// import { useCart } from '../context/CartContext';
+import { useCart } from '../context/CartContext';
 import { AuthModal } from './AuthModal';
 import { EditProfileModal } from './EditProfileModal';
 import { DesktopRecommendationModal } from './DesktopRecommendationModal';
@@ -39,7 +38,7 @@ export const Header: React.FC = () => {
   }>({ tab: 'signin', type: 'photographer' });
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
-  // const { cart } = useCart();
+  const { cart } = useCart();
   const { isLoaded, isAuthenticated, user, logout } = useAuth();
   const { user: clerkUser } = useUser();
 
@@ -47,7 +46,7 @@ export const Header: React.FC = () => {
   const location = useLocation();
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // const currentPath = encodeURIComponent(location.pathname + location.search);
+  const currentPath = encodeURIComponent(location.pathname + location.search);
   const isOnboarding = location.pathname.startsWith('/pg/onboarding');
   const isHomePage = location.pathname === '/';
   const isMobile = windowWidth < 768;
@@ -206,9 +205,10 @@ export const Header: React.FC = () => {
 
               {!isLoaded ? null : isAuthenticated ? (
                 <>
-                  {/* <button
+                  <button
                     className="flex items-center justify-center w-11 h-11 rounded-full text-[var(--color-text-primary)] transition-[background-color,scale,box-shadow,border-color] duration-200 ease-in-out bg-white border border-[var(--color-border)] shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-[var(--ui-bg-subtle)] hover:border-[var(--color-border)] hover:scale-105 hover:shadow-[0_2px_4px_rgba(0,0,0,0.05)] relative"
                     aria-label="Cart"
+                    title="Cart"
                     onClick={() => navigate(`/cart?from=${currentPath}`)}
                   >
                     <ShoppingBag size={22} />
@@ -217,7 +217,7 @@ export const Header: React.FC = () => {
                         {cart.length}
                       </span>
                     )}
-                  </button> */}
+                  </button>
 
                   {/* Signed In: Workspace Button (Hidden on Mobile) */}
                   {!isMobile && (
@@ -334,9 +334,10 @@ export const Header: React.FC = () => {
               ) : (
                 <>
                   {/* Guest: Cart & Auth Icon */}
-                  {/* <button
+                  <button
                     className="flex items-center justify-center w-11 h-11 rounded-full text-[var(--color-text-primary)] transition-[background-color,scale,box-shadow,border-color] duration-200 ease-in-out bg-white border border-[var(--color-border)] shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-[var(--ui-bg-subtle)] hover:border-[var(--color-border)] hover:scale-105 hover:shadow-[0_2px_4px_rgba(0,0,0,0.05)] relative"
                     aria-label="Cart"
+                    title="Cart"
                     onClick={() => navigate(`/cart?from=${currentPath}`)}
                   >
                     <ShoppingBag size={22} />
@@ -345,7 +346,7 @@ export const Header: React.FC = () => {
                         {cart.length}
                       </span>
                     )}
-                  </button> */}
+                  </button>
 
                   <div className="w-px h-6 bg-[var(--color-border)] mx-1 max-md:hidden" />
 
