@@ -125,17 +125,7 @@ export const UploadPage: React.FC = () => {
       return;
     }
 
-    const MAX_FILES_PER_UPLOAD = 20;
-    let filesToUpload = validFiles;
-
-    if (validFiles.length > MAX_FILES_PER_UPLOAD) {
-      filesToUpload = validFiles.slice(0, MAX_FILES_PER_UPLOAD);
-      alert(
-        `You can upload up to ${MAX_FILES_PER_UPLOAD} photos at a time. We'll use the first ${MAX_FILES_PER_UPLOAD} files from your selection.`,
-      );
-    }
-
-    startUpload(filesToUpload, {
+    startUpload(validFiles, {
       classId: urlClassId || undefined,
       className: urlClassName || undefined,
     });
@@ -218,7 +208,7 @@ export const UploadPage: React.FC = () => {
                 </div>
                 <div className="drop-title-sm">Click or Drag photos</div>
                 <div className="drop-footer-note">
-                  Maximum 20 photos per upload
+                  Upload multiple photos at once
                 </div>
               </div>
             </div>
@@ -244,9 +234,20 @@ export const UploadPage: React.FC = () => {
                         <div className="queue-progress">
                           <div
                             className="queue-bar"
-                            style={{ width: `${item.progress}%` }}
+                            style={{
+                              width: `${item.progress}%`,
+                              background:
+                                item.status === 'failed'
+                                  ? 'var(--color-danger)'
+                                  : undefined,
+                            }}
                           />
                         </div>
+                        {item.status === 'failed' && item.error && (
+                          <div className="text-[0.75rem] leading-[1.3] text-[var(--color-danger)] mt-1">
+                            {item.error}
+                          </div>
+                        )}
                       </div>
                       {item.status === 'completed' && (
                         <div className="queue-check-wrapper">

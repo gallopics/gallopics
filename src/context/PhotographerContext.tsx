@@ -109,7 +109,7 @@ interface PhotographerContextType {
   // Photos
   getPhotosByEvent: (eventId: string) => Photo[];
   updatePhotoStatus: (photoIds: string[], status: Photo['status']) => void;
-  deletePhotos: (photoIds: string[]) => void;
+  deletePhotos: (photoIds: string[]) => Promise<void>;
   restorePhotos: (photosToRestore: Photo[]) => void;
   setPhotoPrice: (photoIds: string[], price: number) => void;
   updatePhotoMetadata: (photoIds: string[], metadata: Partial<Photo>) => void;
@@ -811,8 +811,28 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
     );
   };
 
-  const deletePhotos = (photoIds: string[]) => {
+  const deletePhotos = async (photoIds: string[]) => {
+    const photosToDelete = photos.filter(p => photoIds.includes(p.id));
+
     setPhotos(prev => prev.filter(p => !photoIds.includes(p.id)));
+
+    if (SHOW_EVENTS || photoIds.length === 0) return;
+
+    try {
+      await Promise.all(
+        photoIds.map(photoId => api.deletePhoto(getClerkToken, photoId))
+      );
+    } catch (error) {
+      setPhotos(prev => {
+        const remainingIds = new Set(prev.map(p => p.id));
+        const missingPhotos = photosToDelete.filter(
+          p => !remainingIds.has(p.id)
+        );
+        return [...missingPhotos, ...prev];
+      });
+      console.error('Failed to delete photos:', error);
+      throw error;
+    }
   };
 
   const restorePhotos = (photosToRestore: Photo[]) => {
@@ -1098,12 +1118,8 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
         eventId: p.event_id,
         status: p.status === 'ready' ? 'uploadedUnpublished' : 'processing',
         soldCount: 0,
-        rider: 'Processing...',
-        horse: metadata?.className
-          ? `Class: ${metadata.className}`
-          : metadata?.classId
-          ? `Class: ${metadata.classId}`
-          : '',
+        rider: undefined,
+        horse: undefined,
         timestamp: new Date().toLocaleTimeString().slice(0, 5),
         width: 600,
         height: 800,
