@@ -48,7 +48,13 @@ export const EventDetail: React.FC = () => {
   const location = useLocation();
   const fromTab = (location.state as any)?.fromTab;
   const { basePath, isAdmin } = useWorkspace();
-  const { getEvent, getPhotosByEvent, resolveDuplicate } = usePhotographer();
+  const {
+    getEvent,
+    getPhotosByEvent,
+    resolveDuplicate,
+    deletePhotos,
+    restorePhotos,
+  } = usePhotographer();
 
   const event = eventId ? getEvent(eventId) : undefined;
   const allEventPhotos = eventId ? getPhotosByEvent(eventId) : [];
@@ -707,6 +713,7 @@ export const EventDetail: React.FC = () => {
   );
 
   const undoSelectionRef = useRef<Set<string>>(new Set());
+  const undoDeletedPhotosRef = useRef<Photo[]>([]);
   const actionBarRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
@@ -746,25 +753,45 @@ export const EventDetail: React.FC = () => {
   };
 
   const handleUndoDelete = () => {
+    if (undoDeletedPhotosRef.current.length > 0) {
+      restorePhotos(undoDeletedPhotosRef.current);
+      undoDeletedPhotosRef.current = [];
+    }
     setSelectedIds(new Set(undoSelectionRef.current));
     setToast(null);
   };
 
-  const handleConfirmAction = () => {
+  const handleConfirmAction = async () => {
+    const selectedPhotoIds = Array.from(selectedIds);
+    const selectedPhotosSnapshot = allPhotos.filter(p => selectedIds.has(p.id));
+
     setConfirmModal({ ...confirmModal, isOpen: false });
     setIsPanelOpen(false); // Close panel on confirmation (delete/publish/unpublish)
 
     if (confirmModal.type === 'delete') {
       undoSelectionRef.current = new Set(selectedIds);
-      setToast({
-        msg: `${selectedIds.size} photo${
-          selectedIds.size > 1 ? 's' : ''
-        } deleted`,
-        type: TOAST_TOKENS.DELETE.type,
-        onUndo: handleUndoDelete,
-      });
+      undoDeletedPhotosRef.current = selectedPhotosSnapshot;
       setSelectedIds(new Set());
-      setTimeout(() => setToast(null), 3000);
+
+      try {
+        await deletePhotos(selectedPhotoIds);
+        setToast({
+          msg: `${selectedPhotoIds.length} photo${
+            selectedPhotoIds.length > 1 ? 's' : ''
+          } deleted`,
+          type: TOAST_TOKENS.DELETE.type,
+          onUndo: handleUndoDelete,
+        });
+        setTimeout(() => setToast(null), 3000);
+      } catch {
+        undoDeletedPhotosRef.current = [];
+        setSelectedIds(new Set(selectedPhotoIds));
+        setToast({
+          msg: 'Could not delete photo. Please try again.',
+          type: 'danger',
+        });
+        setTimeout(() => setToast(null), 3000);
+      }
     } else if (confirmModal.type === 'publish') {
       setToast({
         msg:

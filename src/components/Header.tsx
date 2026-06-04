@@ -291,12 +291,12 @@ export const Header: React.FC = () => {
                             onClick={() => {
                               navigate(
                                 user?.role === 'admin'
-                                  ? '/admin/events'
+                                  ? workspacePath
                                   : isPendingPhotographer
-                                    ? '/pg/pending-approval'
+                                    ? workspacePath
                                     : user?.id
                                       ? `/photographer/${user.id}`
-                                      : '/pg/events'
+                                      : workspacePath
                               );
                               setIsUserMenuOpen(false);
                             }}
@@ -304,6 +304,18 @@ export const Header: React.FC = () => {
                             {accountShortcutLabel}
                           </button>
                         )}
+                        {user?.role !== 'admin' &&
+                          !isPendingPhotographer && (
+                            <button
+                              className="dropdown-item"
+                              onClick={() => {
+                                navigate('/pg/events');
+                                setIsUserMenuOpen(false);
+                              }}
+                            >
+                              Events
+                            </button>
+                          )}
                         {/* <div className="dropdown-divider" /> */}
                         <button
                           className="dropdown-item dropdown-item-danger"
