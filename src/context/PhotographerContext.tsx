@@ -88,6 +88,7 @@ export interface UploadFile {
   progress: number;
   status: 'pending' | 'uploading' | 'completed' | 'failed';
   error?: string;
+  uploadedPhotoIds?: string[];
 }
 
 export interface UploadSession {
@@ -129,8 +130,15 @@ interface PhotographerContextType {
     files: File[],
     metadata?: { classId?: string; className?: string }
   ) => void; // Updated sig
-  clearUploadSession: (eventId: string) => void;
-  removeUploadFile: (eventId: string, fileId: string) => void;
+  clearUploadSession: (
+    eventId: string,
+    options?: { deleteUploaded?: boolean }
+  ) => Promise<void>;
+  removeUploadFile: (
+    eventId: string,
+    fileId: string,
+    options?: { deleteUploaded?: boolean }
+  ) => Promise<void>;
 
   // Highlights
   highlights: string[];
@@ -288,6 +296,13 @@ const isUuid = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value
   );
+
+const getUploadErrorMessage = (status: number) => {
+  if (status === 413) {
+    return 'File is too large for the current upload limit.';
+  }
+  return `Upload failed: ${status}`;
+};
 
 const generateMockPhotos = (eventId: string, count: number): Photo[] => {
   const srcPool = Array.from(new Set(basePhotos.map(p => p.src)));
@@ -959,7 +974,18 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
     // So keeping currentUploadEventId here is fine.
   };
 
-  const clearUploadSession = (eventId: string) => {
+  const clearUploadSession = async (
+    eventId: string,
+    options?: { deleteUploaded?: boolean }
+  ) => {
+    const uploadedPhotoIds =
+      uploadSessions[eventId]?.files.flatMap(f => f.uploadedPhotoIds || []) ||
+      [];
+
+    if (options?.deleteUploaded && uploadedPhotoIds.length > 0) {
+      await deletePhotos(uploadedPhotoIds);
+    }
+
     setUploadSessions(prev => {
       const next = { ...prev };
       delete next[eventId];
@@ -967,24 +993,30 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
     });
   };
 
-  const removeUploadFile = (eventId: string, fileId: string) => {
+  const removeUploadFile = async (
+    eventId: string,
+    fileId: string,
+    options?: { deleteUploaded?: boolean }
+  ) => {
+    const uploadedPhotoIds =
+      uploadSessions[eventId]?.files.find(f => f.id === fileId)
+        ?.uploadedPhotoIds || [];
+
+    if (options?.deleteUploaded !== false && uploadedPhotoIds.length > 0) {
+      await deletePhotos(uploadedPhotoIds);
+    }
+
     setUploadSessions(prev => {
       const session = prev[eventId];
       if (!session) return prev;
 
       const updatedFiles = session.files.filter(f => f.id !== fileId);
 
-      // If no files left, maybe clear session or keep empty? Keeping empty allows drop zone to appear.
-      // But if empty, UploadPage shows empty state which is good.
-
       return {
         ...prev,
         [eventId]: {
           ...session,
           files: updatedFiles,
-          // If no files left, status could be 'completed' or reset?
-          // Let's keep it as is, or set to 'uploading' if active?
-          // Actually if empty, it doesn't matter much.
         },
       };
     });
@@ -1040,22 +1072,10 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
       return;
     }
 
-    try {
-      // Upload files via FormData to the direct upload endpoint
-      const formData = new FormData();
-      formData.set('event_id', eventId);
-      if (metadata?.classId && isUuid(metadata.classId)) {
-        formData.set('class_section_id', metadata.classId);
-      }
-      if (metadata?.classId) {
-        formData.set('event_class_id', metadata.classId);
-      }
-      if (metadata?.className) {
-        formData.set('class_name', metadata.className);
-      }
-      files.forEach(file => formData.append('files', file));
-
-      // Update progress to "uploading"
+    const updateQueuedFile = (
+      fileId: string,
+      updates: Partial<UploadFile>
+    ) => {
       setUploadSessions(prev => {
         const session = prev[eventId];
         if (!session) return prev;
@@ -1065,95 +1085,100 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
             ...session,
             files: session.files.map(f => ({
               ...f,
-              status: 'uploading' as const,
-              progress: 50,
+              ...(f.id === fileId ? updates : {}),
             })),
           },
         };
       });
+    };
 
-      const response = await fetch(
-        `${getApiBaseUrl()}/api/v1/photographer/uploads`,
-        {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
+    for (const [index, file] of files.entries()) {
+      const queuedFile = newFiles[index];
+      if (!queuedFile) continue;
+
+      try {
+        const formData = new FormData();
+        formData.set('event_id', eventId);
+        if (metadata?.classId && isUuid(metadata.classId)) {
+          formData.set('class_section_id', metadata.classId);
         }
-      );
+        if (metadata?.classId) {
+          formData.set('event_class_id', metadata.classId);
+        }
+        if (metadata?.className) {
+          formData.set('class_name', metadata.className);
+        }
+        formData.append('files', file);
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData.detail || `Upload failed: ${response.status}`
+        updateQueuedFile(queuedFile.id, {
+          status: 'uploading',
+          progress: 50,
+          error: undefined,
+        });
+
+        const response = await fetch(
+          `${getApiBaseUrl()}/api/v1/photographer/uploads`,
+          {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: formData,
+          }
         );
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(
+            errorData.detail || getUploadErrorMessage(response.status)
+          );
+        }
+
+        const photos: ApiPhoto[] = await response.json();
+
+        const newPhotoList: Photo[] = photos.map((p, photoIndex) => ({
+          id: p.id || queuedFile.id || `api-${Date.now()}-${photoIndex}`,
+          url:
+            (p.status === 'ready'
+              ? resolveApiAssetUrl(
+                  `/api/v1/photographer/photos/${p.id}/preview`
+                )
+              : '') ||
+            'https://images.unsplash.com/photo-1599056377758-4808a7e70337?auto=format&fit=crop&q=80&w=600',
+          eventId: p.event_id,
+          status: p.status === 'ready' ? 'uploadedUnpublished' : 'processing',
+          soldCount: 0,
+          rider: undefined,
+          horse: undefined,
+          timestamp: new Date().toLocaleTimeString().slice(0, 5),
+          width: 600,
+          height: 800,
+          fileName: file.name,
+          photoCode: generatePhotoCode(),
+          uploadDate: new Date().toISOString(),
+          batch: '',
+          classId: getApiPhotoClassId(p) || metadata?.classId || '',
+          className:
+            getApiPhotoClassName(p) ||
+            metadata?.className ||
+            metadata?.classId ||
+            '',
+        }));
+
+        setPhotos(prev => [...newPhotoList, ...prev]);
+        updateQueuedFile(queuedFile.id, {
+          progress: 100,
+          status: 'completed',
+          error: undefined,
+          uploadedPhotoIds: newPhotoList.map(photo => photo.id),
+        });
+      } catch (error) {
+        const errorMsg =
+          error instanceof Error ? error.message : 'Upload failed';
+        updateQueuedFile(queuedFile.id, {
+          progress: 0,
+          status: 'failed',
+          error: errorMsg,
+        });
       }
-
-      const photos: ApiPhoto[] = await response.json();
-
-      // Update progress to 100% and mark as completed
-      setUploadSessions(prev => {
-        const session = prev[eventId];
-        if (!session) return prev;
-        return {
-          ...prev,
-          [eventId]: {
-            ...session,
-            files: session.files.map(f => ({
-              ...f,
-              progress: 100,
-              status: 'completed' as const,
-            })),
-          },
-        };
-      });
-
-      // Add returned photos to the photo list
-      const newPhotoList: Photo[] = photos.map((p, i) => ({
-        id: p.id || newFiles[i]?.id || `api-${Date.now()}-${i}`,
-        url:
-          (p.status === 'ready'
-            ? resolveApiAssetUrl(`/api/v1/photographer/photos/${p.id}/preview`)
-            : '') ||
-          'https://images.unsplash.com/photo-1599056377758-4808a7e70337?auto=format&fit=crop&q=80&w=600',
-        eventId: p.event_id,
-        status: p.status === 'ready' ? 'uploadedUnpublished' : 'processing',
-        soldCount: 0,
-        rider: undefined,
-        horse: undefined,
-        timestamp: new Date().toLocaleTimeString().slice(0, 5),
-        width: 600,
-        height: 800,
-        fileName: files[i]?.name,
-        photoCode: generatePhotoCode(),
-        uploadDate: new Date().toISOString(),
-        batch: '',
-        classId: getApiPhotoClassId(p) || metadata?.classId || '',
-        className:
-          getApiPhotoClassName(p) ||
-          metadata?.className ||
-          metadata?.classId ||
-          '',
-      }));
-      setPhotos(prev => [...newPhotoList, ...prev]);
-    } catch (error) {
-      // Mark files as failed
-      const errorMsg = error instanceof Error ? error.message : 'Upload failed';
-      setUploadSessions(prev => {
-        const session = prev[eventId];
-        if (!session) return prev;
-        return {
-          ...prev,
-          [eventId]: {
-            ...session,
-            files: session.files.map(f => ({
-              ...f,
-              progress: 0,
-              status: 'failed' as const,
-              error: errorMsg,
-            })),
-          },
-        };
-      });
     }
   };
 
