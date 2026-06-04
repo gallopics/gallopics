@@ -33,6 +33,7 @@ export const UploadPage: React.FC = () => {
   );
   const [isDragActive, setIsDragActive] = useState(false);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Initial Event Selection Logic
@@ -137,16 +138,21 @@ export const UploadPage: React.FC = () => {
     }
   };
 
-  const handleConfirmClear = () => {
-    if (selectedEventId) {
-      clearUploadSession(selectedEventId);
+  const handleConfirmClear = async () => {
+    if (!selectedEventId) return;
+
+    try {
+      setIsClearing(true);
+      await clearUploadSession(selectedEventId, { deleteUploaded: true });
       setConfirmClearOpen(false);
+    } finally {
+      setIsClearing(false);
     }
   };
 
   const handleViewPhotos = () => {
     if (!selectedEventId) return;
-    clearUploadSession(selectedEventId);
+    void clearUploadSession(selectedEventId);
     navigate(`${basePath}/events/${selectedEventId}`);
   };
 
@@ -222,7 +228,10 @@ export const UploadPage: React.FC = () => {
               <div className="pg-upload-queue-column">
                 <div className="queue-list">
                   {files.map(item => (
-                    <div key={item.id} className="queue-item">
+                    <div
+                      key={item.id}
+                      className={`queue-item ${item.status === 'completed' ? 'is-completed' : ''}`}
+                    >
                       <div className="queue-thumb">
                         <img
                           src={URL.createObjectURL(item.file)}
@@ -250,9 +259,19 @@ export const UploadPage: React.FC = () => {
                         )}
                       </div>
                       {item.status === 'completed' && (
-                        <div className="queue-check-wrapper">
+                        <button
+                          className="queue-check-wrapper"
+                          onClick={e => {
+                            e.stopPropagation();
+                            if (selectedEventId) {
+                              void removeUploadFile(selectedEventId, item.id);
+                            }
+                          }}
+                          title="Remove uploaded photo"
+                          aria-label="Remove uploaded photo"
+                        >
                           <CheckCircle size={20} className="queue-check" />
-                        </div>
+                        </button>
                       )}
 
                       <button
@@ -260,7 +279,7 @@ export const UploadPage: React.FC = () => {
                         onClick={e => {
                           e.stopPropagation();
                           if (selectedEventId)
-                            removeUploadFile(selectedEventId, item.id);
+                            void removeUploadFile(selectedEventId, item.id);
                         }}
                         title="Remove photo"
                       >
@@ -326,14 +345,16 @@ export const UploadPage: React.FC = () => {
                   <button
                     className="modal-btn-cancel"
                     onClick={() => setConfirmClearOpen(false)}
+                    disabled={isClearing}
                   >
                     Cancel
                   </button>
                   <button
                     className="modal-btn-danger"
                     onClick={handleConfirmClear}
+                    disabled={isClearing}
                   >
-                    Clear All
+                    {isClearing ? 'Clearing...' : 'Clear All'}
                   </button>
                 </div>
               </div>
