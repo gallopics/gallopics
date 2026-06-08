@@ -67,13 +67,18 @@ export const EventDetail: React.FC = () => {
         }
       | null
       | undefined;
+    const params = new URLSearchParams(location.search);
 
     return {
-      id: state?.selectedClassId || '',
-      name: state?.selectedClassName || '',
-      arenaName: state?.selectedArenaName || '',
+      id:
+        state?.selectedClassId ||
+        params.get('classSectionId') ||
+        params.get('classId') ||
+        '',
+      name: state?.selectedClassName || params.get('className') || '',
+      arenaName: state?.selectedArenaName || params.get('arenaName') || '',
     };
-  }, [location.state]);
+  }, [location.search, location.state]);
 
   const hasSelectedClassContext = Boolean(
     selectedClassContext.id || selectedClassContext.name
@@ -867,7 +872,7 @@ export const EventDetail: React.FC = () => {
                       from: 'event',
                     });
                     if (selectedClassContext.id) {
-                      params.set('classId', selectedClassContext.id);
+                      params.set('classSectionId', selectedClassContext.id);
                     }
                     if (selectedClassContext.name) {
                       params.set('className', selectedClassContext.name);

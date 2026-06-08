@@ -34,12 +34,14 @@ import { fetchEventsFromApi, mapApiEventToEventData } from '../../data/eventsApi
 import { api, ApiError, type ApiEvent } from '../../data/apiClient';
 import type { EventData } from '../../data/mockEvents';
 import { assetUrl } from '../../lib/utils';
+import { getEventSortTime, isPreviousEventDate } from '../../lib/eventDates';
 import '../../styles/shared-filters.css';
 
 const mapApiEventToPgEvent = (event: EventData): PgEvent => ({
   id: event.id,
   title: event.name,
   date: event.startDate || event.period,
+  endDate: event.endDate || event.startDate,
   dateRange: event.period,
   location: `${event.city}, ${event.country}`,
   coverImage: event.coverImage,
@@ -78,7 +80,7 @@ export const EventsList: React.FC = () => {
   const location = useLocation();
   const initialTab = (location.state as any)?.tab;
   const [view, setView] = useState<
-    'my' | 'upcoming' | 'live' | 'past' | 'archived'
+    'my' | 'upcoming' | 'previous' | 'live' | 'past' | 'archived'
   >(initialTab ?? (isAdmin ? 'live' : 'my'));
   const [county, setCounty] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -154,7 +156,9 @@ export const EventsList: React.FC = () => {
         setIsLoadingUpcomingEvents(true);
         setUpcomingEventsError(null);
         const apiEvents = await fetchEventsFromApi(
-          view === 'upcoming' ? undefined : { hasPhotos: true },
+          view === 'upcoming' || view === 'previous'
+            ? undefined
+            : { hasPhotos: true },
         );
         let bookings: ApiEvent[] = [];
 
@@ -230,7 +234,9 @@ export const EventsList: React.FC = () => {
   }, [bookedEventIds, bookedEvents, events, isAdmin]);
 
   const eventSource =
-    !isAdmin && view === 'upcoming' ? apiUpcomingEvents : workspaceEvents;
+    !isAdmin && (view === 'upcoming' || view === 'previous')
+      ? apiUpcomingEvents
+      : workspaceEvents;
 
   const filteredEvents = eventSource.filter(e => {
     const matchesCounty =
@@ -281,10 +287,18 @@ export const EventsList: React.FC = () => {
     [latestPhotoUrlByEventId, myEvents],
   );
   const liveEvents = filteredEvents.filter(e => e.status === 'open');
-  const pastEvents = filteredEvents.slice(2, 4); // Mock: slice some distinct ones for past
+  const pastEvents = filteredEvents
+    .filter(e => isPreviousEventDate(e.date, e.endDate))
+    .sort((a, b) => getEventSortTime(b.date) - getEventSortTime(a.date));
   const upcomingEvents = filteredEvents.filter(
-    e => e.status === 'upcoming' && !e.isRegistered
+    e =>
+      e.status === 'upcoming' &&
+      !e.isRegistered &&
+      !isPreviousEventDate(e.date, e.endDate),
   );
+  const previousEvents = filteredEvents
+    .filter(e => isPreviousEventDate(e.date, e.endDate))
+    .sort((a, b) => getEventSortTime(b.date) - getEventSortTime(a.date));
   const archivedEvents =
     filteredEvents.filter(e => e.status === 'archived').length > 0
       ? filteredEvents.filter(e => e.status === 'archived')
@@ -363,16 +377,21 @@ export const EventsList: React.FC = () => {
     navigate(`${basePath}/events/${eventId}`, { state: { fromTab: view } });
   };
 
-  const handleOpenUpcomingEvent = (eventId: string) => {
-    if (isPhotographerUpcomingView) {
-      navigate(`/event/${eventId}`, {
+  const handleOpenApiEvent = (event: PgEvent) => {
+    if (isPhotographerApiEventView) {
+      if (event.isRegistered) {
+        handleNavigateToEvent(event.id);
+        return;
+      }
+
+      navigate(`/event/${event.id}`, {
         state: { from: '/pg/events', fromTab: view },
       });
       return;
     }
 
     if (isAdmin) {
-      handleNavigateToEvent(eventId);
+      handleNavigateToEvent(event.id);
     }
   };
 
@@ -384,7 +403,9 @@ export const EventsList: React.FC = () => {
       if (view === 'upcoming') return upcomingEvents.slice(3);
       return upcomingEvents;
     }
-    return view === 'upcoming' ? filteredEvents : myEvents;
+    if (view === 'upcoming') return upcomingEvents;
+    if (view === 'previous') return previousEvents;
+    return myEvents;
   }, [
     archivedEvents,
     filteredEvents,
@@ -392,10 +413,13 @@ export const EventsList: React.FC = () => {
     liveEvents,
     myEvents,
     pastEvents,
+    previousEvents,
     upcomingEvents,
     view,
   ]);
   const isPhotographerUpcomingView = !isAdmin && view === 'upcoming';
+  const isPhotographerApiEventView =
+    isPhotographerUpcomingView || (!isAdmin && view === 'previous');
   const isPhotographerMyEventsLoading =
     !isAdmin &&
     view === 'my' &&
@@ -456,7 +480,7 @@ export const EventsList: React.FC = () => {
                       }`}
                       onClick={() => setView('upcoming')}
                     >
-                      Upcoming
+                      Current
                     </button>
                     <button
                       className={`pg-tab-btn ${
@@ -481,7 +505,15 @@ export const EventsList: React.FC = () => {
                       }`}
                       onClick={() => setView('upcoming')}
                     >
-                      Upcoming
+                      Current
+                    </button>
+                    <button
+                      className={`pg-tab-btn ${
+                        view === 'previous' ? 'active' : ''
+                      }`}
+                      onClick={() => setView('previous')}
+                    >
+                      Previous
                     </button>
                   </>
                 )}
@@ -560,9 +592,9 @@ export const EventsList: React.FC = () => {
       </div>
 
       {/* List Content */}
-      {isAdmin || view === 'upcoming' ? (
+      {isAdmin || isPhotographerApiEventView ? (
         <div className="pg-events-list upcoming-list">
-          {isPhotographerUpcomingView && isLoadingUpcomingEvents ? (
+          {isPhotographerApiEventView && isLoadingUpcomingEvents ? (
             <div className="pg-empty-state">
               <div className="pg-empty-icon">
                 <CalendarPlus size={24} />
@@ -570,7 +602,7 @@ export const EventsList: React.FC = () => {
               <h3>Loading events...</h3>
               <p>Fetching the latest event list.</p>
             </div>
-          ) : isPhotographerUpcomingView && upcomingEventsError ? (
+          ) : isPhotographerApiEventView && upcomingEventsError ? (
             <div className="pg-empty-state">
               <div className="pg-empty-icon">
                 <AlertCircle size={24} />
@@ -590,24 +622,21 @@ export const EventsList: React.FC = () => {
             </div>
           ) : (
             activeList.map(event => {
-              const isApplied =
-                !isAdmin &&
-                view === 'upcoming' &&
-                event.isRegistered === true;
+              const isApplied = !isAdmin && event.isRegistered === true;
               return (
                 <div
                   key={event.id}
                   className={`pg-event-row-grid upcoming-event relative ${
                     isApplied ? 'applied' : ''
                   } ${
-                    isAdmin || isPhotographerUpcomingView ? 'clickable-row' : ''
+                    isAdmin || isPhotographerApiEventView ? 'clickable-row' : ''
                   } ${
-                    isPhotographerUpcomingView ? 'no-logo' : ''
+                    isPhotographerApiEventView ? 'no-logo' : ''
                   }`}
                   style={{ zIndex: activeMenuId === event.id ? 1001 : 1 }}
-                  onClick={() => handleOpenUpcomingEvent(event.id)}
+                  onClick={() => handleOpenApiEvent(event)}
                 >
-                  {!isPhotographerUpcomingView && (
+                  {!isPhotographerApiEventView && (
                     <div className="pg-grid-col-thumb">
                       <div className="pg-event-thumb-small">
                         <img src={event.logo} alt={event.title} />
@@ -818,6 +847,14 @@ export const EventsList: React.FC = () => {
                             )}
                           </div>
                         </div>
+                      ) : view === 'previous' && isApplied ? (
+                        <FilterChip
+                          label="Manage uploads"
+                          onClick={(e?: any) => {
+                            e?.stopPropagation();
+                            handleNavigateToEvent(event.id);
+                          }}
+                        />
                       ) : isApplied ? (
                         <FilterChip
                           label={

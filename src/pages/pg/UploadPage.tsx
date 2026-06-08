@@ -10,6 +10,9 @@ import {
 } from 'lucide-react';
 import { useWorkspace } from '../../context/WorkspaceContext';
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export const UploadPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -26,6 +29,9 @@ export const UploadPage: React.FC = () => {
   // Local State
   const urlEventId = searchParams.get('eventId');
   const urlClassId = searchParams.get('classId');
+  const urlEventClassId = searchParams.get('eventClassId');
+  const urlClassSectionId =
+    searchParams.get('classSectionId') || searchParams.get('class_section_id');
   const urlClassName = searchParams.get('className');
   const urlArenaName = searchParams.get('arenaName');
   const [selectedEventId, setSelectedEventId] = useState<string>(
@@ -126,8 +132,26 @@ export const UploadPage: React.FC = () => {
       return;
     }
 
+    const urlClassIdIsInternal =
+      urlClassId && UUID_PATTERN.test(urlClassId);
+    const internalClassSectionId =
+      urlClassIdIsInternal
+        ? urlClassId
+        : urlClassSectionId && UUID_PATTERN.test(urlClassSectionId)
+          ? urlClassSectionId
+          : undefined;
+    const equipeClassSectionId =
+      urlClassSectionId && !UUID_PATTERN.test(urlClassSectionId)
+        ? urlClassSectionId
+        : undefined;
+    const eventClassId =
+      urlEventClassId || (!urlClassIdIsInternal ? urlClassId : undefined);
+
     startUpload(validFiles, {
-      classId: urlClassId || undefined,
+      classId: !urlClassIdIsInternal ? urlClassId || undefined : undefined,
+      eventClassId: eventClassId || undefined,
+      classSectionId: internalClassSectionId || undefined,
+      equipeClassSectionId,
       className: urlClassName || undefined,
     });
   };
@@ -257,6 +281,18 @@ export const UploadPage: React.FC = () => {
                             {item.error}
                           </div>
                         )}
+                        {item.status === 'completed' &&
+                          (item.matchedRider || item.matchedHorse) && (
+                            <div className="text-[0.75rem] leading-[1.3] text-[var(--color-muted)] mt-1">
+                              Matched{' '}
+                              {[item.matchedRider, item.matchedHorse]
+                                .filter(Boolean)
+                                .join(' / ')}
+                              {item.matchConfidence
+                                ? ` (${item.matchConfidence})`
+                                : ''}
+                            </div>
+                          )}
                       </div>
                       {item.status === 'completed' && (
                         <button
