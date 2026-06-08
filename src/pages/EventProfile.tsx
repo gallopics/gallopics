@@ -6,6 +6,8 @@ import {
   MapPin,
   RotateCcw,
   UploadCloud,
+  AlertCircle,
+  Trash2,
 } from 'lucide-react';
 import { Header } from '../components/Header';
 import { TitleHeader } from '../components/TitleHeader';
@@ -41,6 +43,7 @@ import { PageTabs } from '../components/PageTabs';
 import type { Photo as EventPhoto, ClassSection, EventDetail, Meeting } from '../types';
 import { assetUrl } from '../lib/utils';
 import { usePhotographer } from '../context/PhotographerContext';
+import { useAuth } from '../context/AuthContext';
 
 // Helpers for randomization
 function pick<T>(arr: T[]): T {
@@ -113,7 +116,8 @@ export function EventProfile() {
   const { eventId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { getPhotosByEvent } = usePhotographer();
+  const { user } = useAuth();
+  const { getEvent, getPhotosByEvent, deletePhotos } = usePhotographer();
   const fromPath =
     typeof location.state === 'object' &&
     location.state !== null &&
@@ -135,8 +139,11 @@ export function EventProfile() {
     location.state.eventTab === 'classes'
       ? 'classes'
       : 'uploads';
+  const workspaceEvent = eventId ? getEvent(eventId) : undefined;
   const isPhotographerMyEventView =
-    fromPath === '/pg/events' && fromTab === 'my';
+    (fromPath === '/pg/events' && fromTab === 'my') ||
+    ((user?.role === 'pg' || user?.role === 'admin') &&
+      Boolean(workspaceEvent?.isRegistered));
   const navigateBackToEvents = () => {
     navigate(fromPath, fromTab ? { state: { tab: fromTab } } : undefined);
   };
@@ -161,6 +168,8 @@ export function EventProfile() {
   const [activeEventTab, setActiveEventTab] = useState<'uploads' | 'classes'>(
     initialEventTab
   );
+  const [photoToDelete, setPhotoToDelete] = useState<EventPhoto | null>(null);
+  const [isDeletingPhoto, setIsDeletingPhoto] = useState(false);
   const eventReturnState = useMemo(
     () => ({
       from: fromPath,
@@ -396,6 +405,18 @@ export function EventProfile() {
     });
   }, [uploadPhotos, searchQuery, eventClass]);
 
+  const handleConfirmDeletePhoto = async () => {
+    if (!photoToDelete) return;
+
+    try {
+      setIsDeletingPhoto(true);
+      await deletePhotos([photoToDelete.id]);
+      setPhotoToDelete(null);
+    } finally {
+      setIsDeletingPhoto(false);
+    }
+  };
+
   if (isLoadingEvent)
     return <div className="container pt-[120px]">Loading event...</div>;
 
@@ -562,16 +583,30 @@ export function EventProfile() {
                 )}
               >
                 {activePhotos.map(photo => (
-                  <PhotoCard
-                    key={photo.id}
-                    photo={photo}
-                    onClick={p =>
-                      navigate(
-                        `/photo/${p.id}?from=epro&eventId=${meeting.id}`,
-                        { state: { photo: p, eventReturnState } }
-                      )
-                    }
-                  />
+                  <div key={photo.id} className="relative group">
+                    <PhotoCard
+                      photo={photo}
+                      onClick={p =>
+                        navigate(
+                          `/photo/${p.id}?from=epro&eventId=${meeting.id}`,
+                          { state: { photo: p, eventReturnState } }
+                        )
+                      }
+                    />
+                    {isPhotographerMyEventView && (
+                      <button
+                        className="icon-btn-glass delete-action absolute top-3 right-3 z-40 opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                        onClick={e => {
+                          e.stopPropagation();
+                          setPhotoToDelete(photo);
+                        }}
+                        title="Delete photo"
+                        aria-label="Delete photo"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    )}
+                  </div>
                 ))}
               </MasonryGrid>
             </>
@@ -612,15 +647,26 @@ export function EventProfile() {
                           }`}
                           onClick={() => {
                             if (isPhotographerMyEventView) {
-                              navigate(`/pg/events/${meeting.id}`, {
-                                state: {
-                                  selectedClassId: competition.classSectionId,
-                                  selectedClassName: competition.name,
-                                  selectedArenaName: competition.arenaName,
-                                  fromTab,
-                                  fromUpload: true,
-                                },
+                              const params = new URLSearchParams({
+                                classSectionId: competition.classSectionId,
+                                className: competition.name,
                               });
+                              if (competition.arenaName) {
+                                params.set('arenaName', competition.arenaName);
+                              }
+
+                              navigate(
+                                `/pg/events/${meeting.id}?${params.toString()}`,
+                                {
+                                  state: {
+                                    selectedClassId: competition.classSectionId,
+                                    selectedClassName: competition.name,
+                                    selectedArenaName: competition.arenaName,
+                                    fromTab,
+                                    fromUpload: true,
+                                  },
+                                }
+                              );
                               return;
                             }
 
@@ -655,6 +701,42 @@ export function EventProfile() {
           )}
         </div>
       </section>
+
+      {photoToDelete && (
+        <div className="pg-modal-overlay" style={{ zIndex: 3000 }}>
+          <div className="pg-modal-card">
+            <div className="flex gap-4 items-start">
+              <div className="pg-alert-icon danger">
+                <AlertCircle size={24} />
+              </div>
+              <div className="flex-1">
+                <h3 className="mt-0 text-[1.125rem] font-bold text-primary mb-2">
+                  Delete photo?
+                </h3>
+                <p className="m-0 text-secondary text-[0.875rem] leading-[1.5]">
+                  This will remove the photo from this event.
+                </p>
+                <div className="modal-footer-actions">
+                  <button
+                    className="modal-btn-cancel"
+                    onClick={() => setPhotoToDelete(null)}
+                    disabled={isDeletingPhoto}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="modal-btn-danger"
+                    onClick={handleConfirmDeletePhoto}
+                    disabled={isDeletingPhoto}
+                  >
+                    {isDeletingPhoto ? 'Deleting...' : 'Delete'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <Footer minimal={true} />
     </div>

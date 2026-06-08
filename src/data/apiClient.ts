@@ -1,11 +1,21 @@
-const RENDER_API_BASE_URL = 'https://gallopics-api.onrender.com';
+const SERVER_API_BASE_URL = 'http://82.96.43.103:8081';
 
 export function getApiBaseUrl() {
-  if (import.meta.env.VITE_API_BASE_URL) {
-    return import.meta.env.VITE_API_BASE_URL;
+  const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+
+  if (import.meta.env.DEV) {
+    if (!configuredBaseUrl || configuredBaseUrl === SERVER_API_BASE_URL) {
+      return window.location.origin;
+    }
+
+    return configuredBaseUrl;
   }
 
-  return RENDER_API_BASE_URL;
+  if (configuredBaseUrl) {
+    return configuredBaseUrl;
+  }
+
+  return SERVER_API_BASE_URL;
 }
 
 export function resolveApiAssetUrl(path: string | null | undefined) {
@@ -19,11 +29,6 @@ export function resolveApiAssetUrl(path: string | null | undefined) {
 
   return new URL(path, getApiBaseUrl()).toString();
 }
-
-const isUuid = (value: string) =>
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    value
-  );
 
 export interface ApiUser {
   id: string;
@@ -116,7 +121,21 @@ export interface PhotoDownloadResponse {
   expires_in: number;
 }
 
+export interface UploadPhotoMetadata {
+  classId?: string;
+  eventClassId?: string;
+  classSectionId?: string;
+  equipeClassSectionId?: string;
+  className?: string;
+  takenAt?: string;
+}
+
 type TokenGetter = () => Promise<string | null>;
+
+const isUuid = (value: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value
+  );
 
 type ApiRequestInit = RequestInit & {
   timeoutMs?: number;
@@ -273,18 +292,32 @@ export const api = {
     getToken: TokenGetter,
     eventId: string,
     files: File[],
-    metadata?: { classId?: string; className?: string }
+    metadata?: UploadPhotoMetadata
   ) => {
     const formData = new FormData();
+    const classId = metadata?.classId;
+    const classIdIsInternal = classId ? isUuid(classId) : false;
+    const classSectionId =
+      metadata?.classSectionId || (classIdIsInternal ? classId : undefined);
+    const equipeClassSectionId = metadata?.equipeClassSectionId;
+    const eventClassId =
+      metadata?.eventClassId || (!classIdIsInternal ? classId : undefined);
+
     formData.set('event_id', eventId);
-    if (metadata?.classId && isUuid(metadata.classId)) {
-      formData.set('class_section_id', metadata.classId);
+    if (classSectionId) {
+      formData.set('class_section_id', classSectionId);
     }
-    if (metadata?.classId) {
-      formData.set('event_class_id', metadata.classId);
+    if (equipeClassSectionId) {
+      formData.set('equipe_class_section_id', equipeClassSectionId);
+    }
+    if (eventClassId) {
+      formData.set('event_class_id', eventClassId);
     }
     if (metadata?.className) {
       formData.set('class_name', metadata.className);
+    }
+    if (metadata?.takenAt) {
+      formData.set('taken_at', metadata.takenAt);
     }
     files.forEach(file => formData.append('files', file));
     return request<ApiPhoto[]>(
@@ -375,11 +408,12 @@ export const api = {
   getPhoto: (photoId: string) =>
     request<ApiPhoto>(`/api/v1/photos/${encodeURIComponent(photoId)}`),
 
-  createCheckoutSession: (lineItems: CheckoutLineItem[]) =>
+  createCheckoutSession: (lineItems: CheckoutLineItem[], customerEmail?: string) =>
     request<CheckoutSession>('/api/v1/checkout/sessions', {
       method: 'POST',
       body: JSON.stringify({
         line_items: lineItems,
+        customer_email: customerEmail,
         idempotency_key: `checkout-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       }),
     }),
@@ -410,6 +444,8 @@ export interface ApiPhoto {
   id: string;
   event_id: string;
   photographer_id: string;
+  photographer_display_name?: string | null;
+  photographer_avatar_url?: string | null;
   price: number;
   currency: string;
   status: 'processing' | 'ready' | 'failed';
@@ -420,6 +456,14 @@ export interface ApiPhoto {
   event_class_id?: string | null;
   class_name?: string | null;
   event_class_name?: string | null;
+  taken_at?: string | null;
+  equipe_start_id?: string | null;
+  equipe_rider_id?: string | null;
+  equipe_horse_id?: string | null;
+  matched_at?: string | null;
+  match_confidence?: 'high' | 'medium' | 'low' | 'none' | string | null;
+  match_delta_seconds?: number | null;
+  match_source?: string | null;
   storage_key_original?: string | null;
   storage_key_thumbnail?: string | null;
   storage_key_preview?: string | null;

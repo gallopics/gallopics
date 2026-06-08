@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { Header } from '../components/Header';
 import { TitleHeader } from '../components/TitleHeader';
 import { Footer } from '../components/Footer';
-import { EventBrowseFilter } from '../components/EventBrowseFilter';
 import { FolderEventCard } from '../components/FolderEventCard';
 import type { EventData } from '../data/mockEvents';
 import {
@@ -20,18 +19,13 @@ export function EventsPage() {
   const navigate = useNavigate();
   const { isLoaded, isAuthenticated, user } = useAuth();
 
-  // Filters States
-  const [country, setCountry] = useState('Sweden');
-  const [city, setCity] = useState('All');
-  const [period, setPeriod] = useState('All');
   const [events, setEvents] = useState<EventData[]>([]);
   const [latestPhotoCoverUrls, setLatestPhotoCoverUrls] = useState<
     Record<string, string | null>
   >({});
   const [isLoadingEvents, setIsLoadingEvents] = useState(true);
   const [eventsError, setEventsError] = useState<string | null>(null);
-  const shouldShowPhotoBackedEvents =
-    !isAuthenticated || user?.role === 'pg';
+  const shouldShowPhotoBackedEvents = !isAuthenticated || user?.role === 'pg';
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -50,7 +44,7 @@ export function EventsPage() {
       } catch (error) {
         if (isMounted) {
           setEventsError(
-            error instanceof Error ? error.message : 'Failed to load events',
+            error instanceof Error ? error.message : 'Failed to load events'
           );
         }
       } finally {
@@ -65,144 +59,14 @@ export function EventsPage() {
     };
   }, [isLoaded, shouldShowPhotoBackedEvents]);
 
-  // Filter Logic
-  const filteredEvents = useMemo(() => {
-    const source = events;
-
-    // Date Parsing Helper (Mock specific)
-    const parseEventDates = (event: EventData) => {
-      try {
-        if (event.startDate) {
-          const start = new Date(`${event.startDate}T00:00:00`);
-          const end = new Date(`${event.endDate || event.startDate}T00:00:00`);
-          end.setHours(23, 59, 59, 999);
-          return { start, end };
-        }
-
-        const currentYear = new Date().getFullYear();
-        const parts = event.period.split('–').map(s => s.trim());
-
-        let start, end;
-        if (parts.length === 2) {
-          let startStr = parts[0];
-          let endStr = parts[1];
-          // Append year if missing
-          if (!startStr.match(/\d{4}/)) startStr += ` ${currentYear}`;
-          if (!endStr.match(/\d{4}/)) endStr += ` ${currentYear}`;
-
-          start = new Date(startStr);
-          end = new Date(endStr);
-        } else {
-          let dateStr = parts[0];
-          if (!dateStr.match(/\d{4}/)) dateStr += ` ${currentYear}`;
-          start = new Date(dateStr);
-          end = new Date(dateStr);
-        }
-
-        // Normalizing times
-        start.setHours(0, 0, 0, 0);
-        end.setHours(23, 59, 59, 999);
-
-        return { start, end };
-      } catch {
-        // Fallback for safety
-        return { start: new Date('2099-01-01'), end: new Date('2099-01-01') };
-      }
-    };
-
-    const TODAY = new Date();
-    TODAY.setHours(0, 0, 0, 0);
-
-    const results = source.filter(event => {
-      const matchCountry =
-        event.country === country || country === 'all';
-      const matchCity =
-        city === 'All' ||
-        city === 'all' ||
-        event.city === city;
-
-      // Period Logic
-      let matchPeriod = true;
-      const { start, end } = parseEventDates(event);
-
-      // Is Live? (Today is within range)
-      const isLive =
-        TODAY.getTime() >= start.getTime() && TODAY.getTime() <= end.getTime();
-
-      if (period === 'Recent') {
-        // Rules:
-        // 1. Started within last 30 days: start >= (TODAY - 30) AND start <= TODAY
-        // 2. OR is Live (covers long events started > 30 days ago potentially, though unlikely in mock)
-        // 3. NO future events (start > TODAY) — unless live.
-
-        const thirtyDaysAgo = new Date(TODAY);
-        thirtyDaysAgo.setDate(TODAY.getDate() - 30);
-
-        const startedRecently = start >= thirtyDaysAgo && start <= TODAY;
-
-        matchPeriod = startedRecently || isLive;
-      } else if (period === 'Scheduled') {
-        // Rules:
-        // 1. Upcoming: start > TODAY
-        matchPeriod = start > TODAY;
-      }
-
-      return matchCountry && matchCity && matchPeriod;
-    });
-
-    // Sorting & Limiting for Recent
-    let finalResults = results.sort((a, b) => {
-      const datesA = parseEventDates(a);
-      const datesB = parseEventDates(b);
-
-      if (period === 'Recent') {
-        // Most recent first (Descending by start date)
-        return datesB.start.getTime() - datesA.start.getTime();
-      } else if (period === 'Scheduled') {
-        // Soonest first (Ascending by start date)
-        return datesA.start.getTime() - datesB.start.getTime();
-      }
-      return 0;
-    });
-
-    if (period === 'Recent') {
-      // Separate Live vs Others
-      const liveEvents = finalResults.filter(e => {
-        const { start, end } = parseEventDates(e);
-        return (
-          TODAY.getTime() >= start.getTime() && TODAY.getTime() <= end.getTime()
-        );
-      });
-
-      const otherEvents = finalResults.filter(e => {
-        const { start, end } = parseEventDates(e);
-        return !(
-          TODAY.getTime() >= start.getTime() && TODAY.getTime() <= end.getTime()
-        );
-      });
-
-      // Take All Live + Top 10 Others
-      finalResults = [...liveEvents, ...otherEvents.slice(0, 10)];
-
-      // Re-sort to maintain date order if needed, but usually Live are recent anyway.
-      // But prompt says "Recent should have only live and other 10 cards" "Sort by period"
-      // So we re-sort the combined list.
-      finalResults.sort((a, b) => {
-        const datesA = parseEventDates(a);
-        const datesB = parseEventDates(b);
-        return datesB.start.getTime() - datesA.start.getTime();
-      });
-    }
-
-    return finalResults;
-  }, [country, city, period, events]);
+  const filteredEvents = events;
 
   useEffect(() => {
     const eventsMissingCovers = filteredEvents.filter(
       event =>
         !event.coverImage &&
         event.photoCount !== 0 &&
-        !Object.prototype.hasOwnProperty.call(latestPhotoCoverUrls, event.id),
+        !Object.prototype.hasOwnProperty.call(latestPhotoCoverUrls, event.id)
     );
 
     if (eventsMissingCovers.length === 0) return;
@@ -218,11 +82,11 @@ export function EventsPage() {
           } catch (error) {
             console.warn(
               `Failed to load fallback cover for event ${event.id}`,
-              error,
+              error
             );
             return [event.id, null] as const;
           }
-        }),
+        })
       );
 
       if (!isMounted) return;
@@ -257,17 +121,8 @@ export function EventsPage() {
           coverImage: latestPhotoCoverUrl,
         };
       }),
-    [filteredEvents, latestPhotoCoverUrls],
+    [filteredEvents, latestPhotoCoverUrls]
   );
-
-  const handleFilterChange = (
-    key: 'country' | 'city' | 'period',
-    value: string,
-  ) => {
-    if (key === 'country') setCountry(value);
-    if (key === 'city') setCity(value);
-    if (key === 'period') setPeriod(value);
-  };
 
   return (
     <div className="page-wrapper ehome-page guestHome">
@@ -284,16 +139,6 @@ export function EventsPage() {
       <section className="grid-section">
         <div className="container">
           <h2 className="section-title">Browse events</h2>
-          <div className="filters-wrapper">
-            <EventBrowseFilter
-              country={country}
-              city={city}
-              period={period}
-              onFilterChange={handleFilterChange}
-              isSticky={false}
-              resultsCount={displayEvents.length}
-            />
-          </div>
 
           {isLoadingEvents ? (
             <div className="pg-empty-state">
@@ -316,9 +161,7 @@ export function EventsPage() {
             </div>
           ) : (
             <div className="pg-empty-state">
-              <h3>
-                No events available – yet
-              </h3>
+              <h3>No events available – yet</h3>
             </div>
           )}
         </div>

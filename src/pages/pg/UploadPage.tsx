@@ -10,6 +10,9 @@ import {
 } from 'lucide-react';
 import { useWorkspace } from '../../context/WorkspaceContext';
 
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export const UploadPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -26,6 +29,9 @@ export const UploadPage: React.FC = () => {
   // Local State
   const urlEventId = searchParams.get('eventId');
   const urlClassId = searchParams.get('classId');
+  const urlEventClassId = searchParams.get('eventClassId');
+  const urlClassSectionId =
+    searchParams.get('classSectionId') || searchParams.get('class_section_id');
   const urlClassName = searchParams.get('className');
   const urlArenaName = searchParams.get('arenaName');
   const [selectedEventId, setSelectedEventId] = useState<string>(
@@ -33,7 +39,9 @@ export const UploadPage: React.FC = () => {
   );
   const [isDragActive, setIsDragActive] = useState(false);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const previewUrlsRef = useRef<Record<string, string>>({});
 
   // Initial Event Selection Logic
   useEffect(() => {
@@ -65,6 +73,34 @@ export const UploadPage: React.FC = () => {
   const session = selectedEventId ? uploadSessions[selectedEventId] : null;
   const files = session?.files || [];
   const hasFiles = files.length > 0;
+
+  const previewUrls = React.useMemo(() => {
+    const activeFileIds = new Set(files.map(file => file.id));
+
+    Object.entries(previewUrlsRef.current).forEach(([fileId, url]) => {
+      if (!activeFileIds.has(fileId)) {
+        URL.revokeObjectURL(url);
+        delete previewUrlsRef.current[fileId];
+      }
+    });
+
+    files.forEach(file => {
+      if (!previewUrlsRef.current[file.id]) {
+        previewUrlsRef.current[file.id] = URL.createObjectURL(file.file);
+      }
+    });
+
+    return previewUrlsRef.current;
+  }, [files]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(previewUrlsRef.current).forEach(url => {
+        URL.revokeObjectURL(url);
+      });
+      previewUrlsRef.current = {};
+    };
+  }, []);
 
   const selectedEventTitle =
     events.find(event => event.id === selectedEventId)?.title ||
@@ -125,18 +161,26 @@ export const UploadPage: React.FC = () => {
       return;
     }
 
-    const MAX_FILES_PER_UPLOAD = 20;
-    let filesToUpload = validFiles;
+    const urlClassIdIsInternal =
+      urlClassId && UUID_PATTERN.test(urlClassId);
+    const internalClassSectionId =
+      urlClassIdIsInternal
+        ? urlClassId
+        : urlClassSectionId && UUID_PATTERN.test(urlClassSectionId)
+          ? urlClassSectionId
+          : undefined;
+    const equipeClassSectionId =
+      urlClassSectionId && !UUID_PATTERN.test(urlClassSectionId)
+        ? urlClassSectionId
+        : undefined;
+    const eventClassId =
+      urlEventClassId || (!urlClassIdIsInternal ? urlClassId : undefined);
 
-    if (validFiles.length > MAX_FILES_PER_UPLOAD) {
-      filesToUpload = validFiles.slice(0, MAX_FILES_PER_UPLOAD);
-      alert(
-        `You can upload up to ${MAX_FILES_PER_UPLOAD} photos at a time. We'll use the first ${MAX_FILES_PER_UPLOAD} files from your selection.`,
-      );
-    }
-
-    startUpload(filesToUpload, {
-      classId: urlClassId || undefined,
+    startUpload(validFiles, {
+      classId: !urlClassIdIsInternal ? urlClassId || undefined : undefined,
+      eventClassId: eventClassId || undefined,
+      classSectionId: internalClassSectionId || undefined,
+      equipeClassSectionId,
       className: urlClassName || undefined,
     });
   };
@@ -147,16 +191,21 @@ export const UploadPage: React.FC = () => {
     }
   };
 
-  const handleConfirmClear = () => {
-    if (selectedEventId) {
-      clearUploadSession(selectedEventId);
+  const handleConfirmClear = async () => {
+    if (!selectedEventId) return;
+
+    try {
+      setIsClearing(true);
+      await clearUploadSession(selectedEventId, { deleteUploaded: true });
       setConfirmClearOpen(false);
+    } finally {
+      setIsClearing(false);
     }
   };
 
   const handleViewPhotos = () => {
     if (!selectedEventId) return;
-    clearUploadSession(selectedEventId);
+    void clearUploadSession(selectedEventId);
     navigate(`${basePath}/events/${selectedEventId}`);
   };
 
@@ -218,7 +267,7 @@ export const UploadPage: React.FC = () => {
                 </div>
                 <div className="drop-title-sm">Click or Drag photos</div>
                 <div className="drop-footer-note">
-                  Maximum 20 photos per upload
+                  Upload multiple photos at once
                 </div>
               </div>
             </div>
@@ -232,10 +281,13 @@ export const UploadPage: React.FC = () => {
               <div className="pg-upload-queue-column">
                 <div className="queue-list">
                   {files.map(item => (
-                    <div key={item.id} className="queue-item">
+                    <div
+                      key={item.id}
+                      className={`queue-item ${item.status === 'completed' ? 'is-completed' : ''}`}
+                    >
                       <div className="queue-thumb">
                         <img
-                          src={URL.createObjectURL(item.file)}
+                          src={previewUrls[item.id]}
                           alt={item.file.name}
                         />
                       </div>
@@ -244,14 +296,47 @@ export const UploadPage: React.FC = () => {
                         <div className="queue-progress">
                           <div
                             className="queue-bar"
-                            style={{ width: `${item.progress}%` }}
+                            style={{
+                              width: `${item.progress}%`,
+                              background:
+                                item.status === 'failed'
+                                  ? 'var(--color-danger)'
+                                  : undefined,
+                            }}
                           />
                         </div>
+                        {item.status === 'failed' && item.error && (
+                          <div className="text-[0.75rem] leading-[1.3] text-[var(--color-danger)] mt-1">
+                            {item.error}
+                          </div>
+                        )}
+                        {item.status === 'completed' &&
+                          (item.matchedRider || item.matchedHorse) && (
+                            <div className="text-[0.75rem] leading-[1.3] text-[var(--color-muted)] mt-1">
+                              Matched{' '}
+                              {[item.matchedRider, item.matchedHorse]
+                                .filter(Boolean)
+                                .join(' / ')}
+                              {item.matchConfidence
+                                ? ` (${item.matchConfidence})`
+                                : ''}
+                            </div>
+                          )}
                       </div>
                       {item.status === 'completed' && (
-                        <div className="queue-check-wrapper">
+                        <button
+                          className="queue-check-wrapper"
+                          onClick={e => {
+                            e.stopPropagation();
+                            if (selectedEventId) {
+                              void removeUploadFile(selectedEventId, item.id);
+                            }
+                          }}
+                          title="Remove uploaded photo"
+                          aria-label="Remove uploaded photo"
+                        >
                           <CheckCircle size={20} className="queue-check" />
-                        </div>
+                        </button>
                       )}
 
                       <button
@@ -259,7 +344,7 @@ export const UploadPage: React.FC = () => {
                         onClick={e => {
                           e.stopPropagation();
                           if (selectedEventId)
-                            removeUploadFile(selectedEventId, item.id);
+                            void removeUploadFile(selectedEventId, item.id);
                         }}
                         title="Remove photo"
                       >
@@ -325,14 +410,16 @@ export const UploadPage: React.FC = () => {
                   <button
                     className="modal-btn-cancel"
                     onClick={() => setConfirmClearOpen(false)}
+                    disabled={isClearing}
                   >
                     Cancel
                   </button>
                   <button
                     className="modal-btn-danger"
                     onClick={handleConfirmClear}
+                    disabled={isClearing}
                   >
-                    Clear All
+                    {isClearing ? 'Clearing...' : 'Clear All'}
                   </button>
                 </div>
               </div>

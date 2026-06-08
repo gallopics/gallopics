@@ -86,11 +86,6 @@ const OnboardingProfile = lazy(() =>
     default: m.OnboardingProfile,
   }))
 );
-const OnboardingReady = lazy(() =>
-  import('./pages/pg/onboarding/OnboardingReady').then(m => ({
-    default: m.OnboardingReady,
-  }))
-);
 
 const showComingSoon =
   import.meta.env.VITE_SHOW_COMING_SOON === 'true' ||
@@ -220,14 +215,6 @@ function App() {
                     element={
                       <ProtectedRoute>
                         <PendingApproval />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/pg/onboarding/ready"
-                    element={
-                      <ProtectedRoute>
-                        <OnboardingReady />
                       </ProtectedRoute>
                     }
                   />

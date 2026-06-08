@@ -1,7 +1,15 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import type { Photo } from '../types';
-import { RotateCcw, Pencil, Instagram, Music2, Search } from 'lucide-react';
+import {
+  CalendarDays,
+  ChevronLeft,
+  Images,
+  Pencil,
+  Instagram,
+  Music2,
+  Search,
+} from 'lucide-react';
 import { Header } from '../components/Header';
 import { TitleHeader } from '../components/TitleHeader';
 import { Breadcrumbs } from '../components/Breadcrumbs';
@@ -9,7 +17,6 @@ import type { BreadcrumbItem } from '../components/Breadcrumbs';
 import { Footer } from '../components/Footer';
 import { MasonryGrid } from '../components/MasonryGrid';
 import { PhotoCard } from '../components/PhotoCard';
-import { ModernDropdown } from '../components/ModernDropdown';
 import {
   photos as mockPhotos,
   getActivePhotographerProfile,
@@ -17,7 +24,6 @@ import {
 } from '../data/mockData';
 import { mockEvents, SHOW_EVENTS } from '../data/mockEvents';
 
-import { ScopedSearchBar } from '../components/ScopedSearchBar';
 import { Highlights } from '../components/Highlights';
 import {
   ShareIconButton,
@@ -50,7 +56,6 @@ export function PhotographerProfile() {
   const sourceEvent = eventId ? mockEvents.find(e => e.id === eventId) : null;
 
   const [photos, setPhotos] = useState<Photo[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [apiPhotographer, setApiPhotographer] =
     useState<ApiPhotographer | null>(null);
   const [isLoadingApiPhotographer, setIsLoadingApiPhotographer] =
@@ -59,6 +64,8 @@ export function PhotographerProfile() {
   const [activeTab, setActiveTab] = useState<'highlights' | 'photos'>(
     'highlights'
   );
+  const [galleryEventId, setGalleryEventId] = useState('');
+  const [galleryClassKey, setGalleryClassKey] = useState('');
 
   // Breadcrumbs
   const {
@@ -248,114 +255,131 @@ export function PhotographerProfile() {
     return items;
   }, [from, sourceEvent, eventId, photographer, navigate]);
 
-  // Filter States
-  const [selectedEventId, setSelectedEventId] = useState<string>('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [eventClass, setEventClass] = useState('All');
-
   useEffect(() => {
     const timer = setTimeout(() => {
       setPhotos(
         SHOW_EVENTS ? mockPhotos.filter(p => p.photographerId === id) : []
       );
-      setIsLoading(false);
     }, 1500);
 
     return () => clearTimeout(timer);
   }, [id]);
 
-  // Compute latest event once photos are loaded
   useEffect(() => {
-    if (photos.length > 0 && !selectedEventId && activeProfile) {
-      const allEvents = [
-        activeProfile.primaryEvent,
-        ...activeProfile.dummyEvents,
-      ];
-      // Since we don't have explicit dates on these dummy events in the profile object easily,
-      // but we want "Latest", let's assume they are sorted or we can find them in COMPETITIONS if IDs match.
-      // For now, let's use the first one as "Latest" if no other info.
-      if (allEvents.length > 0) {
-        setSelectedEventId(allEvents[0].id);
-      }
+    setGalleryEventId('');
+    setGalleryClassKey('');
+  }, [id, activeTab]);
+
+  const profilePhotos: Photo[] = useMemo(() => {
+    if (isOwner) {
+      return contextPhotos.map(p => {
+        const ev = contextEvents.find(e => e.id === p.eventId);
+        return {
+          id: p.id,
+          src: p.url,
+          rider: p.rider || 'Unassigned',
+          horse: p.horse || p.fileName || 'Unassigned',
+          event: ev?.title || 'Event',
+          eventId: p.eventId,
+          date: ev?.date || p.uploadDate || 'Today',
+          width: p.width,
+          height: p.height,
+          className: p.className || 'Unassigned class',
+          time: p.timestamp || '12:00',
+          city: ev?.city || 'Sweden',
+          arena: ev?.venueName || 'Main Arena',
+          countryCode: 'SE',
+          discipline: ev?.disciplines?.[0] || 'Showjumping',
+          photographer: photographer
+            ? `${photographer.firstName} ${photographer.lastName}`.trim()
+            : undefined,
+          photographerId: loggedInId,
+        };
+      });
     }
-  }, [photos, selectedEventId, activeProfile]);
 
-  const isResetDisabled =
-    !selectedEventId && eventClass === 'All' && searchQuery === '';
+    return photos;
+  }, [contextEvents, contextPhotos, isOwner, loggedInId, photographer, photos]);
 
-  // Options
-  const eventOptions = activeProfile
-    ? [
-        {
-          label: activeProfile.primaryEvent.name,
-          value: activeProfile.primaryEvent.id,
-        },
-        ...activeProfile.dummyEvents.map(e => ({ label: e.name, value: e.id })),
-      ]
-    : [];
+  const galleryEvents = useMemo(() => {
+    const groups = new Map<
+      string,
+      {
+        id: string;
+        title: string;
+        date: string;
+        city: string;
+        cover: string;
+        photos: Photo[];
+      }
+    >();
 
-  const combinedOptions = useMemo(() => {
-    const available = photos.filter(
-      p => selectedEventId === '' || p.eventId === selectedEventId
-    );
-    const uniqueRiders = Array.from(
-      new Set(available.map(p => p.rider))
-    ).sort();
-    const uniqueHorses = Array.from(
-      new Set(available.map(p => p.horse))
-    ).sort();
+    profilePhotos.forEach(photo => {
+      const event = contextEvents.find(e => e.id === photo.eventId);
+      const fallbackEvent = mockEvents.find(e => e.id === photo.eventId);
+      const existing = groups.get(photo.eventId);
 
-    const riderOptions = uniqueRiders.map(r => {
-      const photo = available.find(p => p.rider === r);
-      return {
-        label: r,
-        value: r,
-        type: 'rider' as const,
-        subtitle: photo?.horse,
-      };
-    });
-
-    const horseOptions = uniqueHorses.map(h => {
-      const photo = available.find(p => p.horse === h);
-      return {
-        label: h,
-        value: h,
-        type: 'horse' as const,
-        subtitle: photo?.rider,
-      };
-    });
-
-    return [...riderOptions, ...horseOptions];
-  }, [photos, selectedEventId]);
-
-  const filteredPhotos = useMemo(() => {
-    return photos.filter(photo => {
-      const matchEvent = !selectedEventId || photo.eventId === selectedEventId;
-      const matchClass =
-        eventClass === 'All' ||
-        (photo.className && photo.className.includes(eventClass)); // Approximate class match
-
-      // Search Query Logic: Matches either Rider OR Horse
-      let matchSearch = true;
-      if (searchQuery && searchQuery.trim().length > 0) {
-        const q = searchQuery.toLowerCase();
-        matchSearch =
-          photo.rider.toLowerCase().includes(q) ||
-          photo.horse.toLowerCase().includes(q);
+      if (existing) {
+        existing.photos.push(photo);
+        return;
       }
 
-      return matchEvent && matchClass && matchSearch;
+      groups.set(photo.eventId, {
+        id: photo.eventId,
+        title: event?.title || fallbackEvent?.name || photo.event || 'Event',
+        date: event?.dateRange || event?.date || fallbackEvent?.period || photo.date,
+        city: event?.city || fallbackEvent?.city || photo.city,
+        cover: photo.src,
+        photos: [photo],
+      });
     });
-  }, [photos, selectedEventId, eventClass, searchQuery]);
 
-  const classOptions = [
-    { label: 'All Classes', value: 'All' },
-    { label: '1.20m', value: '120' },
-    { label: '1.30m', value: '130' },
-  ];
+    return Array.from(groups.values()).sort(
+      (a, b) => b.photos.length - a.photos.length
+    );
+  }, [contextEvents, profilePhotos]);
 
-  const totalEvents = activeProfile ? activeProfile.dummyEvents.length + 1 : 0;
-  const totalPhotosCount = photos.length;
+  const selectedGalleryEvent = galleryEvents.find(
+    event => event.id === galleryEventId
+  );
+
+  const galleryClasses = useMemo(() => {
+    if (!selectedGalleryEvent) return [];
+
+    const groups = new Map<
+      string,
+      { key: string; name: string; cover: string; photos: Photo[] }
+    >();
+
+    selectedGalleryEvent.photos.forEach(photo => {
+      const name = photo.className || 'Unassigned class';
+      const key = name.toLowerCase();
+      const existing = groups.get(key);
+
+      if (existing) {
+        existing.photos.push(photo);
+        return;
+      }
+
+      groups.set(key, {
+        key,
+        name,
+        cover: photo.src,
+        photos: [photo],
+      });
+    });
+
+    return Array.from(groups.values()).sort(
+      (a, b) => b.photos.length - a.photos.length
+    );
+  }, [selectedGalleryEvent]);
+
+  const selectedGalleryClass = galleryClasses.find(
+    classGroup => classGroup.key === galleryClassKey
+  );
+
+  const totalEvents = galleryEvents.length;
+  const totalPhotosCount = profilePhotos.length;
 
   // Resolve Highlights Data
   const displayHighlights: Photo[] = useMemo(() => {
@@ -583,114 +607,127 @@ export function PhotographerProfile() {
             )}
           </div>
         ) : (
-          <section className="grid-section !pt-0 !pb-0">
+          <section className="photographer-gallery-section">
             <div className="container">
-              <div className="filters-wrapper">
-                {/* New Shared Filter Structure */}
-                <div className="filter-container">
-                  <div className="filter-group">
-                    <ModernDropdown
-                      value={selectedEventId}
-                      options={eventOptions}
-                      onChange={setSelectedEventId}
-                      label="Event"
-                      placeholder="Event"
-                      showSearch={true}
-                      searchPlaceholder="Search events..."
-                      variant="pill"
-                    />
-                    <ModernDropdown
-                      value={eventClass}
-                      options={classOptions}
-                      onChange={setEventClass}
-                      label="Class"
-                      placeholder="Class"
-                      variant="pill"
-                    />
-                    <button
-                      className="filter-reset-btn"
-                      onClick={() => {
-                        const allEvents = [
-                          activeProfile.primaryEvent,
-                          ...activeProfile.dummyEvents,
-                        ];
-                        if (allEvents.length > 0)
-                          setSelectedEventId(allEvents[0].id);
-                        setEventClass('All');
-                        setSearchQuery('');
-                      }}
-                      title="Reset filters"
-                      disabled={isResetDisabled}
-                    >
-                      <RotateCcw size={18} />
-                    </button>
-                  </div>
-
-                  <div className="search-group">
-                    <ScopedSearchBar
-                      placeholder="Search by riders or horses..."
-                      options={combinedOptions}
-                      currentValue={searchQuery}
-                      onSelect={val => setSearchQuery(val)}
-                      onSearchChange={val => setSearchQuery(val)}
-                      variant="v2"
-                    />
-                  </div>
-
-                  <div className="filter-results-count">
-                    Showing {filteredPhotos.length} photos
+              {galleryEventId && (
+                <div className="photographer-gallery-toolbar">
+                  <button
+                    type="button"
+                    className="gallery-back-btn"
+                    onClick={() => {
+                      if (galleryClassKey) {
+                        setGalleryClassKey('');
+                        return;
+                      }
+                      setGalleryEventId('');
+                    }}
+                  >
+                    <ChevronLeft size={18} />
+                    {galleryClassKey ? 'Classes' : 'Events'}
+                  </button>
+                  <div className="gallery-path">
+                    <span>{selectedGalleryEvent?.title}</span>
+                    {selectedGalleryClass && (
+                      <>
+                        <span>/</span>
+                        <span>{selectedGalleryClass.name}</span>
+                      </>
+                    )}
                   </div>
                 </div>
-              </div>
+              )}
 
-              <MasonryGrid
-                isLoading={isLoading}
-                renderSkeleton={() => (
-                  <div className="photo-card skeleton-card">
-                    <div className="card-image-wrapper aspect-[3/4] skeleton-block"></div>
-                    <div className="card-content">
-                      <div className="skeleton-line w-[70%] mb-[6px]"></div>
-                      <div className="skeleton-line w-[40%] h-[12px] mb-0"></div>
-                    </div>
-                  </div>
-                )}
-              >
-                {filteredPhotos.map(photo => (
-                  <PhotoCard
-                    key={photo.id}
-                    photo={photo}
-                    onClick={p =>
-                      navigate(`/photo/${p.id}?from=ppro${isOwner ? '&owner=1' : ''}`, {
-                        state: { photo: p, isOwnerProfile: isOwner },
-                      })
-                    }
-                    showCartActions={!isOwner}
-                  />
-                ))}
-              </MasonryGrid>
+              {!galleryEventId && galleryEvents.length > 0 && (
+                <div className="photographer-gallery-grid">
+                  {galleryEvents.map(event => {
+                    const classCount = new Set(
+                      event.photos.map(
+                        photo => photo.className || 'Unassigned class'
+                      )
+                    ).size;
 
-              {!isLoading && filteredPhotos.length === 0 && (
+                    return (
+                      <button
+                        type="button"
+                        key={event.id}
+                        className="photographer-gallery-card"
+                        onClick={() => setGalleryEventId(event.id)}
+                      >
+                        <img src={event.cover} alt="" />
+                        <div className="photographer-gallery-card-body">
+                          <h3>{event.title}</h3>
+                          <p>
+                            <CalendarDays size={14} />
+                            {event.date}
+                          </p>
+                          <div className="photographer-gallery-meta">
+                            <span>{event.photos.length} photos</span>
+                            <span>{classCount} classes</span>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {galleryEventId && !galleryClassKey && galleryClasses.length > 0 && (
+                <div className="photographer-gallery-grid">
+                  {galleryClasses.map(classGroup => (
+                    <button
+                      type="button"
+                      key={classGroup.key}
+                      className="photographer-gallery-card"
+                      onClick={() => setGalleryClassKey(classGroup.key)}
+                    >
+                      <img src={classGroup.cover} alt="" />
+                      <div className="photographer-gallery-card-body">
+                        <h3>{classGroup.name}</h3>
+                        <p>
+                          <Images size={14} />
+                          {selectedGalleryEvent?.title}
+                        </p>
+                        <div className="photographer-gallery-meta">
+                          <span>{classGroup.photos.length} photos</span>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {selectedGalleryClass && (
+                <MasonryGrid>
+                  {selectedGalleryClass.photos.map(photo => (
+                    <PhotoCard
+                      key={photo.id}
+                      photo={photo}
+                      onClick={p =>
+                        navigate(
+                          `/photo/${p.id}?from=ppro${
+                            isOwner ? '&owner=1' : ''
+                          }`,
+                          {
+                            state: { photo: p, isOwnerProfile: isOwner },
+                          }
+                        )
+                      }
+                      showCartActions={!isOwner}
+                    />
+                  ))}
+                </MasonryGrid>
+              )}
+
+              {profilePhotos.length === 0 && (
                 <div className="pg-empty-state">
                   <div className="pg-empty-icon">
                     <Search size={24} />
                   </div>
-                  <h3>No events available – yet</h3>
-                  <p>Try adjusting your filters or search terms.</p>
-                  <button
-                    onClick={() => {
-                      const allEvents = [
-                        activeProfile.primaryEvent,
-                        ...activeProfile.dummyEvents,
-                      ];
-                      if (allEvents.length > 0)
-                        setSelectedEventId(allEvents[0].id);
-                      setEventClass('All');
-                      setSearchQuery('');
-                    }}
-                    className="pg-btn pg-btn-secondary mt-2"
-                  >
-                    Clear filters
-                  </button>
+                  <h3>No uploaded photos yet</h3>
+                  <p>
+                    Upload photos to an event and they will appear here grouped
+                    by event and class.
+                  </p>
                 </div>
               )}
             </div>

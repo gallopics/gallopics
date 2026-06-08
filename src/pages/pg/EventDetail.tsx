@@ -1,7 +1,17 @@
-import React, { useState, useMemo, useRef, useLayoutEffect } from 'react';
+import React, {
+  useState,
+  useMemo,
+  useRef,
+  useLayoutEffect,
+  useEffect,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { usePhotographer, type Photo } from '../../context/PhotographerContext';
+import {
+  usePhotographer,
+  type PgEvent,
+  type Photo,
+} from '../../context/PhotographerContext';
 import { MasonryGrid } from '../../components/MasonryGrid';
 import { PhotoCard } from '../../components/PhotoCard';
 import { PgSelectionPanel } from './PgSelectionPanel';
@@ -33,6 +43,10 @@ import { InfoChip } from '../../components/InfoChip';
 import { PHOTOGRAPHERS } from '../../data/mockData';
 import { FilterChip } from '../../components/FilterChip';
 import { assetUrl } from '../../lib/utils';
+import {
+  fetchEventFromApi,
+  mapApiEventToEventData,
+} from '../../data/eventsApi';
 
 // Tab type
 type TabType = 'uploads' | 'published' | 'archive';
@@ -41,6 +55,36 @@ type TabType = 'uploads' | 'published' | 'archive';
 type FolderType = 'random' | 'misc' | 'uncategorised' | 'duplicates';
 type PublishedFolderType = 'selling_photos' | 'unsold';
 
+const mapApiEventToPgEvent = (eventId: string, event: unknown): PgEvent => {
+  const eventData = mapApiEventToEventData(event as any);
+
+  return {
+    id: eventData.id || eventId,
+    title: eventData.name,
+    date: eventData.startDate || eventData.period,
+    endDate: eventData.endDate || eventData.startDate,
+    dateRange: eventData.period,
+    location: `${eventData.city}, ${eventData.country}`,
+    coverImage: eventData.coverImage,
+    status: 'open',
+    isRegistered: true,
+    photosCount: eventData.photoCount || 0,
+    publishedCount: 0,
+    soldCount: 0,
+    logo:
+      eventData.logo ||
+      eventData.coverImage ||
+      assetUrl('images/events/default.png'),
+    venueName: eventData.name,
+    disciplines: [eventData.discipline].filter(Boolean),
+    city: eventData.city,
+    assignedPhotographers: eventData.photographer
+      ? [eventData.photographer]
+      : [],
+    applicationsWelcomed: eventData.status !== 'disabled',
+  };
+};
+
 export const EventDetail: React.FC = () => {
   const { eventId } = useParams<{ eventId: string }>();
   const navigate = useNavigate();
@@ -48,9 +92,19 @@ export const EventDetail: React.FC = () => {
   const location = useLocation();
   const fromTab = (location.state as any)?.fromTab;
   const { basePath, isAdmin } = useWorkspace();
-  const { getEvent, getPhotosByEvent, resolveDuplicate } = usePhotographer();
+  const {
+    getEvent,
+    getPhotosByEvent,
+    resolveDuplicate,
+    deletePhotos,
+    restorePhotos,
+  } = usePhotographer();
 
-  const event = eventId ? getEvent(eventId) : undefined;
+  const contextEvent = eventId ? getEvent(eventId) : undefined;
+  const [apiEvent, setApiEvent] = useState<PgEvent | null>(null);
+  const [isLoadingApiEvent, setIsLoadingApiEvent] = useState(false);
+  const [apiEventError, setApiEventError] = useState<string | null>(null);
+  const event = contextEvent || apiEvent || undefined;
   const allEventPhotos = eventId ? getPhotosByEvent(eventId) : [];
   const selectedClassContext = useMemo(() => {
     const state = location.state as
@@ -61,13 +115,18 @@ export const EventDetail: React.FC = () => {
         }
       | null
       | undefined;
+    const params = new URLSearchParams(location.search);
 
     return {
-      id: state?.selectedClassId || '',
-      name: state?.selectedClassName || '',
-      arenaName: state?.selectedArenaName || '',
+      id:
+        state?.selectedClassId ||
+        params.get('classSectionId') ||
+        params.get('classId') ||
+        '',
+      name: state?.selectedClassName || params.get('className') || '',
+      arenaName: state?.selectedArenaName || params.get('arenaName') || '',
     };
-  }, [location.state]);
+  }, [location.search, location.state]);
 
   const hasSelectedClassContext = Boolean(
     selectedClassContext.id || selectedClassContext.name
@@ -122,6 +181,43 @@ export const EventDetail: React.FC = () => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const processedDupIds = React.useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!eventId || contextEvent) {
+      setApiEvent(null);
+      setApiEventError(null);
+      setIsLoadingApiEvent(false);
+      return;
+    }
+
+    let isMounted = true;
+    const requestedEventId = eventId;
+
+    async function loadEvent() {
+      try {
+        setIsLoadingApiEvent(true);
+        setApiEventError(null);
+        const nextEvent = await fetchEventFromApi(requestedEventId);
+        if (isMounted) {
+          setApiEvent(mapApiEventToPgEvent(requestedEventId, nextEvent));
+        }
+      } catch (error) {
+        if (isMounted) {
+          setApiEventError(
+            error instanceof Error ? error.message : 'Failed to load event'
+          );
+        }
+      } finally {
+        if (isMounted) setIsLoadingApiEvent(false);
+      }
+    }
+
+    void loadEvent();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [contextEvent, eventId]);
 
   // Deep link effect: Scroll to duplicate group
   React.useEffect(() => {
@@ -707,6 +803,7 @@ export const EventDetail: React.FC = () => {
   );
 
   const undoSelectionRef = useRef<Set<string>>(new Set());
+  const undoDeletedPhotosRef = useRef<Photo[]>([]);
   const actionBarRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
@@ -746,25 +843,45 @@ export const EventDetail: React.FC = () => {
   };
 
   const handleUndoDelete = () => {
+    if (undoDeletedPhotosRef.current.length > 0) {
+      restorePhotos(undoDeletedPhotosRef.current);
+      undoDeletedPhotosRef.current = [];
+    }
     setSelectedIds(new Set(undoSelectionRef.current));
     setToast(null);
   };
 
-  const handleConfirmAction = () => {
+  const handleConfirmAction = async () => {
+    const selectedPhotoIds = Array.from(selectedIds);
+    const selectedPhotosSnapshot = allPhotos.filter(p => selectedIds.has(p.id));
+
     setConfirmModal({ ...confirmModal, isOpen: false });
     setIsPanelOpen(false); // Close panel on confirmation (delete/publish/unpublish)
 
     if (confirmModal.type === 'delete') {
       undoSelectionRef.current = new Set(selectedIds);
-      setToast({
-        msg: `${selectedIds.size} photo${
-          selectedIds.size > 1 ? 's' : ''
-        } deleted`,
-        type: TOAST_TOKENS.DELETE.type,
-        onUndo: handleUndoDelete,
-      });
+      undoDeletedPhotosRef.current = selectedPhotosSnapshot;
       setSelectedIds(new Set());
-      setTimeout(() => setToast(null), 3000);
+
+      try {
+        await deletePhotos(selectedPhotoIds);
+        setToast({
+          msg: `${selectedPhotoIds.length} photo${
+            selectedPhotoIds.length > 1 ? 's' : ''
+          } deleted`,
+          type: TOAST_TOKENS.DELETE.type,
+          onUndo: handleUndoDelete,
+        });
+        setTimeout(() => setToast(null), 3000);
+      } catch {
+        undoDeletedPhotosRef.current = [];
+        setSelectedIds(new Set(selectedPhotoIds));
+        setToast({
+          msg: 'Could not delete photo. Please try again.',
+          type: 'danger',
+        });
+        setTimeout(() => setToast(null), 3000);
+      }
     } else if (confirmModal.type === 'publish') {
       setToast({
         msg:
@@ -840,7 +957,7 @@ export const EventDetail: React.FC = () => {
                       from: 'event',
                     });
                     if (selectedClassContext.id) {
-                      params.set('classId', selectedClassContext.id);
+                      params.set('classSectionId', selectedClassContext.id);
                     }
                     if (selectedClassContext.name) {
                       params.set('className', selectedClassContext.name);
@@ -1376,7 +1493,8 @@ export const EventDetail: React.FC = () => {
   }, [eventId]);
 
   // Guard after all hooks — safe to return early now
-  if (!event) return <div>Event not found</div>;
+  if (!event && isLoadingApiEvent) return <div>Loading event...</div>;
+  if (!event) return <div>{apiEventError || 'Event not found'}</div>;
 
   const chipBtnPrimary =
     'h-8 px-4 rounded-full bg-[var(--color-brand-primary)] text-white border-transparent text-[0.8125rem] font-semibold cursor-pointer transition-all duration-200 flex items-center gap-1.5 whitespace-nowrap shadow-[0_2px_6px_rgba(27,58,236,0.25)] hover:bg-[var(--color-brand-primary-hover)] hover:-translate-y-px';

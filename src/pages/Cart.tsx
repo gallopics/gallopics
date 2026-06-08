@@ -195,7 +195,8 @@ export function Cart() {
                     Payment Successful!
                   </h1>
                   <p className="text-[var(--color-text-secondary)] leading-[1.6] mb-10">
-                    Thank you for your purchase. Your download links are ready.
+                    Thank you for your purchase. Your Gallopics receipt has
+                    been sent by email, and your download links are ready.
                   </p>
                   {capturedOrderId && (
                     <p className="mb-6 break-all text-[0.75rem] text-[var(--color-text-secondary)]">

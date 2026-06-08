@@ -88,7 +88,7 @@ export const OnboardingProfile: React.FC = () => {
         await uploadAvatar(avatarFile);
       }
 
-      navigate('/pg/onboarding/ready');
+      navigate('/pg/pending-approval');
     } catch (error) {
       console.error('Failed to save profile', error);
       setErrors(current => ({
