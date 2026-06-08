@@ -41,6 +41,7 @@ export const UploadPage: React.FC = () => {
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const previewUrlsRef = useRef<Record<string, string>>({});
 
   // Initial Event Selection Logic
   useEffect(() => {
@@ -72,6 +73,34 @@ export const UploadPage: React.FC = () => {
   const session = selectedEventId ? uploadSessions[selectedEventId] : null;
   const files = session?.files || [];
   const hasFiles = files.length > 0;
+
+  const previewUrls = React.useMemo(() => {
+    const activeFileIds = new Set(files.map(file => file.id));
+
+    Object.entries(previewUrlsRef.current).forEach(([fileId, url]) => {
+      if (!activeFileIds.has(fileId)) {
+        URL.revokeObjectURL(url);
+        delete previewUrlsRef.current[fileId];
+      }
+    });
+
+    files.forEach(file => {
+      if (!previewUrlsRef.current[file.id]) {
+        previewUrlsRef.current[file.id] = URL.createObjectURL(file.file);
+      }
+    });
+
+    return previewUrlsRef.current;
+  }, [files]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(previewUrlsRef.current).forEach(url => {
+        URL.revokeObjectURL(url);
+      });
+      previewUrlsRef.current = {};
+    };
+  }, []);
 
   const selectedEventTitle =
     events.find(event => event.id === selectedEventId)?.title ||
@@ -258,7 +287,7 @@ export const UploadPage: React.FC = () => {
                     >
                       <div className="queue-thumb">
                         <img
-                          src={URL.createObjectURL(item.file)}
+                          src={previewUrls[item.id]}
                           alt={item.file.name}
                         />
                       </div>

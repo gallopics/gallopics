@@ -1235,28 +1235,6 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
       };
     });
 
-    // Get token for API call
-    const token = await getClerkToken?.();
-    if (!token) {
-      // No auth - mark as failed
-      setUploadSessions(prev => {
-        const session = prev[eventId];
-        if (!session) return prev;
-        return {
-          ...prev,
-          [eventId]: {
-            ...session,
-            files: session.files.map(f => ({
-              ...f,
-              status: 'failed' as const,
-              error: 'Not authenticated',
-            })),
-          },
-        };
-      });
-      return;
-    }
-
     const updateQueuedFile = (
       fileId: string,
       updates: Partial<UploadFile>
@@ -1275,6 +1253,38 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
           },
         };
       });
+    };
+
+    const getUploadToken = async (skipCache = false) => {
+      const token = await getClerkToken?.({ skipCache } as any);
+      if (!token) throw new Error('Not authenticated');
+      return token;
+    };
+
+    const uploadFormData = async (formData: FormData) => {
+      let token = await getUploadToken();
+      let response = await fetch(
+        `${getApiBaseUrl()}/api/v1/photographer/uploads`,
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        }
+      );
+
+      if (response.status === 401) {
+        token = await getUploadToken(true);
+        response = await fetch(
+          `${getApiBaseUrl()}/api/v1/photographer/uploads`,
+          {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: formData,
+          }
+        );
+      }
+
+      return response;
     };
 
     for (const [index, file] of files.entries()) {
@@ -1312,14 +1322,7 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
           takenAt: takenAt || undefined,
         });
 
-        const response = await fetch(
-          `${getApiBaseUrl()}/api/v1/photographer/uploads`,
-          {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}` },
-            body: formData,
-          }
-        );
+        const response = await uploadFormData(formData);
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
