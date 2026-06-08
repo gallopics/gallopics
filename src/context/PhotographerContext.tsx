@@ -23,6 +23,7 @@ export interface PgEvent {
   id: string;
   title: string;
   date: string; // Start date for sorting/simple display
+  endDate?: string;
   dateRange: string; // Full range "26 Nov – 30 Nov 2026"
   location: string;
   coverImage: string;
@@ -89,6 +90,10 @@ export interface UploadFile {
   status: 'pending' | 'uploading' | 'completed' | 'failed';
   error?: string;
   uploadedPhotoIds?: string[];
+  takenAt?: string;
+  matchedRider?: string;
+  matchedHorse?: string;
+  matchConfidence?: string;
 }
 
 export interface UploadSession {
@@ -128,7 +133,7 @@ interface PhotographerContextType {
   setCurrentUploadEventId: (eventId: string | null) => void; // New export
   startUpload: (
     files: File[],
-    metadata?: { classId?: string; className?: string }
+    metadata?: UploadMetadata
   ) => void; // Updated sig
   clearUploadSession: (
     eventId: string,
@@ -165,7 +170,8 @@ const mapToPgEvent = (e: EventData, isMyEvent: boolean): PgEvent => {
   return {
     id: e.id,
     title: e.name,
-    date: e.period.split(' – ')[0] || e.period,
+    date: e.startDate || e.period.split(' – ')[0] || e.period,
+    endDate: e.endDate || e.startDate,
     dateRange: e.period,
     location: `${e.city}, Sweden`, // Based on mockEvents hardcoded '🇸🇪'
     coverImage: e.coverImage,
@@ -292,16 +298,191 @@ const getApiPhotoClassId = (photo: ApiPhoto) =>
 const getApiPhotoClassName = (photo: ApiPhoto) =>
   photo.class_name || photo.event_class_name || '';
 
+const getApiPhotoTag = (photo: ApiPhoto, type: string) =>
+  photo.tags.find(tag => tag.type === type)?.value;
+
 const isUuid = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value
   );
+
+export interface UploadMetadata {
+  classId?: string;
+  eventClassId?: string;
+  classSectionId?: string;
+  equipeClassSectionId?: string;
+  className?: string;
+  takenAt?: string;
+}
 
 const getUploadErrorMessage = (status: number) => {
   if (status === 413) {
     return 'File is too large for the current upload limit.';
   }
   return `Upload failed: ${status}`;
+};
+
+const readUint16 = (view: DataView, offset: number, littleEndian: boolean) =>
+  view.getUint16(offset, littleEndian);
+
+const readUint32 = (view: DataView, offset: number, littleEndian: boolean) =>
+  view.getUint32(offset, littleEndian);
+
+const parseExifDateTime = (value: string) => {
+  const match = value
+    .trim()
+    .match(/^(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
+  if (!match) return null;
+
+  const [, year, month, day, hour, minute, second] = match;
+  const date = new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second)
+  );
+
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+};
+
+const readExifAscii = (
+  view: DataView,
+  tiffStart: number,
+  valueOffset: number,
+  count: number,
+  littleEndian: boolean
+) => {
+  const inlineValueSize = 4;
+  const stringOffset =
+    count <= inlineValueSize
+      ? valueOffset
+      : tiffStart + readUint32(view, valueOffset, littleEndian);
+
+  if (stringOffset < 0 || stringOffset + count > view.byteLength) return null;
+
+  const bytes = new Uint8Array(view.buffer, stringOffset, count);
+  return new TextDecoder('ascii')
+    .decode(bytes)
+    .replace(/\0+$/g, '')
+    .trim();
+};
+
+const findExifDateInIfd = (
+  view: DataView,
+  tiffStart: number,
+  ifdOffset: number,
+  littleEndian: boolean
+) => {
+  if (ifdOffset < 0 || ifdOffset + 2 > view.byteLength) return null;
+
+  const tagCount = readUint16(view, ifdOffset, littleEndian);
+  for (let index = 0; index < tagCount; index += 1) {
+    const entryOffset = ifdOffset + 2 + index * 12;
+    if (entryOffset + 12 > view.byteLength) return null;
+
+    const tag = readUint16(view, entryOffset, littleEndian);
+    const type = readUint16(view, entryOffset + 2, littleEndian);
+    const count = readUint32(view, entryOffset + 4, littleEndian);
+    const valueOffset = entryOffset + 8;
+
+    if ((tag === 0x9003 || tag === 0x9004) && type === 2) {
+      const value = readExifAscii(
+        view,
+        tiffStart,
+        valueOffset,
+        count,
+        littleEndian
+      );
+      const parsed = value ? parseExifDateTime(value) : null;
+      if (parsed) return parsed;
+    }
+  }
+
+  return null;
+};
+
+const extractJpegTakenAt = async (file: File) => {
+  if (!file.type.includes('jpeg') && !/\.(jpe?g)$/i.test(file.name)) {
+    return null;
+  }
+
+  const buffer = await file.slice(0, 256 * 1024).arrayBuffer();
+  const view = new DataView(buffer);
+  let offset = 2;
+
+  if (view.byteLength < 4 || view.getUint16(0) !== 0xffd8) return null;
+
+  while (offset + 4 <= view.byteLength) {
+    if (view.getUint8(offset) !== 0xff) return null;
+
+    const marker = view.getUint8(offset + 1);
+    const segmentLength = view.getUint16(offset + 2);
+    const segmentStart = offset + 4;
+    const segmentEnd = offset + 2 + segmentLength;
+
+    if (marker === 0xe1 && segmentEnd <= view.byteLength) {
+      const header = new TextDecoder('ascii').decode(
+        new Uint8Array(view.buffer, segmentStart, 6)
+      );
+      if (header === 'Exif\0\0') {
+        const tiffStart = segmentStart + 6;
+        const byteOrder = view.getUint16(tiffStart);
+        const littleEndian = byteOrder === 0x4949;
+        if (!littleEndian && byteOrder !== 0x4d4d) return null;
+
+        const firstIfdOffset = tiffStart + readUint32(view, tiffStart + 4, littleEndian);
+        const tagCount = readUint16(view, firstIfdOffset, littleEndian);
+        for (let index = 0; index < tagCount; index += 1) {
+          const entryOffset = firstIfdOffset + 2 + index * 12;
+          if (entryOffset + 12 > view.byteLength) return null;
+
+          const tag = readUint16(view, entryOffset, littleEndian);
+          if (tag === 0x8769) {
+            const exifIfdOffset =
+              tiffStart + readUint32(view, entryOffset + 8, littleEndian);
+            return findExifDateInIfd(
+              view,
+              tiffStart,
+              exifIfdOffset,
+              littleEndian
+            );
+          }
+        }
+      }
+    }
+
+    offset = segmentEnd;
+  }
+
+  return null;
+};
+
+const getFileTakenAt = async (file: File) => {
+  try {
+    const exifTakenAt = await extractJpegTakenAt(file);
+    if (exifTakenAt) return exifTakenAt;
+  } catch {
+    // Fall back to the browser file timestamp when EXIF is absent or unreadable.
+  }
+
+  return file.lastModified ? new Date(file.lastModified).toISOString() : null;
+};
+
+const normalizeUploadMetadata = (metadata?: UploadMetadata) => {
+  const classId = metadata?.classId;
+  const classIdIsInternal = classId ? isUuid(classId) : false;
+
+  return {
+    classSectionId:
+      metadata?.classSectionId || (classIdIsInternal ? classId : undefined),
+    equipeClassSectionId: metadata?.equipeClassSectionId,
+    eventClassId:
+      metadata?.eventClassId || (!classIdIsInternal ? classId : undefined),
+    className: metadata?.className,
+    takenAt: metadata?.takenAt,
+  };
 };
 
 const generateMockPhotos = (eventId: string, count: number): Photo[] => {
@@ -666,6 +847,7 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
           id: e.id,
           title: e.name || e.title || 'Untitled Event',
           date: e.start_date || e.startDate || new Date().toISOString(),
+          endDate: e.end_date || e.endDate || e.start_date || e.startDate,
           dateRange: e.period || e.dateRange || '',
           location: e.location || e.city || '',
           coverImage: e.cover_image || e.coverImage || '',
@@ -744,8 +926,10 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
           eventId: p.event_id,
           status: p.status === 'ready' ? 'uploadedUnpublished' : 'processing',
           soldCount: 0,
-          rider: undefined,
-          horse: undefined,
+          rider: getApiPhotoTag(p, 'rider'),
+          riderId: p.equipe_rider_id || undefined,
+          horse: getApiPhotoTag(p, 'horse'),
+          horseId: p.equipe_horse_id || undefined,
           timestamp: new Date(p.created_at).toLocaleTimeString().slice(0, 5),
           width: 600,
           height: 800,
@@ -1024,10 +1208,11 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
 
   const startUpload = async (
     files: File[],
-    metadata?: { classId?: string; className?: string }
+    metadata?: UploadMetadata
   ) => {
     if (!currentUploadEventId) return;
     const eventId = currentUploadEventId;
+    const uploadMetadata = normalizeUploadMetadata(metadata);
 
     // Create local tracking for each file
     const newFiles: UploadFile[] = files.map(f => ({
@@ -1097,16 +1282,26 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
       if (!queuedFile) continue;
 
       try {
+        const takenAt = uploadMetadata.takenAt || (await getFileTakenAt(file));
         const formData = new FormData();
         formData.set('event_id', eventId);
-        if (metadata?.classId && isUuid(metadata.classId)) {
-          formData.set('class_section_id', metadata.classId);
+        if (uploadMetadata.classSectionId) {
+          formData.set('class_section_id', uploadMetadata.classSectionId);
         }
-        if (metadata?.classId) {
-          formData.set('event_class_id', metadata.classId);
+        if (uploadMetadata.equipeClassSectionId) {
+          formData.set(
+            'equipe_class_section_id',
+            uploadMetadata.equipeClassSectionId
+          );
         }
-        if (metadata?.className) {
-          formData.set('class_name', metadata.className);
+        if (uploadMetadata.eventClassId) {
+          formData.set('event_class_id', uploadMetadata.eventClassId);
+        }
+        if (uploadMetadata.className) {
+          formData.set('class_name', uploadMetadata.className);
+        }
+        if (takenAt) {
+          formData.set('taken_at', takenAt);
         }
         formData.append('files', file);
 
@@ -1114,6 +1309,7 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
           status: 'uploading',
           progress: 50,
           error: undefined,
+          takenAt: takenAt || undefined,
         });
 
         const response = await fetch(
@@ -1134,34 +1330,52 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
 
         const photos: ApiPhoto[] = await response.json();
 
-        const newPhotoList: Photo[] = photos.map((p, photoIndex) => ({
-          id: p.id || queuedFile.id || `api-${Date.now()}-${photoIndex}`,
-          url:
-            (p.status === 'ready'
-              ? resolveApiAssetUrl(
-                  `/api/v1/photographer/photos/${p.id}/preview`
-                )
-              : '') ||
-            'https://images.unsplash.com/photo-1599056377758-4808a7e70337?auto=format&fit=crop&q=80&w=600',
-          eventId: p.event_id,
-          status: p.status === 'ready' ? 'uploadedUnpublished' : 'processing',
-          soldCount: 0,
-          rider: undefined,
-          horse: undefined,
-          timestamp: new Date().toLocaleTimeString().slice(0, 5),
-          width: 600,
-          height: 800,
-          fileName: file.name,
-          photoCode: generatePhotoCode(),
-          uploadDate: new Date().toISOString(),
-          batch: '',
-          classId: getApiPhotoClassId(p) || metadata?.classId || '',
-          className:
-            getApiPhotoClassName(p) ||
-            metadata?.className ||
-            metadata?.classId ||
-            '',
-        }));
+        const newPhotoList: Photo[] = photos.map((p, photoIndex) => {
+          const rider = getApiPhotoTag(p, 'rider');
+          const horse = getApiPhotoTag(p, 'horse');
+
+          return {
+            id: p.id || queuedFile.id || `api-${Date.now()}-${photoIndex}`,
+            url:
+              (p.status === 'ready'
+                ? resolveApiAssetUrl(
+                    `/api/v1/photographer/photos/${p.id}/preview`
+                  )
+                : '') ||
+              'https://images.unsplash.com/photo-1599056377758-4808a7e70337?auto=format&fit=crop&q=80&w=600',
+            eventId: p.event_id,
+            status: p.status === 'ready' ? 'uploadedUnpublished' : 'processing',
+            soldCount: 0,
+            rider,
+            riderId: p.equipe_rider_id || undefined,
+            horse,
+            horseId: p.equipe_horse_id || undefined,
+            timestamp: new Date(
+              p.taken_at || takenAt || p.created_at || Date.now()
+            )
+              .toLocaleTimeString()
+              .slice(0, 5),
+            width: 600,
+            height: 800,
+            fileName: file.name,
+            photoCode: generatePhotoCode(),
+            uploadDate: new Date().toISOString(),
+            batch: '',
+            classId:
+              getApiPhotoClassId(p) ||
+              uploadMetadata.equipeClassSectionId ||
+              uploadMetadata.classSectionId ||
+              uploadMetadata.eventClassId ||
+              '',
+            className:
+              getApiPhotoClassName(p) ||
+              uploadMetadata.className ||
+              uploadMetadata.equipeClassSectionId ||
+              uploadMetadata.classSectionId ||
+              uploadMetadata.eventClassId ||
+              '',
+          };
+        });
 
         setPhotos(prev => [...newPhotoList, ...prev]);
         updateQueuedFile(queuedFile.id, {
@@ -1169,6 +1383,9 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
           status: 'completed',
           error: undefined,
           uploadedPhotoIds: newPhotoList.map(photo => photo.id),
+          matchedRider: newPhotoList[0]?.rider,
+          matchedHorse: newPhotoList[0]?.horse,
+          matchConfidence: photos[0]?.match_confidence || undefined,
         });
       } catch (error) {
         const errorMsg =

@@ -647,15 +647,26 @@ export function EventProfile() {
                           }`}
                           onClick={() => {
                             if (isPhotographerMyEventView) {
-                              navigate(`/pg/events/${meeting.id}`, {
-                                state: {
-                                  selectedClassId: competition.classSectionId,
-                                  selectedClassName: competition.name,
-                                  selectedArenaName: competition.arenaName,
-                                  fromTab,
-                                  fromUpload: true,
-                                },
+                              const params = new URLSearchParams({
+                                classSectionId: competition.classSectionId,
+                                className: competition.name,
                               });
+                              if (competition.arenaName) {
+                                params.set('arenaName', competition.arenaName);
+                              }
+
+                              navigate(
+                                `/pg/events/${meeting.id}?${params.toString()}`,
+                                {
+                                  state: {
+                                    selectedClassId: competition.classSectionId,
+                                    selectedClassName: competition.name,
+                                    selectedArenaName: competition.arenaName,
+                                    fromTab,
+                                    fromUpload: true,
+                                  },
+                                }
+                              );
                               return;
                             }
 

@@ -3,6 +3,7 @@ import { Header } from '../components/Header';
 import { TitleHeader } from '../components/TitleHeader';
 import { Footer } from '../components/Footer';
 import { FolderEventCard } from '../components/FolderEventCard';
+import { PageTabs } from '../components/PageTabs';
 import type { EventData } from '../data/mockEvents';
 import {
   fetchEventsFromApi,
@@ -11,6 +12,7 @@ import {
 } from '../data/eventsApi';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { getEventSortTime, isPreviousEventDate } from '../lib/eventDates';
 
 import './guestHome.mobile.css';
 import './mobileSearchFix.css';
@@ -25,6 +27,9 @@ export function EventsPage() {
   >({});
   const [isLoadingEvents, setIsLoadingEvents] = useState(true);
   const [eventsError, setEventsError] = useState<string | null>(null);
+  const [activeEventTab, setActiveEventTab] = useState<'upcoming' | 'previous'>(
+    'upcoming'
+  );
   const shouldShowPhotoBackedEvents = !isAuthenticated || user?.role === 'pg';
 
   useEffect(() => {
@@ -59,7 +64,29 @@ export function EventsPage() {
     };
   }, [isLoaded, shouldShowPhotoBackedEvents]);
 
-  const filteredEvents = events;
+  const upcomingEvents = useMemo(
+    () =>
+      events
+        .filter(event => !isPreviousEventDate(event.startDate, event.endDate))
+        .sort(
+          (a, b) =>
+            getEventSortTime(a.startDate) - getEventSortTime(b.startDate)
+        ),
+    [events]
+  );
+  const previousEvents = useMemo(
+    () =>
+      events
+        .filter(event => isPreviousEventDate(event.startDate, event.endDate))
+        .sort(
+          (a, b) =>
+            getEventSortTime(b.startDate) - getEventSortTime(a.startDate)
+        ),
+    [events]
+  );
+
+  const filteredEvents =
+    activeEventTab === 'previous' ? previousEvents : upcomingEvents;
 
   useEffect(() => {
     const eventsMissingCovers = filteredEvents.filter(
@@ -139,6 +166,16 @@ export function EventsPage() {
       <section className="grid-section">
         <div className="container">
           <h2 className="section-title">Browse events</h2>
+          <PageTabs
+            tabs={[
+              { id: 'upcoming', label: `Current (${upcomingEvents.length})` },
+              { id: 'previous', label: `Previous (${previousEvents.length})` },
+            ]}
+            activeTab={activeEventTab}
+            onChange={tabId =>
+              setActiveEventTab(tabId === 'previous' ? 'previous' : 'upcoming')
+            }
+          />
 
           {isLoadingEvents ? (
             <div className="pg-empty-state">
@@ -161,7 +198,11 @@ export function EventsPage() {
             </div>
           ) : (
             <div className="pg-empty-state">
-              <h3>No events available – yet</h3>
+              <h3>
+                {activeEventTab === 'previous'
+                  ? 'No previous events available'
+                  : 'No current events available'}
+              </h3>
             </div>
           )}
         </div>
