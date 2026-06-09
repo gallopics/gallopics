@@ -8,7 +8,6 @@ import {
 import { RotateCcw, Trash2, ChevronRight, ChevronDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import '../../styles/shared-filters.css';
-import { assetUrl } from '../../lib/utils';
 
 // Mock Data
 // Mock Data - Robust Generation
@@ -117,8 +116,7 @@ const MOCK_PHOTOGRAPHERS = [
   id: String(i + 1),
   ...p,
   email: `${p.name.toLowerCase().replace(' ', '.')}@gallopics.se`,
-  // Use the convention from EventsList: Name + .jpg
-  avatarUrl: assetUrl(`images/${p.name}.jpg`),
+  avatarUrl: '',
   subEvents: [
     {
       id: `e${i}-1`,

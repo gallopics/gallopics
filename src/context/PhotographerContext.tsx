@@ -4,7 +4,7 @@ import React, {
   useState,
   type ReactNode,
 } from 'react';
-import { assetUrl, formatLabel } from '../lib/utils';
+import { formatLabel } from '../lib/utils';
 import { useAuth } from './AuthContext';
 import {
   api,
@@ -156,13 +156,7 @@ interface PhotographerContextType {
 }
 
 import { allMockEvents, type EventData, SHOW_EVENTS } from '../data/mockEvents';
-import {
-  photos as basePhotos,
-  RIDERS,
-  HORSES,
-  RIDER_PRIMARY_HORSE,
-  PHOTOGRAPHERS,
-} from '../data/mockData';
+import { PHOTOGRAPHERS } from '../data/mockData';
 
 // Mapped Data based on shared mockEvents
 // Filter/Assign events to our mock photographer "Klara Fors"
@@ -213,9 +207,7 @@ const MOCK_EVENTS: PgEvent[] = allMockEvents.map(e => {
         {
           id: PHOTOGRAPHERS[1].id,
           name: `${PHOTOGRAPHERS[1].firstName} ${PHOTOGRAPHERS[1].lastName}`,
-          avatar: assetUrl(
-            `images/${PHOTOGRAPHERS[1].firstName} ${PHOTOGRAPHERS[1].lastName}.jpg`
-          ),
+          avatar: '',
         },
       ];
       mapped.applicationsWelcomed = true;
@@ -230,9 +222,7 @@ const MOCK_EVENTS: PgEvent[] = allMockEvents.map(e => {
           {
             id: PHOTOGRAPHERS[0].id,
             name: `${PHOTOGRAPHERS[0].firstName} ${PHOTOGRAPHERS[0].lastName}`,
-            avatar: assetUrl(
-              `images/${PHOTOGRAPHERS[0].firstName} ${PHOTOGRAPHERS[0].lastName}.jpg`
-            ),
+            avatar: '',
           },
         ];
       }
@@ -254,9 +244,7 @@ const MOCK_EVENTS: PgEvent[] = allMockEvents.map(e => {
         {
           id: PHOTOGRAPHERS[0].id,
           name: `${PHOTOGRAPHERS[0].firstName} ${PHOTOGRAPHERS[0].lastName}`,
-          avatar: assetUrl(
-            `images/${PHOTOGRAPHERS[0].firstName} ${PHOTOGRAPHERS[0].lastName}.jpg`
-          ),
+          avatar: '',
         },
       ];
     }
@@ -269,17 +257,6 @@ const MOCK_EVENTS: PgEvent[] = allMockEvents.map(e => {
 
   return mapped;
 });
-
-// Helpers for randomization (Copied/Adapted from EventProfile.tsx)
-function pick<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-const randomInt = (min: number, max: number) =>
-  Math.floor(Math.random() * (max - min) + min);
-
-// Class names from existing mock data patterns (Limited to 3 per user request)
-const MOCK_CLASSES = ['1.20m Jumping', '1.30m Grand Prix', 'Dressage Int. B'];
-const MOCK_BATCHES = ['Random', 'Misc', '']; // Empty = Uncategorised
 
 const generatePhotoCode = () => {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -489,269 +466,6 @@ const normalizeUploadMetadata = (metadata?: UploadMetadata) => {
   };
 };
 
-const generateMockPhotos = (eventId: string, count: number): Photo[] => {
-  const srcPool = Array.from(new Set(basePhotos.map(p => p.src)));
-
-  return Array.from({ length: count }).map((_, i) => {
-    const src = pick(srcPool);
-
-    const ratioType = Math.random();
-    let width = 600;
-    let height = 800;
-    if (ratioType > 0.66) {
-      width = 800;
-      height = 600;
-    } else if (ratioType > 0.33) {
-      width = 800;
-      height = 800;
-    }
-
-    if (ratioType < 0.33) height += randomInt(-50, 50);
-
-    // Determine mock status - Increased Published density for better demo
-    const rand = Math.random();
-    let status: Photo['status'] = 'uploadedUnpublished'; // Default for "Uploads" tab
-    let soldCount = 0;
-
-    if (rand > 0.65) {
-      // 35% are published now
-      status = 'published';
-      // Randomly assign soldCount (Mostly 0, some 1, a few 2)
-      const sellRand = Math.random();
-      if (sellRand > 0.8) soldCount = 1; // 20% of published have 1 sale
-      if (sellRand > 0.95) soldCount = 2; // 5% of published have 2 sales
-    } else if (rand > 0.5) {
-      // 15% are archived (Increased density)
-      status = 'archived';
-      // Archived photos can have sales history too
-      const sellRand = Math.random();
-      if (sellRand > 0.4) soldCount = randomInt(2, 6); // 60% of archived have 2-5 sales
-    } else if (rand > 0.45) {
-      // 10% need review
-      status = 'needsReview';
-    }
-
-    // New metadata for Uploads tab
-    const hasTags = Math.random() > 0.1; // 90% have tags
-    const batch = pick(MOCK_BATCHES);
-    const hasClass = hasTags && Math.random() > 0.2; // 80% of tagged photos have a class
-    const classData = hasClass ? pick(MOCK_CLASSES) : undefined;
-
-    // Use consistent rider/horse names to ensure good distribution per tag
-    const riderIndex = i % 3 < 2 ? i % 2 : 2; // 2/3 of photos use first 2 riders
-    const selectedRider = RIDERS[riderIndex];
-    const selectedHorseMapping = RIDER_PRIMARY_HORSE.find(
-      m => m.riderId === selectedRider.id
-    );
-    const selectedHorse =
-      HORSES.find(h => h.id === selectedHorseMapping?.primaryHorseId) ||
-      HORSES[0];
-
-    // Randomize price bundles for Published filtering coverage
-    const bundleRand = Math.random();
-    let priceStandard = 499;
-    let priceHigh = 999;
-    let priceCommercial = 1500;
-
-    if (bundleRand < 0.33) {
-      // Basic (previously lower, now harmonized)
-      priceStandard = 499;
-      priceHigh = 999;
-      priceCommercial = 1500;
-    } else if (bundleRand < 0.66) {
-      // Standard
-      priceStandard = 499;
-      priceHigh = 999;
-      priceCommercial = 1500;
-    }
-
-    const isDuplicate = false;
-    const isGeneric = hasTags && Math.random() > 0.8; // 20% of tagged photos are generic
-
-    return {
-      id: `${eventId}-p-${i}-${generatePhotoCode().slice(4)}`,
-      url: src,
-      eventId: eventId,
-      status: status,
-      soldCount: soldCount,
-      rider:
-        hasTags && !isGeneric
-          ? `${selectedRider.firstName} ${selectedRider.lastName}`
-          : undefined,
-      riderId: hasTags && !isGeneric ? selectedRider.id : undefined,
-      horse: hasTags && !isGeneric ? selectedHorse.name : undefined,
-      horseId: hasTags && !isGeneric ? selectedHorse.id : undefined,
-      timestamp: `${10 + (i % 8)}:${String(randomInt(0, 59)).padStart(2, '0')}`,
-      width,
-      height,
-      title: isGeneric
-        ? i % 2 === 0
-          ? 'Prize ceremony'
-          : 'Atmospheric'
-        : `Photo ${i}`,
-      description: isGeneric ? 'Beautiful sunny day at the arena' : undefined,
-      isGeneric: isGeneric,
-      fileName: `IMG_${2000 + i}.jpg`,
-      photoCode: generatePhotoCode(),
-      uploadDate: '2026-01-20',
-      batch: batch,
-      classId: hasClass && !isGeneric ? `class-${i % 3}` : undefined,
-      className: hasClass && !isGeneric ? classData : undefined,
-      isDuplicate: isDuplicate,
-      storedLocation:
-        status === 'published'
-          ? 'Published'
-          : ((batch || 'Uncategorised') as any),
-      priceStandard: priceStandard,
-      priceHigh: priceHigh,
-      priceCommercial: priceCommercial,
-    };
-  });
-};
-
-const generateDuplicateGroups = (eventId: string): Photo[] => {
-  const groups = [];
-  // src pool for duplicates
-  const srcPool = Array.from(new Set(basePhotos.map(p => p.src)));
-
-  // Group 1: 3 instances (Random, Misc, Published)
-  const src1 = srcPool[0];
-  const grp1Id = 'dup-group-1';
-  const baseP1 = {
-    fileName: 'IMG_DUPLICATE_1.jpg',
-    photoCode: 'DUP-10001',
-    url: src1,
-    width: 600,
-    height: 800,
-  };
-
-  // Instance 1.1: Random
-  groups.push({
-    ...baseP1,
-    id: `${eventId}-dup-1-1`,
-    eventId,
-    status: 'uploadedUnpublished',
-    batch: 'Random',
-    storedLocation: 'Random',
-    isDuplicate: true,
-    duplicateGroupId: grp1Id,
-    soldCount: 0,
-    timestamp: '10:00',
-    uploadDate: '2026-01-20',
-  });
-  // Instance 1.2: Misc
-  groups.push({
-    ...baseP1,
-    id: `${eventId}-dup-1-2`,
-    eventId,
-    status: 'uploadedUnpublished',
-    batch: 'Misc',
-    storedLocation: 'Misc',
-    isDuplicate: true,
-    duplicateGroupId: grp1Id,
-    soldCount: 0,
-    timestamp: '10:00',
-    uploadDate: '2026-01-20',
-  });
-  // Instance 1.3: Published
-  groups.push({
-    ...baseP1,
-    id: `${eventId}-dup-1-3`,
-    eventId,
-    status: 'published',
-    batch: 'Random', // irrelevant if published usually, but let's keep it safe
-    storedLocation: 'Published',
-    isDuplicate: true,
-    duplicateGroupId: grp1Id,
-    soldCount: 0,
-    timestamp: '10:00',
-    uploadDate: '2026-01-20',
-  });
-
-  // Group 2: 2 instances (Uncategorised, Random)
-  const src2 = srcPool[1] || srcPool[0];
-  const grp2Id = 'dup-group-2';
-  const baseP2 = {
-    fileName: 'IMG_DUPLICATE_2.jpg',
-    photoCode: 'DUP-20002',
-    url: src2,
-    width: 800,
-    height: 600,
-  };
-  groups.push({
-    ...baseP2,
-    id: `${eventId}-dup-2-1`,
-    eventId,
-    status: 'uploadedUnpublished',
-    batch: '', // Uncategorised
-    storedLocation: 'Uncategorised',
-    isDuplicate: true,
-    duplicateGroupId: grp2Id,
-    soldCount: 0,
-    timestamp: '11:30',
-    uploadDate: '2026-01-20',
-  });
-  groups.push({
-    ...baseP2,
-    id: `${eventId}-dup-2-2`,
-    eventId,
-    status: 'uploadedUnpublished',
-    batch: 'Random',
-    storedLocation: 'Random',
-    isDuplicate: true,
-    duplicateGroupId: grp2Id,
-    soldCount: 0,
-    timestamp: '11:30',
-    uploadDate: '2026-01-20',
-  });
-
-  // Group 3: 2 instances (Misc, Published)
-  const src3 = srcPool[2] || srcPool[0];
-  const grp3Id = 'dup-group-3';
-  const baseP3 = {
-    fileName: 'IMG_DUPLICATE_3.jpg',
-    photoCode: 'DUP-30003',
-    url: src3,
-    width: 600,
-    height: 800,
-  };
-  groups.push({
-    ...baseP3,
-    id: `${eventId}-dup-3-1`,
-    eventId,
-    status: 'uploadedUnpublished',
-    batch: 'Misc',
-    storedLocation: 'Misc',
-    isDuplicate: true,
-    duplicateGroupId: grp3Id,
-    soldCount: 0,
-    timestamp: '14:15',
-    uploadDate: '2026-01-20',
-  });
-  groups.push({
-    ...baseP3,
-    id: `${eventId}-dup-3-2`,
-    eventId,
-    status: 'published',
-    batch: 'Misc',
-    storedLocation: 'Published',
-    isDuplicate: true,
-    duplicateGroupId: grp3Id,
-    soldCount: 0,
-    timestamp: '14:15',
-    uploadDate: '2026-01-20',
-  });
-
-  return groups as Photo[];
-};
-
-const MOCK_PHOTOS: Photo[] = [
-  ...generateMockPhotos('c1', 120),
-  ...generateDuplicateGroups('c1'),
-  ...generateMockPhotos('c2', 80),
-  ...generateMockPhotos('c3', 60),
-];
-
 // --- Context & Provider ---
 
 const PhotographerContext = createContext<PhotographerContextType | undefined>(
@@ -772,7 +486,7 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
   const [events, setEvents] = useState<PgEvent[]>(
     SHOW_EVENTS ? MOCK_EVENTS : []
   );
-  const [photos, setPhotos] = useState<Photo[]>(MOCK_PHOTOS);
+  const [photos, setPhotos] = useState<Photo[]>([]);
 
   // Upload State
   const [isUploadOverlayOpen, setIsUploadOverlayOpen] = useState(false);
@@ -1375,12 +1089,11 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
           return {
             id: p.id || queuedFile.id || `api-${Date.now()}-${photoIndex}`,
             url:
-              (p.status === 'ready'
+              p.status === 'ready'
                 ? resolveApiAssetUrl(
                     `/api/v1/photographer/photos/${p.id}/preview`
-                  )
-                : '') ||
-              'https://images.unsplash.com/photo-1599056377758-4808a7e70337?auto=format&fit=crop&q=80&w=600',
+                  ) || ''
+                : '',
             eventId: p.event_id,
             status: p.status === 'ready' ? 'uploadedUnpublished' : 'processing',
             soldCount: 0,

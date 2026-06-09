@@ -4,7 +4,6 @@ import { ModernDropdown } from '../../../components/ModernDropdown';
 import { MultiSelect } from '../../../components/MultiSelect';
 import { Toggle } from '../../../components/Toggle';
 import { PHOTOGRAPHERS } from '../../../data/mockData';
-import { assetUrl } from '../../../lib/utils';
 
 interface AddEventModalProps {
   isOpen: boolean;
@@ -108,7 +107,7 @@ export const AddEventModal: React.FC<AddEventModalProps> = ({
     label: `${p.firstName} ${p.lastName}`,
     value: p.id,
     subtext: p.city,
-    icon: assetUrl(`images/${p.firstName} ${p.lastName}.jpg`),
+    icon: '',
   }));
 
   // Handle ESC key

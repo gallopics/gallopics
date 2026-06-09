@@ -13,7 +13,6 @@ import { Footer } from '../components/Footer';
 import { ModernDropdown } from '../components/ModernDropdown';
 import { InfoChip } from '../components/InfoChip';
 import {
-  photos as mockPhotos,
   COMPETITIONS,
   PHOTOGRAPHERS,
   RIDERS,
@@ -32,7 +31,6 @@ import { useCart } from '../context/CartContext';
 import { CheckoutPanel } from '../components/CheckoutPanel';
 import { WatermarkedPhotoPreview } from '../components/WatermarkedPhotoPreview';
 import { ContactSupportModal } from '../components/ContactSupportModal';
-import { assetUrl } from '../lib/utils';
 import {
   api,
   resolveApiAssetUrl,
@@ -143,9 +141,29 @@ export function ImageProfile() {
     };
   }, [id]);
 
-  const photo = useMemo(
-    () => apiPhoto || routePhoto || mockPhotos.find(p => p.id === id) || mockPhotos[0],
-    [apiPhoto, id, routePhoto],
+  const photo = useMemo<Photo>(
+    () =>
+      apiPhoto ||
+      routePhoto || {
+        id: id || '',
+        src: '',
+        rider: 'Unassigned',
+        horse: 'Uploaded photo',
+        event: 'Event',
+        eventId: eventIdParam || '',
+        date: '',
+        width: 600,
+        height: 800,
+        className: 'Uploaded',
+        time: '',
+        city: '',
+        arena: '',
+        countryCode: 'se',
+        discipline: '',
+        photographer: 'Gallopics',
+        photographerId: '',
+      },
+    [apiPhoto, eventIdParam, id, routePhoto],
   );
   const event = useMemo(
     () => COMPETITIONS.find(c => c.id === photo.eventId),
@@ -167,7 +185,7 @@ export function ImageProfile() {
       ? photo.photographer
       : photo.photographer || 'Gallopics';
     const fallbackAvatarUrl = hasMockPhotographer
-      ? assetUrl(`images/${photographer.firstName} ${photographer.lastName}.jpg`)
+      ? undefined
       : undefined;
 
     return {
@@ -282,6 +300,7 @@ export function ImageProfile() {
 
   // Track recently viewed
   useEffect(() => {
+    if (!apiPhoto && !routePhoto) return;
     if (!photo.id) return;
     const saved = localStorage.getItem('gallopics_recent');
     let recent: string[] = saved ? JSON.parse(saved) : [];

@@ -12,7 +12,6 @@ import { PhotoCard } from '../components/PhotoCard';
 import { ModernDropdown } from '../components/ModernDropdown';
 import { InfoChip } from '../components/InfoChip';
 import {
-  photos as mockPhotos,
   RIDERS,
   HORSES,
   COMPETITIONS,
@@ -78,14 +77,8 @@ export function RiderProfile() {
   const [photographer, setPhotographer] = useState('All');
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const riderFullName = `${activeRider.firstName} ${activeRider.lastName}`;
-      const riderPhotos = mockPhotos.filter(p => p.rider === riderFullName);
-      setPhotos(riderPhotos);
-      setIsLoading(false);
-    }, 1000);
-
-    return () => clearTimeout(timer);
+    setPhotos([]);
+    setIsLoading(false);
   }, [activeRider]);
 
   // Compute latest event once photos are loaded
