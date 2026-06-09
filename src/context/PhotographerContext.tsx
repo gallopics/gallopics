@@ -118,7 +118,10 @@ interface PhotographerContextType {
   deletePhotos: (photoIds: string[]) => Promise<void>;
   restorePhotos: (photosToRestore: Photo[]) => void;
   setPhotoPrice: (photoIds: string[], price: number) => void;
-  updatePhotoMetadata: (photoIds: string[], metadata: Partial<Photo>) => void;
+  updatePhotoMetadata: (
+    photoIds: string[],
+    metadata: Partial<Photo>
+  ) => Promise<void>;
   republishPhoto: (photoId: string) => void;
 
   // Duplicates
@@ -290,6 +293,7 @@ const generatePhotoCode = () => {
 };
 
 const getApiPhotoClassId = (photo: ApiPhoto) =>
+  photo.equipe_class_section_id ||
   photo.class_id ||
   photo.class_section_id ||
   photo.event_class_id ||
@@ -1048,12 +1052,43 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
     console.log(`Set price to ${price} for`, photoIds);
   };
 
-  const updatePhotoMetadata = (
+  const updatePhotoMetadata = async (
     photoIds: string[],
     metadata: Partial<Photo>
   ) => {
     setPhotos(prev =>
       prev.map(p => (photoIds.includes(p.id) ? { ...p, ...metadata } : p))
+    );
+
+    const apiPhotoIds = photoIds.filter(isUuid);
+    if (apiPhotoIds.length === 0) return;
+
+    const buildTags = (photo: Photo, updates: Partial<Photo>) => {
+      const next = { ...photo, ...updates };
+      const tags: Array<{ type: string; value: string }> = [];
+
+      if (next.rider && !next.isGeneric) {
+        tags.push({ type: 'rider', value: next.rider });
+      }
+      if (next.horse && !next.isGeneric) {
+        tags.push({ type: 'horse', value: next.horse });
+      }
+      if (next.className && !next.isGeneric) {
+        tags.push({ type: 'class', value: next.className });
+      }
+      return tags;
+    };
+
+    const photosById = new Map(photos.map(photo => [photo.id, photo]));
+    await Promise.all(
+      apiPhotoIds.map(photoId => {
+        const photo = photosById.get(photoId);
+        if (!photo) return Promise.resolve();
+
+        return api.updatePhoto(getClerkToken, photoId, {
+          tags: buildTags(photo, metadata),
+        });
+      })
     );
   };
 

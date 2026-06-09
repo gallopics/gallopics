@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { usePhotographer, type Photo } from '../../context/PhotographerContext';
 import { RIDERS, HORSES } from '../../data/mockData';
+import { fetchClassSectionStarts } from '../../data/eventsApi';
 import { PgCustomSelect } from './PgCustomSelect';
 import { PgToast } from './PgToast';
 import { TOAST_TOKENS } from '../../context/ToastTokens';
@@ -126,6 +127,9 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
   const [isCreatingBatch, setIsCreatingBatch] = useState(false);
   const [newBatchName, setNewBatchName] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [classStarts, setClassStarts] = useState<
+    Array<{ riderName?: string | null; horseName?: string | null }>
+  >([]);
 
   // Confirmation Modals State
   const [confirmModal, setConfirmModal] = useState<{
@@ -140,10 +144,75 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
     [selectedPhotos],
   );
 
-  // Filter Logic
-  const availableHorses = useMemo(() => {
-    return HORSES;
-  }, []);
+  const selectedClassId = useMemo(() => {
+    const ids = new Set(
+      selectedPhotos
+        .map(photo => photo.classId)
+        .filter((value): value is string => Boolean(value))
+    );
+    return ids.size === 1 ? Array.from(ids)[0] : '';
+  }, [selectedPhotos]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setClassStarts([]);
+
+    if (!isOpen || !selectedClassId) return;
+
+    fetchClassSectionStarts(selectedClassId)
+      .then(starts => {
+        if (cancelled) return;
+        setClassStarts(
+          starts.map(start => ({
+            riderName: start.rider_name,
+            horseName: start.horse_name,
+          }))
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setClassStarts([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, selectedClassId]);
+
+  const riderOptions = useMemo(() => {
+    const names = new Set<string>();
+    classStarts.forEach(start => {
+      if (start.riderName) names.add(start.riderName);
+    });
+    selectedPhotos.forEach(photo => {
+      if (photo.rider && photo.rider !== 'None') names.add(photo.rider);
+    });
+
+    if (names.size === 0) {
+      RIDERS.forEach(rider => names.add(`${rider.firstName} ${rider.lastName}`));
+    }
+
+    return Array.from(names)
+      .sort((a, b) => a.localeCompare(b))
+      .map(name => ({ label: name, value: name }));
+  }, [classStarts, selectedPhotos]);
+
+  const horseOptions = useMemo(() => {
+    const names = new Set<string>();
+    classStarts.forEach(start => {
+      if (start.horseName) names.add(start.horseName);
+    });
+    selectedPhotos.forEach(photo => {
+      if (photo.horse && photo.horse !== 'None') names.add(photo.horse);
+    });
+
+    if (names.size === 0) {
+      HORSES.forEach(horse => names.add(horse.name));
+    }
+
+    return Array.from(names)
+      .sort((a, b) => a.localeCompare(b))
+      .map(name => ({ label: name, value: name }));
+  }, [classStarts, selectedPhotos]);
 
   // Toast State
   const [toast, setToast] = useState<{
@@ -499,7 +568,7 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
     propsOnClose();
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const ids = selectedPhotos.map(p => p.id);
     const prevMetadata = selectedPhotos.map(p => ({
       id: p.id,
@@ -547,11 +616,27 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
     updates.priceHigh = finalPrice.high;
     updates.priceCommercial = finalPrice.commercial;
 
-    updatePhotoMetadata(ids, updates);
+    try {
+      await updatePhotoMetadata(ids, updates);
 
-    triggerToast('Changes saved', 'success', 'panel', () => {
+      triggerToast('Changes saved', 'success', 'panel', () => {
+        prevMetadata.forEach(meta => {
+          void updatePhotoMetadata([meta.id], {
+            rider: meta.rider,
+            horse: meta.horse,
+            className: meta.className,
+            isGeneric: meta.isGeneric,
+            title: meta.title || '',
+            description: meta.description || '',
+            priceStandard: meta.priceStandard,
+            priceHigh: meta.priceHigh,
+            priceCommercial: meta.priceCommercial,
+          }).catch(() => undefined);
+        });
+      });
+    } catch {
       prevMetadata.forEach(meta => {
-        updatePhotoMetadata([meta.id], {
+        void updatePhotoMetadata([meta.id], {
           rider: meta.rider,
           horse: meta.horse,
           className: meta.className,
@@ -561,9 +646,11 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
           priceStandard: meta.priceStandard,
           priceHigh: meta.priceHigh,
           priceCommercial: meta.priceCommercial,
-        });
+        }).catch(() => undefined);
       });
-    });
+      triggerToast('Unable to save changes', 'danger', 'panel');
+      return;
+    }
 
     setOriginalState({
       rider,
@@ -870,10 +957,7 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
                                 onChange={val => handleChange('rider', val)}
                                 options={[
                                   { label: 'None', value: 'None' },
-                                  ...RIDERS.map(r => ({
-                                    label: `${r.firstName} ${r.lastName}`,
-                                    value: `${r.firstName} ${r.lastName}`,
-                                  })),
+                                  ...riderOptions,
                                 ]}
                                 placeholder={
                                   isSingle
@@ -894,10 +978,7 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
                                 onChange={val => handleChange('horse', val)}
                                 options={[
                                   { label: 'None', value: 'None' },
-                                  ...availableHorses.map(h => ({
-                                    label: h.name,
-                                    value: h.name,
-                                  })),
+                                  ...horseOptions,
                                 ]}
                                 placeholder={
                                   isSingle

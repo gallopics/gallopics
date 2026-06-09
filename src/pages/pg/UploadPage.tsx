@@ -30,6 +30,7 @@ export const UploadPage: React.FC = () => {
   const urlEventId = searchParams.get('eventId');
   const urlClassId = searchParams.get('classId');
   const urlEventClassId = searchParams.get('eventClassId');
+  const urlEquipeClassSectionId = searchParams.get('equipeClassSectionId');
   const urlClassSectionId =
     searchParams.get('classSectionId') || searchParams.get('class_section_id');
   const urlClassName = searchParams.get('className');
@@ -170,9 +171,10 @@ export const UploadPage: React.FC = () => {
           ? urlClassSectionId
           : undefined;
     const equipeClassSectionId =
-      urlClassSectionId && !UUID_PATTERN.test(urlClassSectionId)
+      urlEquipeClassSectionId ||
+      (urlClassSectionId && !UUID_PATTERN.test(urlClassSectionId)
         ? urlClassSectionId
-        : undefined;
+        : undefined);
     const eventClassId =
       urlEventClassId || (!urlClassIdIsInternal ? urlClassId : undefined);
 
@@ -206,7 +208,16 @@ export const UploadPage: React.FC = () => {
   const handleViewPhotos = () => {
     if (!selectedEventId) return;
     void clearUploadSession(selectedEventId);
-    navigate(`${basePath}/events/${selectedEventId}`);
+    const params = new URLSearchParams();
+    if (urlClassSectionId) params.set('classSectionId', urlClassSectionId);
+    if (urlEquipeClassSectionId) {
+      params.set('equipeClassSectionId', urlEquipeClassSectionId);
+    }
+    if (urlClassName) params.set('className', urlClassName);
+    if (urlArenaName) params.set('arenaName', urlArenaName);
+
+    const query = params.toString();
+    navigate(`${basePath}/events/${selectedEventId}${query ? `?${query}` : ''}`);
   };
 
   return (

@@ -60,6 +60,7 @@ export interface Meeting {
 
 export interface ClassSection {
   classSectionId: string;
+  equipeClassSectionId?: string;
   name: string;
   startTime: string;
   position: number;

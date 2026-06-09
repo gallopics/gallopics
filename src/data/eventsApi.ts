@@ -92,6 +92,15 @@ interface ApiEventClass {
   arena: string;
   discipline?: string | null;
   position: number;
+  class_sections?: Array<{
+    id: string;
+    meeting_class_id?: string | null;
+    categories?: string[];
+    sec_per_start?: number | null;
+    finish_at?: string | null;
+    state?: string | null;
+    total?: number | null;
+  }>;
 }
 
 interface ApiEventScheduleDay {
@@ -104,6 +113,16 @@ export interface ApiEventSchedule {
   equipe_meeting_id: string;
   classes_count: number;
   days: ApiEventScheduleDay[];
+}
+
+export interface ApiClassSectionStart {
+  id: string;
+  rider_id?: string | null;
+  horse_id?: string | null;
+  rider_name?: string | null;
+  horse_name?: string | null;
+  start_no?: string | null;
+  result_at?: string | null;
 }
 
 function normalizeCountry(country: string) {
@@ -329,6 +348,7 @@ export function mapApiScheduleToDailySchedule(
       if (!arenas.has(eventClass.arena)) arenas.set(eventClass.arena, []);
       arenas.get(eventClass.arena)!.push({
         classSectionId: eventClass.id,
+        equipeClassSectionId: eventClass.class_sections?.[0]?.id,
         name: eventClass.name,
         startTime: eventClass.start_time || 'TBD',
         position: eventClass.position,
@@ -431,4 +451,20 @@ export async function fetchEventScheduleFromApi(
   }
 
   return (await response.json()) as ApiEventSchedule;
+}
+
+export async function fetchClassSectionStarts(
+  classSectionId: string
+): Promise<ApiClassSectionStart[]> {
+  const url = new URL(
+    `/api/v1/events/class-sections/${encodeURIComponent(classSectionId)}/starts`,
+    getApiBaseUrl()
+  );
+  const response = await fetchWithTimeout(url);
+
+  if (!response.ok) {
+    throw new Error(`Failed to load class starts: ${response.status}`);
+  }
+
+  return (await response.json()) as ApiClassSectionStart[];
 }
