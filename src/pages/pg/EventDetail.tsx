@@ -110,6 +110,7 @@ export const EventDetail: React.FC = () => {
     const state = location.state as
       | {
           selectedClassId?: string;
+          selectedEquipeClassSectionId?: string;
           selectedClassName?: string;
           selectedArenaName?: string;
         }
@@ -122,6 +123,10 @@ export const EventDetail: React.FC = () => {
         state?.selectedClassId ||
         params.get('classSectionId') ||
         params.get('classId') ||
+        '',
+      equipeClassSectionId:
+        state?.selectedEquipeClassSectionId ||
+        params.get('equipeClassSectionId') ||
         '',
       name: state?.selectedClassName || params.get('className') || '',
       arenaName: state?.selectedArenaName || params.get('arenaName') || '',
@@ -958,6 +963,12 @@ export const EventDetail: React.FC = () => {
                     });
                     if (selectedClassContext.id) {
                       params.set('classSectionId', selectedClassContext.id);
+                    }
+                    if (selectedClassContext.equipeClassSectionId) {
+                      params.set(
+                        'equipeClassSectionId',
+                        selectedClassContext.equipeClassSectionId
+                      );
                     }
                     if (selectedClassContext.name) {
                       params.set('className', selectedClassContext.name);

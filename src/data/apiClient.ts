@@ -454,6 +454,7 @@ export interface ApiPhoto {
   class_id?: string | null;
   class_section_id?: string | null;
   event_class_id?: string | null;
+  equipe_class_section_id?: string | null;
   class_name?: string | null;
   event_class_name?: string | null;
   taken_at?: string | null;

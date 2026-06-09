@@ -651,6 +651,12 @@ export function EventProfile() {
                                 classSectionId: competition.classSectionId,
                                 className: competition.name,
                               });
+                              if (competition.equipeClassSectionId) {
+                                params.set(
+                                  'equipeClassSectionId',
+                                  competition.equipeClassSectionId
+                                );
+                              }
                               if (competition.arenaName) {
                                 params.set('arenaName', competition.arenaName);
                               }
@@ -660,6 +666,8 @@ export function EventProfile() {
                                 {
                                   state: {
                                     selectedClassId: competition.classSectionId,
+                                    selectedEquipeClassSectionId:
+                                      competition.equipeClassSectionId,
                                     selectedClassName: competition.name,
                                     selectedArenaName: competition.arenaName,
                                     fromTab,
