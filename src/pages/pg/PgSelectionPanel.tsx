@@ -4,12 +4,10 @@ import {
   Clock,
   Trash2,
   MoreVertical,
-  RotateCcw,
   Save,
   Slash,
   ChevronDown,
   Plus,
-  Check,
   Pencil,
   Info,
   ChevronRight,
@@ -33,16 +31,10 @@ interface PgSelectionPanelProps {
   onShowToast?: (
     msg: string,
     type: 'success' | 'moved' | 'warning' | 'danger',
-    onUndo?: () => void,
+    onUndo?: () => void
   ) => void;
 }
 
-const CLASSES = [
-  '1.20m Jumping',
-  '1.30m Grand Prix',
-  '1.10m Young Horses',
-  'Dressage Int. B',
-];
 const BATCHES = ['Random', 'Misc', 'Uncategorised'];
 
 const BUNDLES = {
@@ -63,9 +55,7 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
   const {
     updatePhotoMetadata,
     deletePhotos,
-    updatePhotoStatus,
     restorePhotos,
-    republishPhoto,
   } = usePhotographer();
 
   // Derived Selection
@@ -82,11 +72,6 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
   const [horse, setHorse] = useState<string>('');
   const [cls, setCls] = useState<string>('');
   const [isGeneric, setIsGeneric] = useState(false);
-  const [cachedSelections, setCachedSelections] = useState<{
-    rider: string;
-    horse: string;
-    cls: string;
-  } | null>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [viewMode, setViewMode] = useState<'edit' | 'summary'>('edit');
@@ -133,16 +118,9 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
 
   // Confirmation Modals State
   const [confirmModal, setConfirmModal] = useState<{
-    type: 'delete' | 'refresh' | 'close' | 'publish' | 'unpublish';
+    type: 'delete' | 'close';
     isOpen: boolean;
   }>({ type: 'close', isOpen: false });
-
-  const isArchived = useMemo(
-    () =>
-      selectedPhotos.length > 0 &&
-      selectedPhotos.every(p => p.status === 'archived'),
-    [selectedPhotos],
-  );
 
   const selectedClassId = useMemo(() => {
     const ids = new Set(
@@ -188,7 +166,9 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
     });
 
     if (names.size === 0) {
-      RIDERS.forEach(rider => names.add(`${rider.firstName} ${rider.lastName}`));
+      RIDERS.forEach(rider =>
+        names.add(`${rider.firstName} ${rider.lastName}`)
+      );
     }
 
     return Array.from(names)
@@ -227,7 +207,7 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
     msg: string,
     type: 'success' | 'moved' | 'warning' | 'danger',
     context: 'global' | 'panel',
-    undo?: () => void,
+    undo?: () => void
   ) => {
     if (context === 'global' && onShowToast) {
       onShowToast(msg, type, undo);
@@ -340,7 +320,6 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
         setIsGeneric(p.isGeneric || false);
         setTitle(displayTitle);
         setDescription(p.description || '');
-        setCachedSelections(null);
 
         setPriceBundle(bundle);
         if (bundle === 'custom') {
@@ -432,17 +411,6 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
     description,
   ]);
 
-  const canReset = useMemo(() => {
-    return (
-      (!!rider && rider !== 'None') ||
-      (!!horse && horse !== 'None') ||
-      (!!cls && cls !== 'None') ||
-      isGeneric ||
-      !!title ||
-      !!description
-    );
-  }, [rider, horse, cls, isGeneric, title, description]);
-
   // Handlers
   const handleChange = (field: string, value: string) => {
     setTouched(true);
@@ -461,97 +429,16 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
   };
 
   const handleBundleSelect = (
-    bundle: 'basic' | 'standard' | 'premium' | 'custom',
+    bundle: 'basic' | 'standard' | 'premium' | 'custom'
   ) => {
     setTouched(true);
     setPriceBundle(bundle);
     // Do NOT overwrite custom inputs from bundle values
   };
 
-  const toggleGeneric = () => {
-    setTouched(true);
-    const willBeGeneric = !isGeneric;
-    setIsGeneric(willBeGeneric);
-    if (willBeGeneric) {
-      setCachedSelections({ rider, horse, cls });
-      setRider('None');
-      setHorse('None');
-      setCls('None');
-    } else {
-      if (cachedSelections) {
-        setRider(cachedSelections.rider);
-        setHorse(cachedSelections.horse);
-        setCls(cachedSelections.cls);
-      }
-    }
-  };
-
   const enterEditMode = () => {
     setViewMode('edit');
     setEditFromSummary(true);
-  };
-
-  const handleReset = () => {
-    if (!canReset) return;
-    setConfirmModal({ type: 'refresh', isOpen: true });
-  };
-
-  const confirmRefresh = () => {
-    const undoSnapshot = {
-      rider: rider === 'None' ? '' : rider,
-      horse: horse === 'None' ? '' : horse,
-      className: cls === 'None' ? '' : cls,
-      isGeneric,
-      title,
-      description,
-    };
-    // Price reset logic: Not resetting prices on tag refresh
-
-    setRider('');
-    setHorse('');
-    setCls('');
-    setIsGeneric(false);
-    setTitle('');
-    setDescription('');
-    setTouched(true);
-
-    const ids = selectedPhotos.map(p => p.id);
-    const updates = {
-      rider: '',
-      horse: '',
-      className: '',
-      isGeneric: false,
-      title: '',
-      description: '',
-    };
-    updatePhotoMetadata(ids, updates);
-
-    // Preserve Price in "Original State" reset if we treat Refresh as a Tag Reset only?
-    // Prompt implies Refresh only affects tags.
-    // So we should Update Original State for Tags BUT Keep Price?
-    // Or essentially, we are committing standard Tag state.
-
-    setOriginalState(prev =>
-      prev
-        ? {
-            ...prev,
-            rider: '',
-            horse: '',
-            cls: '',
-            isGeneric: false,
-            title: '',
-            description: '',
-          }
-        : null,
-    );
-
-    setTouched(false);
-    setViewMode('edit');
-
-    triggerToast('Tags refreshed', 'warning', 'panel', () => {
-      updatePhotoMetadata(ids, undoSnapshot);
-    });
-    setConfirmModal({ type: 'refresh', isOpen: false });
   };
 
   const onCloseSafe = () => {
@@ -735,57 +622,6 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
     }
   };
 
-  const handlePublish = () => {
-    setConfirmModal({ type: 'publish', isOpen: true });
-  };
-
-  const confirmPublish = () => {
-    const ids = selectedPhotos.map(p => p.id);
-    const undoSnapshot = [...selectedPhotos];
-
-    if (isArchived) {
-      ids.forEach(id => republishPhoto(id));
-      triggerToast('Photo republished', 'success', 'panel', () => {
-        restorePhotos(undoSnapshot);
-        triggerToast('Republish undone (Original restored)', 'moved', 'panel');
-      });
-    } else {
-      updatePhotoStatus(ids, 'published');
-      triggerToast('Photos published', 'success', 'panel', () => {
-        undoSnapshot.forEach(p => {
-          updatePhotoStatus([p.id], p.status);
-        });
-        triggerToast('Publish undone', 'moved', 'panel');
-      });
-    }
-    setConfirmModal({ ...confirmModal, isOpen: false });
-    propsOnClose();
-  };
-
-  const handleUnpublish = () => {
-    setConfirmModal({ type: 'unpublish', isOpen: true });
-  };
-
-  const confirmUnpublish = () => {
-    const ids = selectedPhotos.map(p => p.id);
-    const undoSnapshot = [...selectedPhotos];
-
-    updatePhotoStatus(ids, 'archived');
-    triggerToast(
-      `${count} photo${count > 1 ? 's' : ''} moved to Archive`,
-      'danger',
-      'panel',
-      () => {
-        undoSnapshot.forEach(p => {
-          updatePhotoStatus([p.id], p.status);
-        });
-        triggerToast('Unpublish undone', 'moved', 'panel');
-      },
-    );
-    setConfirmModal({ ...confirmModal, isOpen: false });
-    propsOnClose();
-  };
-
   const handleDeleteInit = () => {
     setConfirmModal({ type: 'delete', isOpen: true });
   };
@@ -850,7 +686,7 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
       `Moved ${isSingle ? 'photo' : `${count} photos`} to ${finalBatch}`,
       'moved',
       'global',
-      undoAction,
+      undoAction
     );
 
     setIsMoveModalOpen(false);
@@ -861,7 +697,7 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
     if (selectedPhotos.length === 0) return null;
     const first = selectedPhotos[0].batch || 'Uncategorised';
     const allMatch = selectedPhotos.every(
-      p => (p.batch || 'Uncategorised') === first,
+      p => (p.batch || 'Uncategorised') === first
     );
     return allMatch ? first : null;
   }, [selectedPhotos]);
@@ -914,13 +750,17 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
               {/* COMPACT TABS */}
               <div className="pg-panel-compact-tabs">
                 <button
-                  className={`pg-panel-compact-tab ${panelTab === 'tags' ? 'active' : ''}`}
+                  className={`pg-panel-compact-tab ${
+                    panelTab === 'tags' ? 'active' : ''
+                  }`}
                   onClick={() => setPanelTab('tags')}
                 >
                   Tags
                 </button>
                 <button
-                  className={`pg-panel-compact-tab ${panelTab === 'price' ? 'active' : ''}`}
+                  className={`pg-panel-compact-tab ${
+                    panelTab === 'price' ? 'active' : ''
+                  }`}
                   onClick={() => setPanelTab('price')}
                 >
                   Price
@@ -934,14 +774,14 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
                     <span className="pg-panel-label">
                       What do you see in the image
                     </span>
-                    <button
+                    {/* <button
                       className="reset-btn"
                       onClick={handleReset}
                       title={canReset ? 'Refresh tags' : 'Nothing to reset'}
                       disabled={!canReset}
                     >
                       <RotateCcw size={18} />
-                    </button>
+                    </button> */}
                   </div>
 
                   {/* EDIT MODE */}
@@ -963,8 +803,8 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
                                   isSingle
                                     ? 'Select Rider...'
                                     : rider
-                                      ? 'Mixed (Overwriting)'
-                                      : 'Mixed (Keep existing)'
+                                    ? 'Mixed (Overwriting)'
+                                    : 'Mixed (Keep existing)'
                                 }
                               />
                             </div>
@@ -992,19 +832,11 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
                           <div className="pg-form-group">
                             <Label text="Class" />
                             <div className="pg-form-row">
-                              <PgCustomSelect
-                                value={cls}
-                                onChange={val => handleChange('cls', val)}
-                                options={[
-                                  { label: 'None', value: 'None' },
-                                  ...CLASSES.map(c => ({ label: c, value: c })),
-                                ]}
-                                placeholder={
-                                  isSingle
-                                    ? 'Select Class...'
-                                    : 'Mixed (Keep existing)'
-                                }
-                              />
+                              <div className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-subtle)] px-3 py-2 text-[15px] text-[var(--color-text-primary)]">
+                                {cls && cls !== 'None'
+                                  ? cls
+                                  : 'No class selected'}
+                              </div>
                             </div>
                           </div>
                         </>
@@ -1015,7 +847,7 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
                       )}
 
                       {/* OR Separator */}
-                      {!isGeneric && (
+                      {/* {!isGeneric && (
                         <div className="pg-tags-or-separator flex items-center my-4 gap-3">
                           <div className="flex-1 h-px bg-[var(--color-border)]" />
                           <span className="text-[0.625rem] font-bold text-[var(--color-text-tertiary)] tracking-[0.05em]">
@@ -1023,10 +855,10 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
                           </span>
                           <div className="flex-1 h-px bg-[var(--color-border)]" />
                         </div>
-                      )}
+                      )} */}
 
                       {/* Generic Option — available for single and multi-select */}
-                      <div
+                      {/* <div
                         className={`pg-form-group${isGeneric ? '' : ' mt-4'}`}
                       >
                         <div
@@ -1034,7 +866,9 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
                           onClick={toggleGeneric}
                         >
                           <div
-                            className={`pg-new-checkbox ${isGeneric ? 'checked' : ''}`}
+                            className={`pg-new-checkbox ${
+                              isGeneric ? 'checked' : ''
+                            }`}
                           >
                             {isGeneric && (
                               <Check size={12} color="#fff" strokeWidth={3} />
@@ -1052,7 +886,7 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
                             selected photos.
                           </p>
                         )}
-                      </div>
+                      </div> */}
 
                       {/* Specific Fields (Generic Only) */}
                       {isGeneric && (
@@ -1191,7 +1025,9 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
                               position: 'relative',
                               overflow: 'hidden',
                               padding: '12px 12px 12px 16px',
-                              border: `1px solid ${isSelected ? c.dot : 'var(--color-border)'}`,
+                              border: `1px solid ${
+                                isSelected ? c.dot : 'var(--color-border)'
+                              }`,
                               borderRadius: 8,
                               background: isSelected ? c.bg : '#fff',
                               cursor: 'pointer',
@@ -1208,7 +1044,11 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
                             <div
                               className="w-4 h-4 rounded-full bg-white mt-0.5 flex items-center justify-center shrink-0"
                               style={{
-                                border: `1px solid ${isSelected ? 'var(--color-brand-primary)' : 'var(--color-border)'}`,
+                                border: `1px solid ${
+                                  isSelected
+                                    ? 'var(--color-brand-primary)'
+                                    : 'var(--color-border)'
+                                }`,
                               }}
                             >
                               {isSelected && (
@@ -1233,14 +1073,18 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
                             </div>
                           </div>
                         );
-                      },
+                      }
                     )}
                     {/* Custom Bundle Card */}
                     <div
                       onClick={() => handleBundleSelect('custom')}
                       style={{
                         padding: 12,
-                        border: `1px solid ${priceBundle === 'custom' ? '#facc15' : 'var(--color-border)'}`,
+                        border: `1px solid ${
+                          priceBundle === 'custom'
+                            ? '#facc15'
+                            : 'var(--color-border)'
+                        }`,
                         borderRadius: 8,
                         background:
                           priceBundle === 'custom' ? '#fef9c3' : '#fff',
@@ -1251,7 +1095,11 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
                         <div
                           className="w-4 h-4 rounded-full bg-white mt-0.5 flex items-center justify-center"
                           style={{
-                            border: `1px solid ${priceBundle === 'custom' ? '#facc15' : 'var(--color-border)'}`,
+                            border: `1px solid ${
+                              priceBundle === 'custom'
+                                ? '#facc15'
+                                : 'var(--color-border)'
+                            }`,
                           }}
                         >
                           {priceBundle === 'custom' && (
@@ -1298,7 +1146,9 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
 
         {/* Footer */}
         <div
-          className={`pg-panel-footer ${isDirty || editFromSummary ? 'dirty-state' : ''}`}
+          className={`pg-panel-footer ${
+            isDirty || editFromSummary ? 'dirty-state' : ''
+          }`}
         >
           {isDirty || editFromSummary ? (
             <>
@@ -1311,21 +1161,6 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
             </>
           ) : (
             <>
-              {currentTab === 'published' ? (
-                <button
-                  className="pg-panel-btn destructive"
-                  onClick={handleUnpublish}
-                >
-                  Unpublish
-                </button>
-              ) : (
-                <button
-                  className="pg-panel-btn primary"
-                  onClick={handlePublish}
-                >
-                  {isArchived ? 'Republish' : 'Publish'}
-                </button>
-              )}
               <div className="flex gap-2">
                 {currentTab !== 'published' && (
                   <button
@@ -1384,7 +1219,9 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
                             return (
                               <div
                                 key={b}
-                                className={`pg-select-option ${isDisabled ? 'disabled' : ''}`}
+                                className={`pg-select-option ${
+                                  isDisabled ? 'disabled' : ''
+                                }`}
                                 onClick={() => {
                                   if (!isDisabled) {
                                     setTargetBatch(b);
@@ -1464,23 +1301,13 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
             <div className="pg-panel-confirm-card">
               <h3>
                 {confirmModal.type === 'delete' && 'Delete photo?'}
-                {confirmModal.type === 'refresh' && 'Refresh tags?'}
                 {confirmModal.type === 'close' && 'Discard changes?'}
-                {confirmModal.type === 'publish' &&
-                  (isArchived ? 'Republish photo?' : 'Publish photo?')}
-                {confirmModal.type === 'unpublish' && 'Unpublish photo?'}
               </h3>
               <p>
                 {confirmModal.type === 'delete' &&
                   'This will remove the photo from this event. You can undo right after deleting.'}
-                {confirmModal.type === 'refresh' &&
-                  'This will revert tags to organiser data and remove your custom title/description.'}
                 {confirmModal.type === 'close' &&
                   'You have unsaved changes. Are you sure you want to discard them?'}
-                {confirmModal.type === 'publish' &&
-                  'This will make the photo available for buyers.'}
-                {confirmModal.type === 'unpublish' &&
-                  'This will move the photo to the Archive tab.'}
               </p>
               <div className="pg-panel-confirm-actions">
                 <button
@@ -1499,36 +1326,12 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
                     Delete
                   </button>
                 )}
-                {confirmModal.type === 'refresh' && (
-                  <button
-                    className="pg-panel-btn primary"
-                    onClick={confirmRefresh}
-                  >
-                    Refresh
-                  </button>
-                )}
                 {confirmModal.type === 'close' && (
                   <button
                     className="pg-panel-btn destructive"
                     onClick={confirmCloseDiscard}
                   >
                     Discard
-                  </button>
-                )}
-                {confirmModal.type === 'publish' && (
-                  <button
-                    className="pg-panel-btn primary"
-                    onClick={confirmPublish}
-                  >
-                    {isArchived ? 'Republish' : 'Publish'}
-                  </button>
-                )}
-                {confirmModal.type === 'unpublish' && (
-                  <button
-                    className="pg-panel-btn destructive"
-                    onClick={confirmUnpublish}
-                  >
-                    Unpublish
                   </button>
                 )}
               </div>
@@ -1677,10 +1480,10 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
               toast.type === 'moved'
                 ? 'success'
                 : toast.type === 'warning'
-                  ? 'info'
-                  : toast.type === 'danger'
-                    ? 'danger'
-                    : 'success'
+                ? 'info'
+                : toast.type === 'danger'
+                ? 'danger'
+                : 'success'
             }
             message={toast.msg}
             onUndo={toast.undo}

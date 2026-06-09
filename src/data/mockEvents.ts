@@ -1,5 +1,4 @@
 import { COMPETITIONS, PHOTOGRAPHERS } from './mockData';
-import { assetUrl } from '../lib/utils';
 
 export const SHOW_EVENTS = false;
 
@@ -32,53 +31,53 @@ const EVENT_ASSETS: Record<
   { cover: string; logo: string; count: number }
 > = {
   c1: {
-    cover: assetUrl('images/Abdel_Said_Arpege_du_RU5978.jpg'),
-    logo: assetUrl('images/Sweden International Horse Show.jpg'),
+    cover: '',
+    logo: '',
     count: 820,
   },
   c2: {
-    cover: assetUrl('images/Alice_Nilsson_Eunomia8286.jpg'),
-    logo: assetUrl('images/Gothenburg Indoor Masters.jpg'),
+    cover: '',
+    logo: '',
     count: 745,
   },
   c3: {
-    cover: assetUrl('images/Falsterbo7800.jpg'),
-    logo: assetUrl('images/Falsterbo Summer Classic.jpg'),
+    cover: '',
+    logo: '',
     count: 920,
   },
   c4: {
-    cover: assetUrl('images/Peder_Fredricson_Alcapone_des_Carmille8136.jpg'),
-    logo: assetUrl('images/Strömsholm Spring Dressage.jpg'),
+    cover: '',
+    logo: '',
     count: 550,
   },
   c5: {
-    cover: assetUrl('images/Anna_Svanberg_Vidar9116.jpg'),
-    logo: assetUrl('images/Uppsala Arena Cup.jpg'),
+    cover: '',
+    logo: '',
     count: 480,
   },
   c6: {
-    cover: assetUrl('images/Fredrik_Spetz_Galactee_de_Tivoli8292.jpg'),
-    logo: assetUrl('images/Malmö City Jumping.jpg'),
+    cover: '',
+    logo: '',
     count: 620,
   },
   c7: {
-    cover: assetUrl('images/Alma_Nilsson_Sall_Kilimanjaro_WV7865.jpg'),
-    logo: assetUrl('images/Linköping Eventing Weekend.jpg'),
+    cover: '',
+    logo: '',
     count: 410,
   },
   c8: {
-    cover: assetUrl('images/Felicia_Hultberg_Bollerup_Chiquelle8407.jpg'),
-    logo: assetUrl('images/Örebro Autumn Cup.jpg'),
+    cover: '',
+    logo: '',
     count: 380,
   },
   c9: {
-    cover: assetUrl('images/Amanda_Landeblad_Joelina6763.jpg'),
-    logo: assetUrl('images/Umeå Northern Lights Dressage.jpg'),
+    cover: '',
+    logo: '',
     count: 590,
   },
   c10: {
-    cover: assetUrl('images/Carl-Walter_Fox_Eka_First_Navy_Jack8998.jpg'),
-    logo: assetUrl('images/Jönköping Lake District Classic.jpg'),
+    cover: '',
+    logo: '',
     count: 420,
   },
 };
@@ -129,9 +128,7 @@ export const mockEvents: EventData[] = COMPETITIONS.map(comp => {
     photographer: {
       id: photographer.id,
       name: `${photographer.firstName} ${photographer.lastName}`,
-      avatar: assetUrl(
-        `images/${photographer.firstName} ${photographer.lastName}.jpg`,
-      ), // Maps to real files e.g. "Hanna Björk.jpg"
+      avatar: '',
     },
   };
 });
@@ -148,11 +145,11 @@ export const disabledEvents: EventData[] = [
     discipline: 'Dressage',
     country: 'Sweden',
     photoCount: 120,
-    logo: assetUrl('images/Uppsala Arena Cup.jpg'), // Reusing existing mock logo
+    logo: '',
     photographer: {
       id: 'p1',
       name: 'Hanna Björk',
-      avatar: assetUrl('images/Hanna Björk.jpg'),
+      avatar: '',
     },
     status: 'disabled',
   },
@@ -166,7 +163,7 @@ export const disabledEvents: EventData[] = [
     discipline: 'Show Jumping',
     country: 'Sweden',
     photoCount: 45,
-    logo: assetUrl('images/Malmö City Jumping.jpg'), // Reusing existing mock logo
+    logo: '',
     photographer: null,
     status: 'disabled',
   },

@@ -5,7 +5,6 @@ import { InfoChip } from '../../components/InfoChip';
 import { FilterChip } from '../../components/FilterChip';
 import { ModernDropdown } from '../../components/ModernDropdown';
 import { ModernSearchBar } from '../../components/ModernSearchBar';
-import { PhotoCard } from '../../components/PhotoCard';
 import { FolderEventCard } from '../../components/FolderEventCard';
 import { CopyrightBar } from '../../components/CopyrightBar';
 import {
@@ -29,34 +28,12 @@ import { PageTabs } from '../../components/PageTabs';
 import { StatusPill } from '../../components/StatusPill';
 import { ProfileAvatar } from '../../components/ProfileAvatar';
 
-// Mock Data for showcase
-const MOCK_PHOTO = {
-  id: 'p1',
-  src: 'https://images.unsplash.com/photo-1534068590799-09895a701e3e?auto=format&fit=crop&w=800&q=80',
-  rider: 'Alva Karlsson',
-  horse: 'Göta Glimt',
-  event: 'Summer Cup 2025',
-  eventId: 'e1',
-  date: '2025-07-15',
-  width: 800,
-  height: 600,
-  className: '',
-  time: '14:30',
-  city: 'Stockholm',
-  arena: 'Main Arena',
-  countryCode: 'se',
-  discipline: 'Show Jumping',
-  photographer: 'Hanna Björk',
-  photographerId: 'ph1',
-};
-
 const MOCK_EVENT = {
   id: 'e1',
   name: 'Summer Cup 2025',
   period: 'Jul 15 - Jul 18',
-  coverImage:
-    'https://images.unsplash.com/photo-1534068590799-09895a701e3e?auto=format&fit=crop&w=800&q=80',
-  logo: 'https://ui-avatars.com/api/?name=SC&background=random',
+  coverImage: '',
+  logo: '',
   city: 'Stockholm',
   flag: '🇸🇪',
   status: 'active' as const,
@@ -66,7 +43,7 @@ const MOCK_EVENT = {
   photographer: {
     id: 'ph1',
     name: 'Hanna Björk',
-    avatar: 'https://ui-avatars.com/api/?name=Hanna+Bjork&background=random',
+    avatar: '',
   },
 };
 
@@ -741,7 +718,9 @@ export const TokensPage: React.FC = () => {
               <div className="comp-showcase">
                 <div className="card-grid-showcase">
                   <TokenShowcase label="<PhotoCard />">
-                    <PhotoCard photo={MOCK_PHOTO} onClick={() => {}} />
+                    <div className="flex h-[18rem] w-[14rem] items-center justify-center rounded-lg border border-dashed border-[var(--color-border)] bg-[var(--color-surface-muted)] text-sm text-[var(--color-text-secondary)]">
+                      API photo preview
+                    </div>
                   </TokenShowcase>
                   <TokenShowcase label="<FolderEventCard />">
                     <FolderEventCard event={MOCK_EVENT} onClick={() => {}} />

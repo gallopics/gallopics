@@ -11,7 +11,6 @@ import {
   useClerk,
   useUser,
 } from '@clerk/clerk-react';
-import { assetUrl } from '../lib/utils';
 import {
   api,
   ApiError,
@@ -90,7 +89,7 @@ export const PROTOTYPE_USER = {
   displayName: 'Klara Fors',
   country: 'Sweden',
   city: 'Stockholm',
-  avatarUrl: assetUrl('images/Klara Fors.jpg'),
+  avatarUrl: '',
   role: 'pg' as const,
 };
 

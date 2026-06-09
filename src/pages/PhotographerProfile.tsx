@@ -18,11 +18,10 @@ import { Footer } from '../components/Footer';
 import { MasonryGrid } from '../components/MasonryGrid';
 import { PhotoCard } from '../components/PhotoCard';
 import {
-  photos as mockPhotos,
   getActivePhotographerProfile,
   PHOTOGRAPHERS,
 } from '../data/mockData';
-import { mockEvents, SHOW_EVENTS } from '../data/mockEvents';
+import { mockEvents } from '../data/mockEvents';
 
 import { Highlights } from '../components/Highlights';
 import {
@@ -34,7 +33,6 @@ import {
 // Owner / Manage Logic
 import { usePhotographer } from '../context/PhotographerContext';
 import { ManageHighlightsModal } from '../components/ManageHighlightsModal';
-import { assetUrl } from '../lib/utils';
 import { useAuth } from '../context/AuthContext';
 import {
   api,
@@ -256,13 +254,7 @@ export function PhotographerProfile() {
   }, [from, sourceEvent, eventId, photographer, navigate]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setPhotos(
-        SHOW_EVENTS ? mockPhotos.filter(p => p.photographerId === id) : []
-      );
-    }, 1500);
-
-    return () => clearTimeout(timer);
+    setPhotos([]);
   }, [id]);
 
   useEffect(() => {
@@ -413,10 +405,7 @@ export function PhotographerProfile() {
       return apiHighlightPhotos;
     }
 
-    // Public mock view: Map IDs to mockData photos
-    return (photographer?.highlights || [])
-      .map(id => mockPhotos.find(p => p.id === id))
-      .filter((p): p is Photo => !!p);
+    return [];
   }, [
     apiHighlightPhotos,
     apiPhotographer,
@@ -446,8 +435,7 @@ export function PhotographerProfile() {
   const photographerAvatar =
     resolveApiAssetUrl(
       'avatarUrl' in photographer ? photographer.avatarUrl : null
-    ) ??
-    assetUrl(`images/${photographer.firstName} ${photographer.lastName}.jpg`);
+    ) ?? undefined;
 
   return (
     <div className="page-wrapper">

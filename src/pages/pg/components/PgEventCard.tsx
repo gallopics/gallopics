@@ -45,16 +45,13 @@ export const PgEventCard: React.FC<PgEventCardProps> = ({
       <div className="bg-white rounded-[0_24px_24px_24px] overflow-hidden flex flex-col border border-black/[0.04] shadow-[0_4px_16px_rgba(0,0,0,0.06)] p-4 transition-all duration-300 group-hover:shadow-[0_12px_32px_rgba(0,0,0,0.10)]">
         {/* 1. Cover Area */}
         <div className="w-full aspect-video overflow-hidden relative rounded-xl bg-[var(--ui-bg-subtle)]">
-          <img
-            src={
-              event.coverImage ||
-              'https://images.unsplash.com/photo-1551884831-bbf3cdc6469e?auto=format&fit=crop&q=80&w=800'
-            }
-            alt={event.title}
-            className={`w-full h-full object-cover will-change-transform transition-[scale] duration-500 ease-[cubic-bezier(0.2,0,0.2,1)] group-hover:scale-[1.04] ${
-              !hasCover ? 'grayscale opacity-10' : ''
-            }`}
-          />
+          {hasCover && (
+            <img
+              src={event.coverImage}
+              alt={event.title}
+              className="w-full h-full object-cover will-change-transform transition-[scale] duration-500 ease-[cubic-bezier(0.2,0,0.2,1)] group-hover:scale-[1.04]"
+            />
+          )}
 
           {!hasCover && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">

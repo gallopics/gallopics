@@ -25,7 +25,6 @@ import {
   Trash2,
   Pencil,
   AlertCircle,
-  RotateCcw,
   Info,
   ImageOff,
   Globe,
@@ -800,7 +799,7 @@ export const EventDetail: React.FC = () => {
     onUndo?: () => void;
   } | null>(null);
   const [confirmModal, setConfirmModal] = useState<{
-    type: 'delete' | 'publish' | 'unpublish';
+    type: 'delete';
     isOpen: boolean;
   }>({ type: 'delete', isOpen: false });
   const [activePanelTab, setActivePanelTab] = useState<'tags' | 'price'>(
@@ -837,16 +836,6 @@ export const EventDetail: React.FC = () => {
     setConfirmModal({ type: 'delete', isOpen: true });
   };
 
-  const handleUnpublishSelection = () => {
-    if (selectedIds.size === 0) return;
-    setConfirmModal({ type: 'unpublish', isOpen: true });
-  };
-
-  const handlePublishSelection = () => {
-    if (selectedIds.size === 0) return;
-    setConfirmModal({ type: 'publish', isOpen: true });
-  };
-
   const handleUndoDelete = () => {
     if (undoDeletedPhotosRef.current.length > 0) {
       restorePhotos(undoDeletedPhotosRef.current);
@@ -861,7 +850,7 @@ export const EventDetail: React.FC = () => {
     const selectedPhotosSnapshot = allPhotos.filter(p => selectedIds.has(p.id));
 
     setConfirmModal({ ...confirmModal, isOpen: false });
-    setIsPanelOpen(false); // Close panel on confirmation (delete/publish/unpublish)
+    setIsPanelOpen(false);
 
     if (confirmModal.type === 'delete') {
       undoSelectionRef.current = new Set(selectedIds);
@@ -887,32 +876,6 @@ export const EventDetail: React.FC = () => {
         });
         setTimeout(() => setToast(null), 3000);
       }
-    } else if (confirmModal.type === 'publish') {
-      setToast({
-        msg:
-          activeTab === 'archive'
-            ? 'Republished successfully'
-            : 'Published successfully',
-        type: TOAST_TOKENS.PUBLISH.type,
-      });
-      setSelectedIds(new Set());
-      setTimeout(() => setToast(null), 3000);
-    } else if (confirmModal.type === 'unpublish') {
-      // Mock move to archive
-      undoSelectionRef.current = new Set(selectedIds);
-      setToast({
-        msg: `${selectedIds.size} photo${
-          selectedIds.size > 1 ? 's' : ''
-        } moved to Archive`,
-        type: TOAST_TOKENS.DELETE.type, // Use delete type for red accent or similar
-        onUndo: () => {
-          // Undo logic
-          setToast({ msg: 'Unpublish undone', type: 'success' });
-          setTimeout(() => setToast(null), 3000);
-        },
-      });
-      setSelectedIds(new Set());
-      setTimeout(() => setToast(null), 3000);
     }
   };
 
@@ -1094,30 +1057,12 @@ export const EventDetail: React.FC = () => {
 
                             {activeTab === 'uploads' ||
                             activeTab === 'archive' ? (
-                              <>
-                                <button
-                                  className={`${roundBtnDelete} ${roundBtnLg}`}
-                                  onClick={handleDeleteSelection}
-                                  title="Delete selection"
-                                >
-                                  <Trash2 size={18} />
-                                </button>
-                                <button
-                                  className={`${chipBtnPrimary} ${chipBtnLg} ml-2`}
-                                  onClick={handlePublishSelection}
-                                >
-                                  {activeTab === 'archive'
-                                    ? 'Republish'
-                                    : 'Publish'}
-                                </button>
-                              </>
-                            ) : activeTab === 'published' ? (
                               <button
                                 className={`${roundBtnDelete} ${roundBtnLg}`}
-                                onClick={handleUnpublishSelection}
-                                title="Unpublish"
+                                onClick={handleDeleteSelection}
+                                title="Delete selection"
                               >
-                                <RotateCcw size={18} />
+                                <Trash2 size={18} />
                               </button>
                             ) : null}
 
@@ -1359,13 +1304,7 @@ export const EventDetail: React.FC = () => {
                                   onRemove={() => {
                                     if (isDuplicatesFolder) {
                                       handleRemove(photo.id);
-                                    } else if (activeTab === 'published') {
-                                      setSelectedIds(new Set([photo.id]));
-                                      setConfirmModal({
-                                        type: 'unpublish',
-                                        isOpen: true,
-                                      });
-                                    } else {
+                                    } else if (activeTab !== 'published') {
                                       setSelectedIds(new Set([photo.id]));
                                       setConfirmModal({
                                         type: 'delete',
@@ -1507,11 +1446,8 @@ export const EventDetail: React.FC = () => {
   if (!event && isLoadingApiEvent) return <div>Loading event...</div>;
   if (!event) return <div>{apiEventError || 'Event not found'}</div>;
 
-  const chipBtnPrimary =
-    'h-8 px-4 rounded-full bg-[var(--color-brand-primary)] text-white border-transparent text-[0.8125rem] font-semibold cursor-pointer transition-all duration-200 flex items-center gap-1.5 whitespace-nowrap shadow-[0_2px_6px_rgba(27,58,236,0.25)] hover:bg-[var(--color-brand-primary-hover)] hover:-translate-y-px';
   const chipBtnGhost =
     'h-8 px-3 rounded-full border-transparent bg-transparent text-[0.8125rem] font-semibold cursor-pointer transition-all duration-200 flex items-center gap-1.5 whitespace-nowrap hover:bg-[var(--ui-bg-subtle)]';
-  const chipBtnLg = '!h-10 !px-5 !text-[0.875rem]';
   const roundBtnBase =
     'w-8 h-8 rounded-full border border-black/10 bg-white flex items-center justify-center cursor-pointer text-[var(--color-text-secondary)] transition-all duration-200 flex-shrink-0 hover:bg-[var(--ui-bg-subtle)] hover:text-[var(--color-text-primary)]';
   const roundBtnDelete =
@@ -1619,9 +1555,7 @@ export const EventDetail: React.FC = () => {
                     label="Photographer"
                     name={`${eventPhotographer.firstName} ${eventPhotographer.lastName}`}
                     variant="photographer"
-                    avatarUrl={assetUrl(
-                      `images/${eventPhotographer.firstName} ${eventPhotographer.lastName}.jpg`
-                    )}
+                    avatarUrl={undefined}
                   />
                   {/* <ActionSeparator /> */}
                 </>
@@ -1672,37 +1606,17 @@ export const EventDetail: React.FC = () => {
           <div className="pg-modal-card">
             <div className="flex gap-4 items-start">
               <div
-                className={`pg-alert-icon ${
-                  confirmModal.type === 'delete' ||
-                  confirmModal.type === 'unpublish'
-                    ? 'danger'
-                    : 'info'
-                }`}
+                className="pg-alert-icon danger"
               >
                 <AlertCircle size={24} />
               </div>
               <div className="flex-1">
                 <h3 className="mt-0 text-[1.125rem] font-bold text-primary mb-2">
-                  {confirmModal.type === 'delete'
-                    ? `Delete photo${selectedIds.size > 1 ? 's' : ''}?`
-                    : confirmModal.type === 'unpublish'
-                    ? `Unpublish photo${selectedIds.size > 1 ? 's' : ''}?`
-                    : 'Publish photos?'}
+                  {`Delete photo${selectedIds.size > 1 ? 's' : ''}?`}
                 </h3>
                 <p className="m-0 text-secondary text-[0.875rem] leading-[1.5]">
-                  {confirmModal.type === 'delete'
-                    ? 'This will remove the selected photo(s) from the event. This action cannot be undone.'
-                    : confirmModal.type === 'unpublish'
-                    ? 'This will move photos to the Archive tab.'
-                    : Array.from(selectedIds).some(id =>
-                        validDuplicateIds.has(id)
-                      )
-                    ? `Warning: ${
-                        Array.from(selectedIds).filter(id =>
-                          validDuplicateIds.has(id)
-                        ).length
-                      } duplicates found. Fix duplicates before publishing.`
-                    : 'This will move photos to Published.'}
+                  This will remove the selected photo(s) from the event. This
+                  action cannot be undone.
                 </p>
                 <div className="modal-footer-actions">
                   <button
@@ -1714,25 +1628,10 @@ export const EventDetail: React.FC = () => {
                     Cancel
                   </button>
                   <button
-                    className={
-                      confirmModal.type === 'delete' ||
-                      confirmModal.type === 'unpublish'
-                        ? 'modal-btn-danger'
-                        : 'modal-btn-save'
-                    }
+                    className="modal-btn-danger"
                     onClick={handleConfirmAction}
-                    disabled={
-                      confirmModal.type === 'publish' &&
-                      Array.from(selectedIds).some(id =>
-                        validDuplicateIds.has(id)
-                      )
-                    }
                   >
-                    {confirmModal.type === 'delete'
-                      ? 'Delete'
-                      : confirmModal.type === 'unpublish'
-                      ? 'Unpublish'
-                      : 'Publish'}
+                    Delete
                   </button>
                 </div>
               </div>
@@ -1835,17 +1734,11 @@ export const EventDetail: React.FC = () => {
                 <div>
                   <label className="event-info-label">Photographer</label>
                   <div className="event-info-person-chip">
-                    <img
-                      src={
-                        eventPhotographer
-                          ? assetUrl(
-                              `images/${eventPhotographer.firstName} ${eventPhotographer.lastName}.jpg`
-                            )
-                          : assetUrl('images/ida.jpg')
-                      }
-                      alt=""
-                      className="w-6 h-6 rounded-full object-cover bg-[var(--color-border)]"
-                    />
+                    <div className="w-6 h-6 rounded-full bg-[var(--color-border)] flex items-center justify-center text-[0.6875rem] font-semibold text-[var(--color-text-secondary)]">
+                      {eventPhotographer
+                        ? eventPhotographer.firstName.charAt(0)
+                        : '?'}
+                    </div>
                     <span className="event-info-person-name">
                       {eventPhotographer
                         ? `${eventPhotographer.firstName} ${eventPhotographer.lastName}`

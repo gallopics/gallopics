@@ -95,6 +95,9 @@ export const EventsList: React.FC = () => {
   const [toastMessage, setToastMessage] = useState('Booking updated.');
   const [apiUpcomingEvents, setApiUpcomingEvents] = useState<PgEvent[]>([]);
   const [bookedEvents, setBookedEvents] = useState<PgEvent[]>([]);
+  const [cancelledBookingEventIds, setCancelledBookingEventIds] = useState<
+    Set<string>
+  >(new Set());
   const [bookingEventId, setBookingEventId] = useState<string | null>(null);
   const [isLoadingUpcomingEvents, setIsLoadingUpcomingEvents] = useState(false);
   const [upcomingEventsError, setUpcomingEventsError] = useState<string | null>(
@@ -182,6 +185,7 @@ export const EventsList: React.FC = () => {
           );
           const bookedIds = new Set(booked.map(event => event.id));
           setBookedEvents(booked);
+          setCancelledBookingEventIds(new Set());
           setApiUpcomingEvents(
             apiEvents
               .map(mapApiEventToPgEvent)
@@ -228,10 +232,18 @@ export const EventsList: React.FC = () => {
   const workspaceEvents = useMemo(() => {
     if (isAdmin) return events;
     const localEventsWithoutBookedApiDupes = events.filter(
-      event => !bookedEventIds.has(event.id),
+      event =>
+        !bookedEventIds.has(event.id) &&
+        !cancelledBookingEventIds.has(event.id),
     );
     return [...bookedEvents, ...localEventsWithoutBookedApiDupes];
-  }, [bookedEventIds, bookedEvents, events, isAdmin]);
+  }, [
+    bookedEventIds,
+    bookedEvents,
+    cancelledBookingEventIds,
+    events,
+    isAdmin,
+  ]);
 
   const eventSource =
     !isAdmin && (view === 'upcoming' || view === 'previous')
@@ -320,6 +332,11 @@ export const EventsList: React.FC = () => {
         booked = await api.bookEvent(getSessionToken, event.id);
       }
       const bookedPgEvent = mapBackendEventToPgEvent(booked, true);
+      setCancelledBookingEventIds(prev => {
+        const next = new Set(prev);
+        next.delete(event.id);
+        return next;
+      });
       setBookedEvents(prev => [
         bookedPgEvent,
         ...prev.filter(item => item.id !== event.id),
@@ -348,6 +365,7 @@ export const EventsList: React.FC = () => {
     try {
       setBookingEventId(event.id);
       await api.cancelEventBooking(getSessionToken, event.id);
+      setCancelledBookingEventIds(prev => new Set(prev).add(event.id));
       setBookedEvents(prev => prev.filter(item => item.id !== event.id));
       setApiUpcomingEvents(prev =>
         prev.map(item =>

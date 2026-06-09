@@ -26,13 +26,7 @@ import {
   mapApiScheduleToDailySchedule,
 } from '../data/eventsApi';
 import type { EventData } from '../data/mockEvents';
-import {
-  photos as basePhotos,
-  RIDERS,
-  HORSES,
-  RIDER_PRIMARY_HORSE,
-  PHOTOGRAPHERS,
-} from '../data/mockData';
+import { PHOTOGRAPHERS } from '../data/mockData';
 import {
   ShareIconButton,
   ActionSeparator,
@@ -40,77 +34,9 @@ import {
 } from '../components/HeaderActions';
 import { ScopedSearchBar } from '../components/ScopedSearchBar';
 import { PageTabs } from '../components/PageTabs';
-import type { Photo as EventPhoto, ClassSection, EventDetail, Meeting } from '../types';
-import { assetUrl } from '../lib/utils';
+import type { Photo as EventPhoto, ClassSection, EventDetail } from '../types';
 import { usePhotographer } from '../context/PhotographerContext';
 import { useAuth } from '../context/AuthContext';
-
-// Helpers for randomization
-function pick<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)];
-}
-
-const randomInt = (min: number, max: number) =>
-  Math.floor(Math.random() * (max - min) + min);
-
-const generateEventPhotos = (
-  eventId: string,
-  count: number,
-  discipline?: string,
-  meetingOverride?: Meeting,
-  eventClasses: ClassSection[] = []
-): EventPhoto[] => {
-  const srcPool = Array.from(new Set(basePhotos.map(p => p.src)));
-  const comp =
-    meetingOverride || eventDetails.find(e => e.meetingId === eventId)?.meeting;
-  const eventName = comp?.name || 'Gallopics Event';
-  const eventDate = comp?.period.startDate || '2026-01-01';
-
-  return Array.from({ length: count }).map((_, i) => {
-    const src = pick(srcPool);
-    const rider = pick(RIDERS);
-    const competition = eventClasses.length > 0 ? pick(eventClasses) : null;
-    const horseMapping = RIDER_PRIMARY_HORSE.find(m => m.riderId === rider.id);
-    const horse =
-      HORSES.find(h => h.id === horseMapping?.primaryHorseId) || HORSES[0];
-
-    const ratioType = Math.random();
-    let width = 600;
-    let height = 800;
-
-    if (ratioType > 0.66) {
-      width = 800;
-      height = 600;
-    } else if (ratioType > 0.33) {
-      width = 800;
-      height = 800;
-    }
-
-    if (ratioType < 0.33) {
-      height += randomInt(-50, 50);
-    }
-
-    return {
-      id: `${eventId}-p-${i}-${Math.random().toString(36).substr(2, 5)}`,
-      src,
-      rider: `${rider.firstName} ${rider.lastName}`,
-      horse: horse.name,
-      event: eventName,
-      eventId: eventId,
-      date: eventDate,
-      width,
-      height,
-      className: 'photo-grid-item',
-      time: `${9 + (i % 8)}:00`,
-      city: comp?.city || 'Sweden',
-      arena: competition?.name || 'Main Arena',
-      countryCode: comp?.country.code.toLowerCase() || 'se',
-      discipline: competition?.discipline || discipline || 'Show Jumping',
-      photographer: comp?.photographer?.name || 'Gallopics',
-      photographerId: comp?.photographer?.id,
-    };
-  });
-};
 
 export function EventProfile() {
   const { eventId } = useParams();
@@ -229,10 +155,6 @@ export function EventProfile() {
 
       setLoading(true);
       const loadPhotos = async () => {
-        const eventClasses = eventDetail.schedule.flatMap(day =>
-          day.arenas.flatMap(arena => arena.competitions)
-        );
-
         if (!isPhotographerMyEventView && !localEventDetail) {
           const eventForPhotos: EventData = {
             id: eventDetail.meetingId,
@@ -259,15 +181,8 @@ export function EventProfile() {
           return;
         }
 
-        const generated = generateEventPhotos(
-          eventDetail.meetingId,
-          eventDetail.meeting.photoCount,
-          eventDetail.meeting.disciplines[0],
-          eventDetail.meeting,
-          eventClasses
-        );
         if (isMounted) {
-          setPhotos(generated);
+          setPhotos([]);
           setLoading(false);
         }
       };
@@ -501,9 +416,7 @@ export function EventProfile() {
                   label="Photographer"
                   name={`${eventPhotographer.firstName} ${eventPhotographer.lastName}`}
                   variant="photographer"
-                  avatarUrl={assetUrl(
-                    `images/${eventPhotographer.firstName} ${eventPhotographer.lastName}.jpg`
-                  )}
+                  avatarUrl={undefined}
                   onClick={() =>
                     navigate(
                       `/photographer/${eventPhotographer.id}?from=event&eventId=${eventId}`

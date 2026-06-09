@@ -7,7 +7,7 @@ import type { BreadcrumbItem } from '../components/Breadcrumbs';
 import { Footer } from '../components/Footer';
 import { Trash2, ArrowLeft, ShoppingBag, Check, Eye } from 'lucide-react';
 import { CheckoutPanel } from '../components/CheckoutPanel';
-import { photos as mockPhotos, COMPETITIONS } from '../data/mockData';
+import { COMPETITIONS } from '../data/mockData';
 import { PhotoCard } from '../components/PhotoCard';
 import { QUALITY_TIERS } from '../constants/qualityTiers';
 import { api, type CheckoutLineItem, type CheckoutOrder } from '../data/apiClient';
@@ -69,28 +69,10 @@ export function Cart() {
       }
       // Handle /photo/:id
       else if (decoded.includes('/photo/')) {
-        const photoId = decoded.split('/photo/')[1]?.split('?')[0];
-        const photo = mockPhotos.find(p => p.id === photoId);
-        if (photo) {
-          const event = COMPETITIONS.find(c => c.id === photo.eventId);
-          if (event) {
-            items.push({
-              label: event.name,
-              onClick: () => navigate(`/event/${event.id}`),
-            });
-            items.push({
-              label: 'Photo detail',
-              onClick: () => navigate(decoded),
-            });
-          } else {
-            items.push({
-              label: 'Photo detail',
-              onClick: () => navigate(decoded),
-            });
-          }
-        } else {
-          items.push({ label: 'Events', onClick: () => navigate('/') });
-        }
+        items.push({
+          label: 'Photo detail',
+          onClick: () => navigate(decoded),
+        });
       }
       // Handle /photographer/:id
       else if (decoded.includes('/photographer/')) {
@@ -157,13 +139,7 @@ export function Cart() {
     [cart]
   );
 
-  const recentPhotos = useMemo(() => {
-    const saved = localStorage.getItem('gallopics_recent');
-    const ids: string[] = saved ? JSON.parse(saved) : [];
-    return ids
-      .map(id => mockPhotos.find(p => p.id === id))
-      .filter((p): p is (typeof mockPhotos)[0] => !!p);
-  }, []);
+  const recentPhotos = useMemo(() => [], []);
 
   return (
     <div className="page-wrapper">
