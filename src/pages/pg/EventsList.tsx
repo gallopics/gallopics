@@ -56,6 +56,7 @@ const mapApiEventToPgEvent = (event: EventData): PgEvent => ({
   city: event.city,
   assignedPhotographers: event.photographer ? [event.photographer] : [],
   applicationsWelcomed: event.status !== 'disabled',
+  canUploadPhotos: false,
 });
 
 const mapBackendEventToPgEvent = (
@@ -65,6 +66,7 @@ const mapBackendEventToPgEvent = (
   ...mapApiEventToPgEvent(mapApiEventToEventData(event)),
   isRegistered,
   status: isRegistered ? 'open' : 'upcoming',
+  canUploadPhotos: isRegistered,
 });
 
 export const EventsList: React.FC = () => {
@@ -94,6 +96,7 @@ export const EventsList: React.FC = () => {
   const [showApplyToast, setShowApplyToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('Booking updated.');
   const [apiUpcomingEvents, setApiUpcomingEvents] = useState<PgEvent[]>([]);
+  const [apiPhotoEvents, setApiPhotoEvents] = useState<PgEvent[]>([]);
   const [bookedEvents, setBookedEvents] = useState<PgEvent[]>([]);
   const [cancelledBookingEventIds, setCancelledBookingEventIds] = useState<
     Set<string>
@@ -185,7 +188,16 @@ export const EventsList: React.FC = () => {
           );
           const bookedIds = new Set(booked.map(event => event.id));
           setBookedEvents(booked);
-          setCancelledBookingEventIds(new Set());
+          setApiPhotoEvents(
+            apiEvents
+              .map(mapApiEventToPgEvent)
+              .map(event => ({
+                ...event,
+                isRegistered: bookedIds.has(event.id),
+                status: 'open',
+                canUploadPhotos: bookedIds.has(event.id),
+              })),
+          );
           setApiUpcomingEvents(
             apiEvents
               .map(mapApiEventToPgEvent)
@@ -202,6 +214,7 @@ export const EventsList: React.FC = () => {
             error instanceof Error ? error.message : 'Failed to load events',
           );
           setApiUpcomingEvents([]);
+          setApiPhotoEvents([]);
           setBookedEvents([]);
         }
       } finally {
@@ -232,12 +245,25 @@ export const EventsList: React.FC = () => {
   const workspaceEvents = useMemo(() => {
     if (isAdmin) return events;
     const localEventsWithoutBookedApiDupes = events.filter(
-      event =>
-        !bookedEventIds.has(event.id) &&
-        !cancelledBookingEventIds.has(event.id),
+      event => !bookedEventIds.has(event.id),
     );
-    return [...bookedEvents, ...localEventsWithoutBookedApiDupes];
+    const localEventIds = new Set(events.map(event => event.id));
+    const photoEventsWithoutDupes = apiPhotoEvents.filter(
+      event => !bookedEventIds.has(event.id) && !localEventIds.has(event.id),
+    );
+    const readOnlyCancelledEvents = localEventsWithoutBookedApiDupes.map(
+      event =>
+        cancelledBookingEventIds.has(event.id)
+          ? {
+              ...event,
+              isRegistered: false,
+              canUploadPhotos: false,
+            }
+          : event,
+    );
+    return [...bookedEvents, ...readOnlyCancelledEvents, ...photoEventsWithoutDupes];
   }, [
+    apiPhotoEvents,
     bookedEventIds,
     bookedEvents,
     cancelledBookingEventIds,
@@ -939,10 +965,16 @@ export const EventsList: React.FC = () => {
                 event={event}
                 onCoverChange={handleCoverChange}
                 onCancelBooking={
-                  bookedEventIds.has(event.id) ? handleCancelBooking : undefined
+                  event.canUploadPhotos !== false && bookedEventIds.has(event.id)
+                    ? handleCancelBooking
+                    : undefined
                 }
                 eventProfilePath={
-                  bookedEventIds.has(event.id) ? `/event/${event.id}` : undefined
+                  event.canUploadPhotos === false
+                    ? undefined
+                    : bookedEventIds.has(event.id)
+                      ? `/event/${event.id}`
+                      : undefined
                 }
                 eventProfileState={
                   bookedEventIds.has(event.id)

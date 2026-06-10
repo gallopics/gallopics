@@ -74,6 +74,8 @@ export const UploadPage: React.FC = () => {
   const session = selectedEventId ? uploadSessions[selectedEventId] : null;
   const files = session?.files || [];
   const hasFiles = files.length > 0;
+  const selectedEvent = events.find(event => event.id === selectedEventId);
+  const canUploadPhotos = selectedEvent?.canUploadPhotos !== false;
 
   const previewUrls = React.useMemo(() => {
     const activeFileIds = new Set(files.map(file => file.id));
@@ -104,8 +106,7 @@ export const UploadPage: React.FC = () => {
   }, []);
 
   const selectedEventTitle =
-    events.find(event => event.id === selectedEventId)?.title ||
-    'Selected event';
+    selectedEvent?.title || 'Selected event';
 
   // Handlers
   const handleClose = () => {
@@ -142,12 +143,14 @@ export const UploadPage: React.FC = () => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragActive(false);
+    if (!canUploadPhotos) return;
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       handleFiles(Array.from(e.dataTransfer.files));
     }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canUploadPhotos) return;
     if (e.target.files && e.target.files.length > 0) {
       handleFiles(Array.from(e.target.files));
     }
@@ -155,6 +158,7 @@ export const UploadPage: React.FC = () => {
   };
 
   const handleFiles = (newFiles: File[]) => {
+    if (!canUploadPhotos) return;
     const validFiles = newFiles.filter(f => f.type.startsWith('image/'));
 
     if (validFiles.length === 0) {
@@ -262,7 +266,9 @@ export const UploadPage: React.FC = () => {
               onDragLeave={handleDrag}
               onDragOver={handleDrag}
               onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => {
+                if (canUploadPhotos) fileInputRef.current?.click();
+              }}
             >
               <input
                 type="file"
@@ -271,14 +277,19 @@ export const UploadPage: React.FC = () => {
                 ref={fileInputRef}
                 className="hidden"
                 onChange={handleFileSelect}
+                disabled={!canUploadPhotos}
               />
               <div className="drop-content-wrapper">
                 <div className="drop-icon-circle">
                   <UploadCloud size={24} />
                 </div>
-                <div className="drop-title-sm">Click or Drag photos</div>
+                <div className="drop-title-sm">
+                  {canUploadPhotos ? 'Click or Drag photos' : 'Uploads closed'}
+                </div>
                 <div className="drop-footer-note">
-                  Upload multiple photos at once
+                  {canUploadPhotos
+                    ? 'Upload multiple photos at once'
+                    : 'This event is read-only because the booking was cancelled.'}
                 </div>
               </div>
             </div>
@@ -372,8 +383,9 @@ export const UploadPage: React.FC = () => {
                 </div>
                 <h3>Your queue is empty</h3>
                 <p>
-                  Select an event, then drag photos into the sidebar to start
-                  uploading.
+                  {canUploadPhotos
+                    ? 'Select an event, then drag photos into the sidebar to start uploading.'
+                    : 'This event is read-only because the booking was cancelled.'}
                 </p>
               </div>
             )}

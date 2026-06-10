@@ -42,6 +42,7 @@ export interface PgEvent {
   city: string;
   assignedPhotographers?: { id: string; name: string; avatar: string }[];
   applicationsWelcomed?: boolean;
+  canUploadPhotos?: boolean;
 }
 
 export interface Photo {
@@ -187,6 +188,7 @@ const mapToPgEvent = (e: EventData, isMyEvent: boolean): PgEvent => {
     city: e.city,
     assignedPhotographers: e.photographer ? [e.photographer] : [],
     applicationsWelcomed: true, // Defaulting to true for mock data
+    canUploadPhotos: isMyEvent,
   };
 };
 
@@ -584,6 +586,7 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
           city: e.city || '',
           assignedPhotographers: [],
           applicationsWelcomed: true,
+          canUploadPhotos: true,
         }));
         if (isMounted) setEvents(mappedEvents);
       } catch (error) {
@@ -961,6 +964,8 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
   ) => {
     if (!currentUploadEventId) return;
     const eventId = currentUploadEventId;
+    const currentEvent = events.find(event => event.id === eventId);
+    if (currentEvent?.canUploadPhotos === false) return;
     const uploadMetadata = normalizeUploadMetadata(metadata);
 
     // Create local tracking for each file

@@ -54,7 +54,11 @@ type TabType = 'uploads' | 'published' | 'archive';
 type FolderType = 'random' | 'misc' | 'uncategorised' | 'duplicates';
 type PublishedFolderType = 'selling_photos' | 'unsold';
 
-const mapApiEventToPgEvent = (eventId: string, event: unknown): PgEvent => {
+const mapApiEventToPgEvent = (
+  eventId: string,
+  event: unknown,
+  canUploadPhotos = false
+): PgEvent => {
   const eventData = mapApiEventToEventData(event as any);
 
   return {
@@ -81,6 +85,7 @@ const mapApiEventToPgEvent = (eventId: string, event: unknown): PgEvent => {
       ? [eventData.photographer]
       : [],
     applicationsWelcomed: eventData.status !== 'disabled',
+    canUploadPhotos,
   };
 };
 
@@ -104,6 +109,7 @@ export const EventDetail: React.FC = () => {
   const [isLoadingApiEvent, setIsLoadingApiEvent] = useState(false);
   const [apiEventError, setApiEventError] = useState<string | null>(null);
   const event = contextEvent || apiEvent || undefined;
+  const canUploadPhotos = isAdmin || event?.canUploadPhotos !== false;
   const allEventPhotos = eventId ? getPhotosByEvent(eventId) : [];
   const selectedClassContext = useMemo(() => {
     const state = location.state as
@@ -917,36 +923,38 @@ export const EventDetail: React.FC = () => {
                 <span className="tab-badge">{tabCounts.uploads}</span>
               </button>
 
-              <div className="ml-auto flex items-center gap-3">
-                <button
-                  onClick={() => {
-                    const params = new URLSearchParams({
-                      eventId: event!.id,
-                      from: 'event',
-                    });
-                    if (selectedClassContext.id) {
-                      params.set('classSectionId', selectedClassContext.id);
-                    }
-                    if (selectedClassContext.equipeClassSectionId) {
-                      params.set(
-                        'equipeClassSectionId',
-                        selectedClassContext.equipeClassSectionId
-                      );
-                    }
-                    if (selectedClassContext.name) {
-                      params.set('className', selectedClassContext.name);
-                    }
-                    if (selectedClassContext.arenaName) {
-                      params.set('arenaName', selectedClassContext.arenaName);
-                    }
-                    navigate(`${basePath}/upload?${params.toString()}`);
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
-                >
-                  <UploadCloud size={16} />
-                  Upload
-                </button>
-              </div>
+              {canUploadPhotos && (
+                <div className="ml-auto flex items-center gap-3">
+                  <button
+                    onClick={() => {
+                      const params = new URLSearchParams({
+                        eventId: event!.id,
+                        from: 'event',
+                      });
+                      if (selectedClassContext.id) {
+                        params.set('classSectionId', selectedClassContext.id);
+                      }
+                      if (selectedClassContext.equipeClassSectionId) {
+                        params.set(
+                          'equipeClassSectionId',
+                          selectedClassContext.equipeClassSectionId
+                        );
+                      }
+                      if (selectedClassContext.name) {
+                        params.set('className', selectedClassContext.name);
+                      }
+                      if (selectedClassContext.arenaName) {
+                        params.set('arenaName', selectedClassContext.arenaName);
+                      }
+                      navigate(`${basePath}/upload?${params.toString()}`);
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
+                  >
+                    <UploadCloud size={16} />
+                    Upload
+                  </button>
+                </div>
+              )}
 
               {/* Event title when expanded */}
               {isExpanded && (
@@ -1368,7 +1376,9 @@ export const EventDetail: React.FC = () => {
                             <p>
                               {searchTerm
                                 ? `No photos match "${searchTerm}"`
-                                : 'This folder is empty. Upload photos to get started.'}
+                                : canUploadPhotos
+                                  ? 'This folder is empty. Upload photos to get started.'
+                                  : 'This event is read-only because the booking was cancelled.'}
                             </p>
                           </div>
                         )}
