@@ -301,14 +301,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <p className="text-secondary text-xs leading-[1.4] text-center m-0">
                   By continuing, you agree to our{' '}
                   <a
-                    href="#"
+                    href="/terms"
+                    target="_blank"
                     className="text-[var(--color-brand-primary)] underline"
                   >
                     Terms
                   </a>{' '}
                   and{' '}
                   <a
-                    href="#"
+                    href="/privacy"
+                    target="_blank"
                     className="text-[var(--color-brand-primary)] underline"
                   >
                     Privacy Policy
@@ -442,7 +444,7 @@ const SignInForm: React.FC<FormProps> = ({
 
   return (
     <div className="auth-form-wrapper">
-      <div className="auth-oauth-group">
+      {/* <div className="auth-oauth-group">
         <button
           className="auth-btn-oauth"
           type="button"
@@ -478,9 +480,9 @@ const SignInForm: React.FC<FormProps> = ({
           </svg>
           Continue with Apple
         </button>
-      </div>
+      </div> */}
 
-      <div className="auth-divider">or</div>
+      {/* <div className="auth-divider">or</div> */}
 
       <form id="auth-main-form" className="auth-form" onSubmit={handleSubmit}>
         <div className="auth-input-group">
@@ -675,7 +677,7 @@ const RegisterForm: React.FC<FormProps> = ({
 
   return (
     <div className="auth-form-wrapper">
-      <div className="auth-oauth-group">
+      {/* <div className="auth-oauth-group">
         <button
           className="auth-btn-oauth"
           type="button"
@@ -711,9 +713,9 @@ const RegisterForm: React.FC<FormProps> = ({
           </svg>
           Continue with Apple
         </button>
-      </div>
-
-      <div className="auth-divider">or</div>
+      </div> */}
+      {/* 
+      <div className="auth-divider">or</div> */}
 
       <form id="auth-main-form" className="auth-form" onSubmit={handleSubmit}>
         <div className="flex gap-4">

@@ -38,7 +38,7 @@ export const CopyrightBar: React.FC<CopyrightBarProps> = ({
                 window.dispatchEvent(
                   new CustomEvent('open-contact-support', {
                     detail: { photographerOnly: true },
-                  }),
+                  })
                 );
               }}
             >
@@ -136,7 +136,7 @@ export const CopyrightBar: React.FC<CopyrightBarProps> = ({
             <TikTokIcon size={20} />
           </a>
           <a
-            href="https://www.facebook.com/gallopics"
+            href="https://www.facebook.com/share/1DriauvcA6/?mibextid=wwXIfr"
             target="_blank"
             rel="noopener noreferrer"
             aria-label="Facebook"

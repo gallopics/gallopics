@@ -17,7 +17,7 @@ export const ContactSupportModal: React.FC<ContactSupportModalProps> = ({
   photographerOnly = false,
 }) => {
   const [role, setRole] = useState<UserRole>(
-    photographerOnly ? 'Photographer' : 'Photo buyer',
+    photographerOnly ? 'Photographer' : 'Photo buyer'
   );
   const [email, setEmail] = useState('');
   const [countryCode, setCountryCode] = useState('+46');
@@ -119,7 +119,7 @@ export const ContactSupportModal: React.FC<ContactSupportModalProps> = ({
 
       if (!response.ok) {
         throw new Error(
-          `Contact request failed with status ${response.status}`,
+          `Contact request failed with status ${response.status}`
         );
       }
 
@@ -131,7 +131,7 @@ export const ContactSupportModal: React.FC<ContactSupportModalProps> = ({
             type: 'success',
             message: 'Message sent successfully! We will get back to you soon.',
           },
-        }),
+        })
       );
 
       setTimeout(() => {
@@ -146,7 +146,7 @@ export const ContactSupportModal: React.FC<ContactSupportModalProps> = ({
             type: 'danger',
             message: 'Failed to send message. Please try again.',
           },
-        }),
+        })
       );
     }
   };
@@ -221,7 +221,9 @@ export const ContactSupportModal: React.FC<ContactSupportModalProps> = ({
                 <input
                   id="support-email"
                   type="email"
-                  className={`auth-input !pl-[42px] ${errors.email ? 'error' : ''}`}
+                  className={`auth-input !pl-[42px] ${
+                    errors.email ? 'error' : ''
+                  }`}
                   placeholder="name@example.com"
                   value={email}
                   onChange={e => {
@@ -287,7 +289,9 @@ export const ContactSupportModal: React.FC<ContactSupportModalProps> = ({
                 <input
                   id="support-subject"
                   type="text"
-                  className={`auth-input !pl-[42px] ${errors.subject ? 'error' : ''}`}
+                  className={`auth-input !pl-[42px] ${
+                    errors.subject ? 'error' : ''
+                  }`}
                   placeholder="Subject"
                   value={subject}
                   onChange={e => {
@@ -315,7 +319,9 @@ export const ContactSupportModal: React.FC<ContactSupportModalProps> = ({
                 />
                 <textarea
                   id="support-message"
-                  className={`auth-input !pl-[42px] !h-[120px] !py-3 resize-none leading-relaxed ${errors.message ? 'error' : ''}`}
+                  className={`auth-input !pl-[42px] !h-[120px] !py-3 resize-none leading-relaxed ${
+                    errors.message ? 'error' : ''
+                  }`}
                   placeholder="Describe your issue..."
                   value={message}
                   onChange={e => {
@@ -366,7 +372,8 @@ export const ContactSupportModal: React.FC<ContactSupportModalProps> = ({
 
           <div className="flex items-center justify-center gap-2 pt-2 border-t border-[var(--color-border)]">
             <a
-              href="#"
+              href="/faq"
+              target="_blank"
               className="text-[0.75rem] text-[var(--color-text-secondary)] no-underline transition-colors duration-200 hover:text-[var(--color-brand-primary)]"
             >
               FAQs
@@ -375,7 +382,8 @@ export const ContactSupportModal: React.FC<ContactSupportModalProps> = ({
               •
             </span>
             <a
-              href="#"
+              href="/terms"
+              target="_blank"
               className="text-[0.75rem] text-[var(--color-text-secondary)] no-underline transition-colors duration-200 hover:text-[var(--color-brand-primary)]"
             >
               Terms
@@ -384,7 +392,8 @@ export const ContactSupportModal: React.FC<ContactSupportModalProps> = ({
               •
             </span>
             <a
-              href="#"
+              href="/privacy"
+              target="_blank"
               className="text-[0.75rem] text-[var(--color-text-secondary)] no-underline transition-colors duration-200 hover:text-[var(--color-brand-primary)]"
             >
               Privacy
