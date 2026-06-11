@@ -19,6 +19,7 @@ import {
   PHOTOGRAPHERS,
   photos,
 } from '../data/mockData';
+import type { EventData } from '../data/mockEvents';
 import { useMobileSearchMode } from '../hooks/useMobileSearchMode';
 
 import { HorseIcon } from './icons/HorseIcon';
@@ -29,6 +30,7 @@ interface SearchResult {
   type: 'event' | 'rider' | 'horse' | 'photographer' | 'photo';
   title: string;
   subtitle: string;
+  matchLabel?: string;
   meta?: string;
   photoSrc?: string; // For thumbnail
 }
@@ -44,6 +46,11 @@ interface ModernSearchBarProps {
   mobilePlaceholder?: string;
   desktopPlaceholder?: string;
   heroMode?: boolean;
+  eventOptions?: EventData[];
+  eventSearchIndex?: Record<string, string>;
+  eventMatchLabels?: Record<string, string>;
+  eventOnly?: boolean;
+  onSearchChange?: (value: string) => void;
 }
 
 export const ModernSearchBar: React.FC<ModernSearchBarProps> = ({
@@ -53,10 +60,19 @@ export const ModernSearchBar: React.FC<ModernSearchBarProps> = ({
   mobilePlaceholder,
   desktopPlaceholder,
   heroMode = false,
+  eventOptions,
+  eventSearchIndex = {},
+  eventMatchLabels = {},
+  eventOnly = false,
+  onSearchChange,
 }) => {
   const defaultDesktopPlaceholder =
-    'Search riders, horses, events, photographers, photo ID...';
-  const defaultMobilePlaceholder = 'Search...';
+    eventOnly
+      ? 'Search events, riders, horses, photographers...'
+      : 'Search riders, horses, events, photographers, photo ID...';
+  const defaultMobilePlaceholder = eventOnly
+    ? 'Search events...'
+    : 'Search...';
 
   // Determine current placeholder based on width/prop
   const isMobileBreakpoint =
@@ -84,6 +100,7 @@ export const ModernSearchBar: React.FC<ModernSearchBarProps> = ({
     deactivateSearch();
     setIsOpen(false);
     setQuery('');
+    onSearchChange?.('');
     // Force full close if collapsible to ensure clean state
     if (collapsible) setIsExpanded(false);
 
@@ -147,6 +164,7 @@ export const ModernSearchBar: React.FC<ModernSearchBarProps> = ({
 
   const handleSearch = (val: string) => {
     setQuery(val);
+    onSearchChange?.(val);
     if (val.length < 2) {
       setGroups({});
       setHasResults(false);
@@ -160,89 +178,123 @@ export const ModernSearchBar: React.FC<ModernSearchBarProps> = ({
     let count = 0;
 
     // 1. Events
-    const events = COMPETITIONS.filter(
-      c =>
-        c.name.toLowerCase().includes(lower) ||
-        c.city.toLowerCase().includes(lower),
-    )
-      .slice(0, MAX_PER_GROUP)
-      .map(c => ({
-        id: c.id,
-        type: 'event' as const,
-        title: c.name,
-        subtitle: `${c.city} • ${formatDate(c.date, c.endDate)} • ${c.discipline}`,
-        meta: c.country,
-      }));
+    const events = eventOptions
+      ? eventOptions
+          .filter(event => {
+            const searchableText = [
+              event.name,
+              event.city,
+              event.country,
+              event.discipline,
+              event.photographer?.name,
+              eventSearchIndex[event.id],
+            ]
+              .filter(Boolean)
+              .join(' ')
+              .toLowerCase();
+
+            return searchableText.includes(lower);
+          })
+          .slice(0, MAX_PER_GROUP)
+          .map(event => ({
+            id: event.id,
+            type: 'event' as const,
+            title: event.name,
+            subtitle: `${event.city} • ${event.period} • ${event.discipline}`,
+            matchLabel: eventMatchLabels[event.id],
+            meta: event.country,
+          }))
+      : COMPETITIONS.filter(
+          c =>
+            c.name.toLowerCase().includes(lower) ||
+            c.city.toLowerCase().includes(lower),
+        )
+          .slice(0, MAX_PER_GROUP)
+          .map(c => ({
+            id: c.id,
+            type: 'event' as const,
+            title: c.name,
+            subtitle: `${c.city} • ${formatDate(c.date, c.endDate)} • ${c.discipline}`,
+            meta: c.country,
+          }));
     if (events.length) newGroups['event'] = events;
     count += events.length;
 
-    // 2. Riders
-    const riders = RIDERS.filter(r =>
-      `${r.firstName} ${r.lastName}`.toLowerCase().includes(lower),
-    )
-      .slice(0, MAX_PER_GROUP)
-      .map(r => {
-        const fullName = `${r.firstName} ${r.lastName}`;
-        return {
-          id: r.id,
-          type: 'rider' as const,
-          title: fullName,
-          subtitle: getAssociation(r.id, 'rider'),
-        };
-      });
-    if (riders.length) newGroups['rider'] = riders;
-    count += riders.length;
+    if (!eventOnly) {
+      // 2. Riders
+      const riders = RIDERS.filter(r =>
+        `${r.firstName} ${r.lastName}`.toLowerCase().includes(lower),
+      )
+        .slice(0, MAX_PER_GROUP)
+        .map(r => {
+          const fullName = `${r.firstName} ${r.lastName}`;
+          return {
+            id: r.id,
+            type: 'rider' as const,
+            title: fullName,
+            subtitle: getAssociation(r.id, 'rider'),
+          };
+        });
+      if (riders.length) newGroups['rider'] = riders;
+      count += riders.length;
 
-    // 3. Horses
-    const horses = HORSES.filter(
-      h =>
-        h.name.toLowerCase().includes(lower) ||
-        h.registeredName.toLowerCase().includes(lower),
-    )
-      .slice(0, MAX_PER_GROUP)
-      .map(h => ({
-        id: h.id,
-        type: 'horse' as const,
-        title: h.name,
-        subtitle: getAssociation(h.id, 'horse'),
-      }));
-    if (horses.length) newGroups['horse'] = horses;
-    count += horses.length;
+      // 3. Horses
+      const horses = HORSES.filter(
+        h =>
+          h.name.toLowerCase().includes(lower) ||
+          h.registeredName.toLowerCase().includes(lower),
+      )
+        .slice(0, MAX_PER_GROUP)
+        .map(h => ({
+          id: h.id,
+          type: 'horse' as const,
+          title: h.name,
+          subtitle: getAssociation(h.id, 'horse'),
+        }));
+      if (horses.length) newGroups['horse'] = horses;
+      count += horses.length;
 
-    // 4. Photographers
-    const photographers = PHOTOGRAPHERS.filter(p =>
-      `${p.firstName} ${p.lastName}`.toLowerCase().includes(lower),
-    )
-      .slice(0, MAX_PER_GROUP)
-      .map(p => ({
-        id: p.id,
-        type: 'photographer' as const,
-        title: `${p.firstName} ${p.lastName}`,
-        subtitle: p.city || 'Photographer',
-      }));
-    if (photographers.length) newGroups['photographer'] = photographers;
-    count += photographers.length;
+      // 4. Photographers
+      const photographers = PHOTOGRAPHERS.filter(p =>
+        `${p.firstName} ${p.lastName}`.toLowerCase().includes(lower),
+      )
+        .slice(0, MAX_PER_GROUP)
+        .map(p => ({
+          id: p.id,
+          type: 'photographer' as const,
+          title: `${p.firstName} ${p.lastName}`,
+          subtitle: p.city || 'Photographer',
+        }));
+      if (photographers.length) newGroups['photographer'] = photographers;
+      count += photographers.length;
 
-    // 5. Photos (Search by ID)
-    // Clean query for ID search: remove # if present
-    const cleanQuery = lower.replace(/^#/, '');
-    const matchingPhotos = photos
-      .filter(p => p.id.toLowerCase().includes(cleanQuery))
-      .slice(0, MAX_PER_GROUP)
-      .map(p => ({
-        id: p.id,
-        type: 'photo' as const,
-        title: `#${p.id.toUpperCase()}`,
-        subtitle: `${p.event} • ${p.rider}`,
-      }));
+      // 5. Photos (Search by ID)
+      // Clean query for ID search: remove # if present
+      const cleanQuery = lower.replace(/^#/, '');
+      const matchingPhotos = photos
+        .filter(p => p.id.toLowerCase().includes(cleanQuery))
+        .slice(0, MAX_PER_GROUP)
+        .map(p => ({
+          id: p.id,
+          type: 'photo' as const,
+          title: `#${p.id.toUpperCase()}`,
+          subtitle: `${p.event} • ${p.rider}`,
+        }));
 
-    if (matchingPhotos.length) newGroups['photo'] = matchingPhotos;
-    count += matchingPhotos.length;
+      if (matchingPhotos.length) newGroups['photo'] = matchingPhotos;
+      count += matchingPhotos.length;
+    }
 
     setGroups(newGroups);
     setHasResults(count > 0);
     setIsOpen(true);
   };
+
+  useEffect(() => {
+    if (query.length >= 2) {
+      handleSearch(query);
+    }
+  }, [eventOptions, eventSearchIndex, eventMatchLabels]);
 
   // Close outside or Collapse
   useEffect(() => {
@@ -420,6 +472,7 @@ export const ModernSearchBar: React.FC<ModernSearchBarProps> = ({
     'photographer',
     'photo',
   ];
+  const visibleGroupOrder = eventOnly ? groupOrder.slice(0, 1) : groupOrder;
 
   const isLight = theme === 'light';
 
@@ -451,7 +504,7 @@ export const ModernSearchBar: React.FC<ModernSearchBarProps> = ({
         style={style}
       >
         {hasResults
-          ? groupOrder.map(type => {
+          ? visibleGroupOrder.map(type => {
               const groupItems = groups[type];
               if (!groupItems) return null;
 
@@ -468,7 +521,7 @@ export const ModernSearchBar: React.FC<ModernSearchBarProps> = ({
                   {groupItems.map(item => (
                     <div
                       key={item.id}
-                      className={`flex items-center px-4 h-14 cursor-pointer transition-[background] duration-[150ms] ease-linear clickable ${isLight ? 'hover:bg-[var(--brand-tint-hover)]' : 'hover:bg-white/[0.06]'}`}
+                      className={`flex items-center px-4 ${item.matchLabel ? 'h-[78px]' : 'h-14'} cursor-pointer transition-[background] duration-[150ms] ease-linear clickable ${isLight ? 'hover:bg-[var(--brand-tint-hover)]' : 'hover:bg-white/[0.06]'}`}
                       onMouseDown={e => e.preventDefault()}
                       onClick={() => handleResultClick(item)}
                     >
@@ -479,12 +532,19 @@ export const ModernSearchBar: React.FC<ModernSearchBarProps> = ({
                       </div>
                       <div className="flex flex-col justify-center overflow-hidden flex-1">
                         <span
-                          className={`text-[0.875rem] font-medium whitespace-nowrap overflow-hidden text-ellipsis leading-[1.2] ${isLight ? 'text-[var(--color-text-primary)]' : 'text-[#EEE]'}`}
+                          className={`text-[0.875rem] font-medium whitespace-nowrap overflow-hidden text-ellipsis leading-[1.25] ${isLight ? 'text-[var(--color-text-primary)]' : 'text-[#EEE]'}`}
                         >
                           {item.title}
                         </span>
+                        {item.matchLabel && (
+                          <span
+                            className={`text-[0.75rem] whitespace-nowrap overflow-hidden text-ellipsis mt-1 leading-[1.25] font-medium ${isLight ? 'text-[var(--color-brand-primary)]' : 'text-[#90caf9]'}`}
+                          >
+                            {item.matchLabel}
+                          </span>
+                        )}
                         <span
-                          className={`text-[0.75rem] whitespace-nowrap overflow-hidden text-ellipsis mt-0.5 leading-[1.2] ${isLight ? 'text-[var(--color-text-secondary)]' : 'text-[var(--color-text-secondary)]'}`}
+                          className={`text-[0.75rem] whitespace-nowrap overflow-hidden text-ellipsis ${item.matchLabel ? 'mt-1' : 'mt-0.5'} leading-[1.25] ${isLight ? 'text-[var(--color-text-secondary)]' : 'text-[var(--color-text-secondary)]'}`}
                         >
                           {item.subtitle}
                         </span>
@@ -527,11 +587,12 @@ export const ModernSearchBar: React.FC<ModernSearchBarProps> = ({
     <div className="fixed inset-0 z-[2000] pointer-events-none pt-[calc(env(safe-area-inset-top)+12px)] px-3 flex flex-col items-center">
       <div
         className="fixed inset-0 bg-black/65 backdrop-blur-[2px] z-[2001] pointer-events-auto [animation:fadeIn_0.2s_ease]"
-        onClick={() => {
-          setIsOpen(false);
-          deactivateSearch();
-          setIsExpanded(false);
-        }}
+          onClick={() => {
+            setIsOpen(false);
+            deactivateSearch();
+            setIsExpanded(false);
+            onSearchChange?.('');
+          }}
       />
 
       <div className="relative w-full max-w-full mx-auto z-[2005] pointer-events-auto">
@@ -555,6 +616,7 @@ export const ModernSearchBar: React.FC<ModernSearchBarProps> = ({
                 e.stopPropagation();
                 setQuery('');
                 setGroups({});
+                onSearchChange?.('');
                 inputRef.current?.focus();
               }}
             >
@@ -565,7 +627,9 @@ export const ModernSearchBar: React.FC<ModernSearchBarProps> = ({
 
         {/* Mobile Helper Line */}
         <div className="mt-2 px-0 w-full text-white/90 text-[12px] font-medium tracking-[0.02em] [text-shadow:0_1px_2px_rgba(0,0,0,0.6)] whitespace-normal leading-[1.3] line-clamp-2 text-center pointer-events-none">
-          Riders • Horses • Events • Photographers • Photo ID
+          {eventOnly
+            ? 'Events • Riders • Horses • Photographers'
+            : 'Riders • Horses • Events • Photographers • Photo ID'}
         </div>
 
         {renderResults()}
@@ -670,6 +734,7 @@ export const ModernSearchBar: React.FC<ModernSearchBarProps> = ({
                 e.stopPropagation();
                 setQuery('');
                 setGroups({});
+                onSearchChange?.('');
               }}
             >
               <X size={14} />
