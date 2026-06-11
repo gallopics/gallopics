@@ -28,13 +28,13 @@ interface ClerkDebugInfo {
   details: string;
 }
 
-const routerBase =
-  import.meta.env.BASE_URL === '/'
-    ? ''
-    : import.meta.env.BASE_URL.replace(/\/$/, '');
+// const routerBase =
+//   import.meta.env.BASE_URL === '/'
+//     ? ''
+//     : import.meta.env.BASE_URL.replace(/\/$/, '');
 
-const buildAbsoluteUrl = (path: string) =>
-  new URL(`${routerBase}${path}`, window.location.origin).toString();
+// const buildAbsoluteUrl = (path: string) =>
+//   new URL(`${routerBase}${path}`, window.location.origin).toString();
 
 const buildClerkMetadata = (overrides?: Record<string, unknown>) => ({
   approvalStatus: 'pending',
@@ -109,11 +109,11 @@ const buildSignInDebugInfo = (result: unknown): ClerkDebugInfo => {
   };
 };
 
-const getOAuthCallbackUrl = () => buildAbsoluteUrl('/auth/callback');
+// const getOAuthCallbackUrl = () => buildAbsoluteUrl('/auth/callback');
 
-const getPostSignInUrl = () => buildAbsoluteUrl('/pg');
+// const getPostSignInUrl = () => buildAbsoluteUrl('/pg');
 
-const getPostSignUpUrl = () => buildAbsoluteUrl('/pg/onboarding/profile');
+// const getPostSignUpUrl = () => buildAbsoluteUrl('/pg/onboarding/profile');
 
 const getPostSignInRoute = (identifier: string) => {
   const normalized = identifier.trim().toLowerCase();
@@ -419,28 +419,28 @@ const SignInForm: React.FC<FormProps> = ({
     }
   };
 
-  const startOAuth = async (strategy: 'oauth_google' | 'oauth_apple') => {
-    if (!isLoaded) {
-      return;
-    }
+  // const startOAuth = async (strategy: 'oauth_google' | 'oauth_apple') => {
+  //   if (!isLoaded) {
+  //     return;
+  //   }
 
-    setIsLoading(true);
-    setErrors({});
+  //   setIsLoading(true);
+  //   setErrors({});
 
-    try {
-      await signIn.authenticateWithRedirect({
-        strategy,
-        redirectUrl: getOAuthCallbackUrl(),
-        redirectUrlComplete: getPostSignInUrl(),
-      });
-    } catch (error) {
-      console.error('Clerk OAuth sign-in error', error);
-      setErrors({
-        form: getClerkErrorMessage(error, 'Unable to start social sign-in.'),
-      });
-      setIsLoading(false);
-    }
-  };
+  //   try {
+  //     await signIn.authenticateWithRedirect({
+  //       strategy,
+  //       redirectUrl: getOAuthCallbackUrl(),
+  //       redirectUrlComplete: getPostSignInUrl(),
+  //     });
+  //   } catch (error) {
+  //     console.error('Clerk OAuth sign-in error', error);
+  //     setErrors({
+  //       form: getClerkErrorMessage(error, 'Unable to start social sign-in.'),
+  //     });
+  //     setIsLoading(false);
+  //   }
+  // };
 
   return (
     <div className="auth-form-wrapper">
@@ -651,29 +651,29 @@ const RegisterForm: React.FC<FormProps> = ({
     await handleCreateAccount();
   };
 
-  const startOAuth = async (strategy: 'oauth_google' | 'oauth_apple') => {
-    if (!isLoaded) {
-      return;
-    }
+  // const startOAuth = async (strategy: 'oauth_google' | 'oauth_apple') => {
+  //   if (!isLoaded) {
+  //     return;
+  //   }
 
-    setIsLoading(true);
-    setErrors({});
+  //   setIsLoading(true);
+  //   setErrors({});
 
-    try {
-      await signUp.authenticateWithRedirect({
-        strategy,
-        redirectUrl: getOAuthCallbackUrl(),
-        redirectUrlComplete: getPostSignUpUrl(),
-        unsafeMetadata: buildClerkMetadata(),
-      });
-    } catch (error) {
-      console.error('Clerk OAuth sign-up error', error);
-      setErrors({
-        form: getClerkErrorMessage(error, 'Unable to start social sign-up.'),
-      });
-      setIsLoading(false);
-    }
-  };
+  //   try {
+  //     await signUp.authenticateWithRedirect({
+  //       strategy,
+  //       redirectUrl: getOAuthCallbackUrl(),
+  //       redirectUrlComplete: getPostSignUpUrl(),
+  //       unsafeMetadata: buildClerkMetadata(),
+  //     });
+  //   } catch (error) {
+  //     console.error('Clerk OAuth sign-up error', error);
+  //     setErrors({
+  //       form: getClerkErrorMessage(error, 'Unable to start social sign-up.'),
+  //     });
+  //     setIsLoading(false);
+  //   }
+  // };
 
   return (
     <div className="auth-form-wrapper">
