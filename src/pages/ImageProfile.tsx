@@ -19,9 +19,7 @@ import {
   HORSES,
 } from '../data/mockData';
 import {
-  Share2,
   ChevronLeft,
-  ChevronRight,
   ShoppingBag,
   Check,
   Zap,
@@ -41,8 +39,6 @@ import {
 import type { Photo } from '../types';
 
 import { QUALITY_TIERS, getPriceByTierId } from '../constants/qualityTiers';
-
-const getPrice = (quality: string) => getPriceByTierId(quality);
 
 const isUuid = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -130,6 +126,7 @@ export function ImageProfile() {
           countryCode: 'se',
           photographer: photo.photographer_display_name || 'Gallopics',
           photographerId: photo.photographer_id,
+          price: photo.price,
         });
       })
       .catch(() => {
@@ -260,6 +257,8 @@ export function ImageProfile() {
       item => item.photoId === photo.id && item.quality === selectedQuality,
     );
   }, [cart, photo.id, selectedQuality]);
+
+  const getPrice = (quality: string) => getPriceByTierId(quality);
 
   const checkoutLineItems = useMemo<CheckoutLineItem[]>(() => {
     const selected = QUALITY_TIERS.find(t => t.id === selectedQuality);
@@ -444,7 +443,7 @@ export function ImageProfile() {
                     />
                   </div>
 
-                  <div className="flex items-center gap-3 max-md:flex-shrink-0 max-md:flex max-md:items-center max-md:mt-1">
+                  {/* <div className="flex items-center gap-3 max-md:flex-shrink-0 max-md:flex max-md:items-center max-md:mt-1">
                     <div className="flex gap-1 max-md:hidden">
                       <button
                         className="w-9 h-9 rounded-full flex items-center justify-center text-[var(--color-text-secondary)] transition-[background] duration-200 hover:bg-[var(--ui-bg-subtle)] hover:text-[var(--color-text-primary)]"
@@ -466,7 +465,7 @@ export function ImageProfile() {
                     >
                       <Share2 size={20} />
                     </button>
-                  </div>
+                  </div> */}
                 </div>
               </div>
             </div>

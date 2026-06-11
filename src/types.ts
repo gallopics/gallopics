@@ -16,6 +16,7 @@ export interface Photo {
   countryCode: string;
   photographer?: string;
   photographerId?: string;
+  price?: number;
   isDuplicate?: boolean;
   duplicateGroupId?: string;
 }

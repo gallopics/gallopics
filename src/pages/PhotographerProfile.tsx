@@ -17,15 +17,11 @@ import type { BreadcrumbItem } from '../components/Breadcrumbs';
 import { Footer } from '../components/Footer';
 import { MasonryGrid } from '../components/MasonryGrid';
 import { PhotoCard } from '../components/PhotoCard';
-import {
-  getActivePhotographerProfile,
-  PHOTOGRAPHERS,
-} from '../data/mockData';
+import { getActivePhotographerProfile, PHOTOGRAPHERS } from '../data/mockData';
 import { mockEvents } from '../data/mockEvents';
 
 import { Highlights } from '../components/Highlights';
 import {
-  ShareIconButton,
   ActionSeparator,
   ActionCluster,
 } from '../components/HeaderActions';
@@ -319,7 +315,11 @@ export function PhotographerProfile() {
       groups.set(photo.eventId, {
         id: photo.eventId,
         title: event?.title || fallbackEvent?.name || photo.event || 'Event',
-        date: event?.dateRange || event?.date || fallbackEvent?.period || photo.date,
+        date:
+          event?.dateRange ||
+          event?.date ||
+          fallbackEvent?.period ||
+          photo.date,
         city: event?.city || fallbackEvent?.city || photo.city,
         cover: photo.src,
         photos: [photo],
@@ -524,7 +524,7 @@ export function PhotographerProfile() {
 
             <ActionSeparator />
 
-            <ShareIconButton />
+            {/* <ShareIconButton /> */}
           </ActionCluster>
         }
       />
@@ -659,30 +659,32 @@ export function PhotographerProfile() {
                 </div>
               )}
 
-              {galleryEventId && !galleryClassKey && galleryClasses.length > 0 && (
-                <div className="photographer-gallery-grid">
-                  {galleryClasses.map(classGroup => (
-                    <button
-                      type="button"
-                      key={classGroup.key}
-                      className="photographer-gallery-card"
-                      onClick={() => setGalleryClassKey(classGroup.key)}
-                    >
-                      <img src={classGroup.cover} alt="" />
-                      <div className="photographer-gallery-card-body">
-                        <h3>{classGroup.name}</h3>
-                        <p>
-                          <Images size={14} />
-                          {selectedGalleryEvent?.title}
-                        </p>
-                        <div className="photographer-gallery-meta">
-                          <span>{classGroup.photos.length} photos</span>
+              {galleryEventId &&
+                !galleryClassKey &&
+                galleryClasses.length > 0 && (
+                  <div className="photographer-gallery-grid">
+                    {galleryClasses.map(classGroup => (
+                      <button
+                        type="button"
+                        key={classGroup.key}
+                        className="photographer-gallery-card"
+                        onClick={() => setGalleryClassKey(classGroup.key)}
+                      >
+                        <img src={classGroup.cover} alt="" />
+                        <div className="photographer-gallery-card-body">
+                          <h3>{classGroup.name}</h3>
+                          <p>
+                            <Images size={14} />
+                            {selectedGalleryEvent?.title}
+                          </p>
+                          <div className="photographer-gallery-meta">
+                            <span>{classGroup.photos.length} photos</span>
+                          </div>
                         </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
               {selectedGalleryClass && (
                 <MasonryGrid>
