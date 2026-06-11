@@ -28,7 +28,7 @@ import {
 import type { EventData } from '../data/mockEvents';
 import { PHOTOGRAPHERS } from '../data/mockData';
 import {
-  ShareIconButton,
+  // ShareIconButton,
   ActionSeparator,
   ActionCluster,
 } from '../components/HeaderActions';
@@ -238,7 +238,8 @@ export function EventProfile() {
       id: photo.id,
       src: photo.url,
       rider: photo.rider || 'Unassigned',
-      horse: photo.horse || photo.className || photo.fileName || 'Uploaded photo',
+      horse:
+        photo.horse || photo.className || photo.fileName || 'Uploaded photo',
       event: eventDetail.meeting.name,
       eventId,
       date: photo.uploadDate || eventDetail.meeting.period.startDate,
@@ -426,7 +427,7 @@ export function EventProfile() {
                 <ActionSeparator />
               </>
             )}
-            <ShareIconButton />
+            {/* <ShareIconButton /> */}
           </ActionCluster>
         }
       />
@@ -496,9 +497,16 @@ export function EventProfile() {
                 )}
               >
                 {activePhotos.map(photo => (
-                  <div key={photo.id} className="relative group">
+                  <div
+                    key={photo.id}
+                    className={`relative group ${
+                      isPhotographerMyEventView ? 'event-photo-manage-card' : ''
+                    }`}
+                  >
                     <PhotoCard
                       photo={photo}
+                      showCartActions={true}
+                      showShareActions={false}
                       onClick={p =>
                         navigate(
                           `/photo/${p.id}?from=epro&eventId=${meeting.id}`,
@@ -508,7 +516,7 @@ export function EventProfile() {
                     />
                     {isPhotographerMyEventView && (
                       <button
-                        className="icon-btn-glass delete-action absolute top-3 right-3 z-40 opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                        className="icon-btn-glass delete-action absolute top-3 right-3 z-40 opacity-100"
                         onClick={e => {
                           e.stopPropagation();
                           setPhotoToDelete(photo);

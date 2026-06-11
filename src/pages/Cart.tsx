@@ -9,7 +9,7 @@ import { Trash2, ArrowLeft, ShoppingBag, Check, Eye } from 'lucide-react';
 import { CheckoutPanel } from '../components/CheckoutPanel';
 import { COMPETITIONS } from '../data/mockData';
 import { PhotoCard } from '../components/PhotoCard';
-import { QUALITY_TIERS } from '../constants/qualityTiers';
+import { getDefaultCartTier } from '../constants/qualityTiers';
 import { api, type CheckoutLineItem, type CheckoutOrder } from '../data/apiClient';
 import type { CartItem } from '../types';
 
@@ -36,8 +36,7 @@ export function Cart() {
   }, [toast]);
 
   const handleAddToCart = (photo: any) => {
-    // Default to high quality tier
-    const tier = QUALITY_TIERS.find(t => t.id === 'high') || QUALITY_TIERS[1];
+    const tier = getDefaultCartTier();
     const exists = cart.some(
       item => item.photoId === photo.id && item.quality === tier.id,
     );

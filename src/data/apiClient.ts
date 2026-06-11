@@ -30,6 +30,21 @@ export function resolveApiAssetUrl(path: string | null | undefined) {
   return new URL(path, getApiBaseUrl()).toString();
 }
 
+function resolveApiDownloadUrl(url: string) {
+  const downloadUrl = new URL(url, getApiBaseUrl());
+
+  if (
+    /^\/api\/v1\/photos\/[^/]+\/download$/i.test(downloadUrl.pathname) &&
+    downloadUrl.searchParams.has('order_id')
+  ) {
+    const apiBaseUrl = new URL(getApiBaseUrl());
+    return new URL(`${downloadUrl.pathname}${downloadUrl.search}`, apiBaseUrl)
+      .toString();
+  }
+
+  return downloadUrl.toString();
+}
+
 export interface ApiUser {
   id: string;
   clerk_user_id: string;
@@ -427,15 +442,21 @@ export const api = {
       }),
     }),
 
-  createPhotoDownload: (photoId: string, orderId: string) =>
-    request<PhotoDownloadResponse>(
+  createPhotoDownload: async (photoId: string, orderId: string) => {
+    const download = await request<PhotoDownloadResponse>(
       `/api/v1/photos/${encodeURIComponent(photoId)}/download`,
       {
         method: 'POST',
         body: JSON.stringify({ order_id: orderId }),
         retryNetworkErrors: 1,
       }
-    ),
+    );
+
+    return {
+      ...download,
+      url: resolveApiDownloadUrl(download.url),
+    };
+  },
 };
 
 // --- Additional Types for Upload/Gallery ---

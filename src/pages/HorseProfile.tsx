@@ -9,17 +9,14 @@ import type { BreadcrumbItem } from '../components/Breadcrumbs';
 import { Footer } from '../components/Footer';
 import { MasonryGrid } from '../components/MasonryGrid';
 import { PhotoCard } from '../components/PhotoCard';
+import { getDefaultCartTier } from '../constants/qualityTiers';
 import { ModernDropdown } from '../components/ModernDropdown';
 import { InfoChip } from '../components/InfoChip';
-import {
-  HORSES,
-  RIDERS,
-  COMPETITIONS,
-} from '../data/mockData';
+import { HORSES, RIDERS, COMPETITIONS } from '../data/mockData';
 import { RiderIcon } from '../components/icons/RiderIcon';
 
 import {
-  ShareIconButton,
+  // ShareIconButton,
   ActionSeparator,
   ActionCluster,
 } from '../components/HeaderActions';
@@ -85,7 +82,7 @@ export function HorseProfile() {
       const relevantEvents = COMPETITIONS.filter(c => uniqueIds.includes(c.id));
       if (relevantEvents.length > 0) {
         relevantEvents.sort(
-          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
         );
         setSelectedEventId(relevantEvents[0].id);
       }
@@ -126,7 +123,7 @@ export function HorseProfile() {
         (eventClass === 'All' ||
           ((p as any).class || '1.30m') === eventClass) &&
         (photographer === 'All' ||
-          ((p as any).photographer || 'Unknown') === photographer),
+          ((p as any).photographer || 'Unknown') === photographer)
     );
     const uniqueIds = Array.from(new Set(available.map(p => p.eventId)));
     const relevantEvents = COMPETITIONS.filter(c => uniqueIds.includes(c.id));
@@ -144,7 +141,7 @@ export function HorseProfile() {
   // 4. Riders
   const riderOptions = useMemo(() => {
     const available = getAvailable(
-      p => !selectedEventId || p.eventId === selectedEventId,
+      p => !selectedEventId || p.eventId === selectedEventId
     );
     const unique = Array.from(new Set(available.map(p => p.rider))).sort();
     return [
@@ -156,10 +153,10 @@ export function HorseProfile() {
   // 5. Photographer
   const photographerOptions = useMemo(() => {
     const available = getAvailable(
-      p => !selectedEventId || p.eventId === selectedEventId,
+      p => !selectedEventId || p.eventId === selectedEventId
     );
     const unique = Array.from(
-      new Set(available.map(p => p.photographer).filter(Boolean)),
+      new Set(available.map(p => p.photographer).filter(Boolean))
     ).sort();
     return [
       { label: 'All Photographers', value: 'All' },
@@ -197,10 +194,10 @@ export function HorseProfile() {
                 riderCounts[p.rider] = (riderCounts[p.rider] || 0) + 1;
               });
               const topRiderName = Object.keys(riderCounts).reduce((a, b) =>
-                riderCounts[a] > riderCounts[b] ? a : b,
+                riderCounts[a] > riderCounts[b] ? a : b
               );
               const topRider = RIDERS.find(
-                r => `${r.firstName} ${r.lastName}` === topRiderName,
+                r => `${r.firstName} ${r.lastName}` === topRiderName
               );
 
               if (!topRider) return null;
@@ -214,7 +211,7 @@ export function HorseProfile() {
                     icon={<RiderIcon size={20} />}
                     onClick={() =>
                       navigate(
-                        `/rider/${topRider.id}?from=horse&horseId=${horseId}`,
+                        `/rider/${topRider.id}?from=horse&horseId=${horseId}`
                       )
                     }
                   />
@@ -222,7 +219,7 @@ export function HorseProfile() {
                 </>
               );
             })()}
-            <ShareIconButton />
+            {/* <ShareIconButton /> */}
           </ActionCluster>
         }
       />
@@ -272,16 +269,16 @@ export function HorseProfile() {
                   onClick={() => {
                     // Auto-reset to latest
                     const uniqueIds = Array.from(
-                      new Set(photos.map(p => p.eventId)),
+                      new Set(photos.map(p => p.eventId))
                     );
                     const relevantEvents = COMPETITIONS.filter(c =>
-                      uniqueIds.includes(c.id),
+                      uniqueIds.includes(c.id)
                     );
                     if (relevantEvents.length > 0) {
                       relevantEvents.sort(
                         (a, b) =>
                           new Date(b.date).getTime() -
-                          new Date(a.date).getTime(),
+                          new Date(a.date).getTime()
                       );
                       setSelectedEventId(relevantEvents[0].id);
                     }
@@ -320,19 +317,19 @@ export function HorseProfile() {
                 photo={photo}
                 onClick={p =>
                   navigate(
-                    `/photo/${p.id}?from=horse&horseId=${activeHorse.id}`,
+                    `/photo/${p.id}?from=horse&horseId=${activeHorse.id}`
                   )
                 }
                 onAddToCart={p => {
-                  // Check if in cart
+                  const tier = getDefaultCartTier();
                   const isInCart = cart.some(
-                    item => item.photoId === p.id && item.quality === 'high',
+                    item => item.photoId === p.id && item.quality === tier.id
                   );
                   if (isInCart) {
                     setToast({ message: 'Already in cart' });
                     return;
                   }
-                  addToCart(p, 'high', 'High Quality', 999);
+                  addToCart(p, tier.id, tier.label, tier.price);
                   setToast({ message: 'Added to cart' });
                 }}
               />

@@ -2598,6 +2598,17 @@ textarea.auth-input {
   transform: translateY(0);
 }
 
+.event-photo-manage-card .hover-actions-bottom {
+  opacity: 1;
+  top: 56px;
+  transform: translateY(0);
+}
+
+.event-photo-manage-card .card-hover-overlay {
+  background: transparent;
+  opacity: 1;
+}
+
 .icon-btn-glass {
   width: 36px;
   height: 36px;
@@ -2875,6 +2886,10 @@ textarea.auth-input {
     transform: translateY(0);
     top: 8px;
     right: 8px;
+  }
+
+  .event-photo-manage-card .hover-actions-bottom {
+    top: 60px;
   }
 
   .hover-actions-bottom .icon-btn-glass:not(.primary) {

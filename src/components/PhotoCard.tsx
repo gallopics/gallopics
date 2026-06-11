@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { WatermarkedThumbnail } from './WatermarkedThumbnail';
-import { QUALITY_TIERS } from '../constants/qualityTiers';
+import { getDefaultCartTier } from '../constants/qualityTiers';
 
 interface PhotoCardProps {
   photo: Photo;
@@ -51,6 +51,7 @@ interface PhotoCardProps {
   selectable?: boolean;
   showEdit?: boolean;
   showCartActions?: boolean;
+  showShareActions?: boolean;
 }
 
 export const PhotoCard: React.FC<PhotoCardProps> = ({
@@ -68,6 +69,7 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({
   selectable = true,
   showEdit = true,
   showCartActions = true,
+  showShareActions = true,
 }) => {
   const [isLoaded, setIsLoaded] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -79,7 +81,7 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({
   // 1. Variant Configuration (Tokenizing variants)
   const config = {
     isPG: ['pgUpload', 'pgDuplicate', 'pgPublished', 'pgArchived'].includes(
-      variant,
+      variant
     ),
     showDots: ['pgUpload', 'pgPublished', 'pgArchived'].includes(variant),
     showDuplicateMeta: variant === 'pgDuplicate',
@@ -115,8 +117,7 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({
     if (isAdded) {
       removeFromCartByPhotoId(photo.id);
     } else {
-      // Default to high quality tier
-      const tier = QUALITY_TIERS.find(t => t.id === 'high') || QUALITY_TIERS[1];
+      const tier = getDefaultCartTier();
       addToCart(photo, tier.id, tier.label, tier.price);
     }
 
@@ -137,11 +138,24 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({
           </div>
 
           <div className="card-mobile-actions">
-            <button className="mobile-action-btn" onClick={toggleMobileMenu}>
-              <MoreVertical size={20} />
-            </button>
+            {showShareActions ? (
+              <button className="mobile-action-btn" onClick={toggleMobileMenu}>
+                <MoreVertical size={20} />
+              </button>
+            ) : (
+              showCartActions && (
+                <button
+                  className="mobile-action-btn"
+                  onClick={handleToggleCart}
+                  title={isAdded ? 'Remove from cart' : 'Add to cart'}
+                  aria-label={isAdded ? 'Remove from cart' : 'Add to cart'}
+                >
+                  {isAdded ? <Check size={20} /> : <Plus size={20} />}
+                </button>
+              )
+            )}
 
-            {showMobileMenu && (
+            {showShareActions && showMobileMenu && (
               <div className="mobile-menu-popup">
                 {showCartActions && (
                   <button
@@ -159,14 +173,16 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({
                     )}
                   </button>
                 )}
-                <button
-                  onClick={e => {
-                    e.stopPropagation();
-                    setShowMobileMenu(false);
-                  }}
-                >
-                  <Share2 size={16} /> Share
-                </button>
+                {showShareActions && (
+                  <button
+                    onClick={e => {
+                      e.stopPropagation();
+                      setShowMobileMenu(false);
+                    }}
+                  >
+                    <Share2 size={16} /> Share
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -239,7 +255,9 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({
                   e.stopPropagation();
                   onEditPrice?.(photo);
                 }}
-                title={`${activeBundle.charAt(0).toUpperCase() + activeBundle.slice(1)}: Web ${web} / High ${high} / Commercial ${commercial}`}
+                title={`${
+                  activeBundle.charAt(0).toUpperCase() + activeBundle.slice(1)
+                }: Web ${web} / High ${high} / Commercial ${commercial}`}
                 style={{ background: bundleColor }}
               />
             )}
@@ -251,7 +269,9 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({
 
   return (
     <div
-      className={`photo-card ${config.containerClass} ${selectable ? 'selectable' : ''}`}
+      className={`photo-card ${config.containerClass} ${
+        selectable ? 'selectable' : ''
+      }`}
       onClick={() => onClick(photo)}
       tabIndex={0}
     >
@@ -275,7 +295,7 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({
 
         {/* Duplicate Badge / Manage */}
         {['default', 'pgUpload', 'pgPublished', 'pgArchived'].includes(
-          variant,
+          variant
         ) &&
           photo.isDuplicate && (
             <div
@@ -309,15 +329,17 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({
               </div>
             </div>
             <div className="hover-actions-bottom">
-              <button
-                className="icon-btn-glass"
-                onClick={e => {
-                  e.stopPropagation();
-                }}
-                title="Share"
-              >
-                <Share2 size={18} />
-              </button>
+              {showShareActions && (
+                <button
+                  className="icon-btn-glass"
+                  onClick={e => {
+                    e.stopPropagation();
+                  }}
+                  title="Share"
+                >
+                  <Share2 size={18} />
+                </button>
+              )}
               {showCartActions && (
                 <button
                   className={`icon-btn-glass primary ${isAdded ? 'added' : ''}`}

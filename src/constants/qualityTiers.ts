@@ -34,3 +34,8 @@ export const getPriceByTierId = (id: string): number => {
   const tier = QUALITY_TIERS.find(t => t.id === id);
   return tier ? tier.price : 999;
 };
+
+export const getDefaultCartTier = () => {
+  const tier = QUALITY_TIERS.find(t => t.id === 'web') || QUALITY_TIERS[0];
+  return tier;
+};
