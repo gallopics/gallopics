@@ -9,6 +9,7 @@ import {
   fetchEventsWithPhotosFromApi,
   fetchLatestPublicEventPhotoUrl,
 } from '../data/eventsApi';
+import { api, type ApiPhoto } from '../data/apiClient';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
@@ -25,6 +26,18 @@ export function EventsPage() {
   >({});
   const [isLoadingEvents, setIsLoadingEvents] = useState(true);
   const [eventsError, setEventsError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [eventSearchIndex, setEventSearchIndex] = useState<
+    Record<string, string>
+  >({});
+  const [photoMatchedEventIds, setPhotoMatchedEventIds] = useState<
+    Record<string, true>
+  >({});
+  const [eventMatchLabels, setEventMatchLabels] = useState<
+    Record<string, string>
+  >({});
+  const [isSearchingPhotoMetadata, setIsSearchingPhotoMetadata] =
+    useState(false);
   const shouldShowPhotoBackedEvents = !isAuthenticated || user?.role === 'pg';
 
   useEffect(() => {
@@ -59,7 +72,174 @@ export function EventsPage() {
     };
   }, [isLoaded, shouldShowPhotoBackedEvents]);
 
-  const filteredEvents = events;
+  useEffect(() => {
+    const query = searchQuery.trim();
+    if (query.length < 2) {
+      setPhotoMatchedEventIds({});
+      setEventMatchLabels({});
+      setIsSearchingPhotoMetadata(false);
+      return;
+    }
+
+    const searchableEvents = events.filter(event => event.photoCount !== 0);
+    if (searchableEvents.length === 0) {
+      setPhotoMatchedEventIds({});
+      setEventMatchLabels({});
+      setIsSearchingPhotoMetadata(false);
+      return;
+    }
+
+    let isMounted = true;
+    setIsSearchingPhotoMetadata(true);
+
+    const searchTimer = window.setTimeout(() => {
+      async function searchEventPhotos() {
+        const results = await Promise.all(
+          searchableEvents.map(async event => {
+            try {
+              const [searchedPhotos, galleryPage] = await Promise.all([
+                api.searchGallery(event.id, query),
+                api.getEventGallery(event.id, 1, 25),
+              ]);
+              const photographerMatches = galleryPage.items.filter(photo =>
+                (photo.photographer_display_name || '')
+                  .toLowerCase()
+                  .includes(query.toLowerCase())
+              );
+              const photosById = new Map(
+                [...searchedPhotos, ...photographerMatches].map(photo => [
+                  photo.id,
+                  photo,
+                ])
+              );
+
+              return [event.id, Array.from(photosById.values())] as const;
+            } catch (error) {
+              console.warn(
+                `Failed to search photo metadata for event ${event.id}`,
+                error
+              );
+              return [event.id, [] as ApiPhoto[]] as const;
+            }
+          })
+        );
+
+        if (!isMounted) return;
+
+        const nextMatchedIds: Record<string, true> = {};
+        const nextMatchLabels: Record<string, string> = {};
+        const lowerQuery = query.toLowerCase();
+        const getBestMatchLabel = (photos: ApiPhoto[]) => {
+          const candidates = photos.flatMap(photo => [
+            ...((photo.tags ?? []).map(tag => ({
+              label:
+                tag.type === 'rider'
+                  ? 'Rider'
+                  : tag.type === 'horse'
+                    ? 'Horse'
+                    : tag.type === 'class'
+                      ? 'Class'
+                      : tag.type,
+              value: tag.value,
+            })) || []),
+            {
+              label: 'Photographer',
+              value: photo.photographer_display_name || '',
+            },
+          ]);
+
+          const getMatchScore = (value: string) => {
+            const normalizedValue = value.trim().toLowerCase();
+            if (!normalizedValue) return 0;
+            if (normalizedValue === lowerQuery) return 5;
+            if (normalizedValue.startsWith(lowerQuery)) return 4;
+            if (
+              normalizedValue
+                .split(/\s+/)
+                .some(word => word.startsWith(lowerQuery))
+            ) {
+              return 3;
+            }
+            if (normalizedValue.includes(lowerQuery)) return 2;
+            return 1;
+          };
+
+          const bestCandidate = candidates
+            .filter(candidate => candidate.value)
+            .sort(
+              (a, b) =>
+                getMatchScore(b.value) - getMatchScore(a.value) ||
+                a.value.length - b.value.length
+            )[0];
+
+          return bestCandidate
+            ? `${bestCandidate.label}: ${bestCandidate.value}`
+            : '';
+        };
+
+        setEventSearchIndex(prev => {
+          const next = { ...prev };
+
+          results.forEach(([eventId, photos]) => {
+            if (photos.length === 0) return;
+
+            nextMatchedIds[eventId] = true;
+            const matchLabel = getBestMatchLabel(photos);
+            if (matchLabel) nextMatchLabels[eventId] = matchLabel;
+            const photoText = photos
+              .flatMap(photo => [
+                photo.photographer_display_name,
+                photo.class_name,
+                photo.event_class_name,
+                ...(photo.tags ?? []).map(tag => tag.value),
+              ])
+              .filter(Boolean)
+              .join(' ');
+
+            next[eventId] = [next[eventId], query, photoText]
+              .filter(Boolean)
+              .join(' ');
+          });
+
+          return next;
+        });
+        setPhotoMatchedEventIds(nextMatchedIds);
+        setEventMatchLabels(nextMatchLabels);
+        setIsSearchingPhotoMetadata(false);
+      }
+
+      void searchEventPhotos();
+    }, 250);
+
+    return () => {
+      isMounted = false;
+      window.clearTimeout(searchTimer);
+    };
+  }, [events, searchQuery]);
+
+  const filteredEvents = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return events;
+
+    return events.filter(event => {
+      const searchableText = [
+        event.name,
+        event.city,
+        event.country,
+        event.discipline,
+        event.photographer?.name,
+        eventSearchIndex[event.id],
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return (
+        searchableText.includes(query) ||
+        Boolean(photoMatchedEventIds[event.id])
+      );
+    });
+  }, [events, eventSearchIndex, photoMatchedEventIds, searchQuery]);
 
   useEffect(() => {
     const eventsMissingCovers = filteredEvents.filter(
@@ -126,13 +306,22 @@ export function EventsPage() {
 
   return (
     <div className="page-wrapper ehome-page guestHome">
-      <Header />
+      <Header
+        searchEvents={displayEvents}
+        eventSearchIndex={eventSearchIndex}
+        eventMatchLabels={eventMatchLabels}
+        onSearchChange={setSearchQuery}
+      />
 
       <div className="ehome-intro-inner">
         <TitleHeader
           title="Your best moments, captured"
           description="We capture horse competitions across Sweden. Search your event, spot your photos, and purchase your favorites."
           variant="ehome"
+          searchEvents={displayEvents}
+          eventSearchIndex={eventSearchIndex}
+          eventMatchLabels={eventMatchLabels}
+          onSearchChange={setSearchQuery}
         />
       </div>
 
@@ -161,7 +350,13 @@ export function EventsPage() {
             </div>
           ) : (
             <div className="pg-empty-state">
-              <h3>No events available – yet</h3>
+              <h3>
+                {isSearchingPhotoMetadata
+                  ? 'Searching photos...'
+                  : searchQuery.trim()
+                  ? `No events match "${searchQuery.trim()}"`
+                  : 'No events available – yet'}
+              </h3>
             </div>
           )}
         </div>

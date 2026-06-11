@@ -13,8 +13,21 @@ import { createPortal } from 'react-dom';
 import { PgToast } from '../pages/pg/PgToast';
 import { assetUrl } from '../lib/utils';
 import { Link } from 'react-router-dom';
+import type { EventData } from '../data/mockEvents';
 
-export const Header: React.FC = () => {
+interface HeaderProps {
+  searchEvents?: EventData[];
+  eventSearchIndex?: Record<string, string>;
+  eventMatchLabels?: Record<string, string>;
+  onSearchChange?: (value: string) => void;
+}
+
+export const Header: React.FC<HeaderProps> = ({
+  searchEvents,
+  eventSearchIndex,
+  eventMatchLabels,
+  onSearchChange,
+}) => {
   const [scrolled, setScrolled] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isEditProfileModalOpen, setIsEditProfileModalOpen] = useState(false);
@@ -201,7 +214,14 @@ export const Header: React.FC = () => {
           {/* 3. Utility Icons (Right) */}
           {!isOnboarding ? (
             <div className="flex items-center gap-1.5 min-[480px]:gap-3 md:gap-3 ml-auto relative flex-wrap justify-end">
-              <ModernSearchBar collapsible />
+              <ModernSearchBar
+                collapsible
+                eventOptions={searchEvents}
+                eventSearchIndex={eventSearchIndex}
+                eventMatchLabels={eventMatchLabels}
+                eventOnly={Boolean(searchEvents)}
+                onSearchChange={onSearchChange}
+              />
 
               {!isLoaded ? null : isAuthenticated ? (
                 <>

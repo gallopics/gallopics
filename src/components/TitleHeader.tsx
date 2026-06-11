@@ -4,6 +4,7 @@ import { Camera, LayoutDashboard } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { ModernSearchBar } from './ModernSearchBar';
 import { ProfileAvatar } from './ProfileAvatar';
+import type { EventData } from '../data/mockEvents';
 
 interface TitleHeaderProps {
   title: React.ReactNode;
@@ -20,15 +21,31 @@ interface TitleHeaderProps {
   avatarShape?: 'circle' | 'square';
   avatarMobileRow?: boolean;
   className?: string;
+  searchEvents?: EventData[];
+  eventSearchIndex?: Record<string, string>;
+  eventMatchLabels?: Record<string, string>;
+  onSearchChange?: (value: string) => void;
 }
 
 interface HeroCardProps {
   extraClass?: string;
   title: React.ReactNode;
   description: React.ReactNode;
+  searchEvents?: EventData[];
+  eventSearchIndex?: Record<string, string>;
+  eventMatchLabels?: Record<string, string>;
+  onSearchChange?: (value: string) => void;
 }
 
-const HeroCard = ({ extraClass = '', title, description }: HeroCardProps) => (
+const HeroCard = ({
+  extraClass = '',
+  title,
+  description,
+  searchEvents,
+  eventSearchIndex,
+  eventMatchLabels,
+  onSearchChange,
+}: HeroCardProps) => (
   <div className={`hero-card ${extraClass}`}>
     <div className="flex flex-col gap-4 max-w-[480px] z-[2] flex-1">
       <h1 className="font-['Sora',sans-serif] text-5xl max-md:text-[2.5rem] max-[375px]:text-[2.25rem] font-semibold leading-[1.05] text-white tracking-[-0.03em] m-0">
@@ -43,7 +60,13 @@ const HeroCard = ({ extraClass = '', title, description }: HeroCardProps) => (
         theme="light"
         heroMode={true}
         isMobileTrigger={true}
-        mobilePlaceholder="Search"
+        mobilePlaceholder="Search events"
+        desktopPlaceholder="Search events, riders, horses, photographers..."
+        eventOptions={searchEvents}
+        eventSearchIndex={eventSearchIndex}
+        eventMatchLabels={eventMatchLabels}
+        eventOnly={Boolean(searchEvents)}
+        onSearchChange={onSearchChange}
       />
     </div>
   </div>
@@ -52,7 +75,18 @@ const HeroCard = ({ extraClass = '', title, description }: HeroCardProps) => (
 const GuestHeroCarousel: React.FC<{
   title: React.ReactNode;
   description: React.ReactNode;
-}> = ({ title, description }) => {
+  searchEvents?: EventData[];
+  eventSearchIndex?: Record<string, string>;
+  eventMatchLabels?: Record<string, string>;
+  onSearchChange?: (value: string) => void;
+}> = ({
+  title,
+  description,
+  searchEvents,
+  eventSearchIndex,
+  eventMatchLabels,
+  onSearchChange,
+}) => {
   const carouselRef = useRef<HTMLDivElement>(null);
   const [activeSlide, setActiveSlide] = useState(0);
 
@@ -87,6 +121,10 @@ const GuestHeroCarousel: React.FC<{
             extraClass="hero-card--guest"
             title={title}
             description={description}
+            searchEvents={searchEvents}
+            eventSearchIndex={eventSearchIndex}
+            eventMatchLabels={eventMatchLabels}
+            onSearchChange={onSearchChange}
           />
 
           {/* Photographer card */}
@@ -178,6 +216,10 @@ export const TitleHeader: React.FC<TitleHeaderProps> = ({
   avatarShape = 'circle',
   avatarMobileRow = false,
   className = '',
+  searchEvents,
+  eventSearchIndex,
+  eventMatchLabels,
+  onSearchChange,
 }) => {
   const { user, isAuthenticated, isLoaded } = useAuth();
   const { user: clerkUser } = useUser();
@@ -227,7 +269,14 @@ export const TitleHeader: React.FC<TitleHeaderProps> = ({
         <div className="container">
           {isLoaded && isAuthenticated ? (
             <div className="grid grid-cols-[1fr_280px] gap-6 items-stretch max-lg:grid-cols-[1fr_240px] max-md:grid-cols-1">
-              <HeroCard title={title} description={description} />
+              <HeroCard
+                title={title}
+                description={description}
+                searchEvents={searchEvents}
+                eventSearchIndex={eventSearchIndex}
+                eventMatchLabels={eventMatchLabels}
+                onSearchChange={onSearchChange}
+              />
 
               {/* My Console card */}
               <div className="hero-card-secondary max-md:hidden">
@@ -251,7 +300,14 @@ export const TitleHeader: React.FC<TitleHeaderProps> = ({
               </div>
             </div>
           ) : isLoaded ? (
-            <GuestHeroCarousel title={title} description={description} />
+            <GuestHeroCarousel
+              title={title}
+              description={description}
+              searchEvents={searchEvents}
+              eventSearchIndex={eventSearchIndex}
+              eventMatchLabels={eventMatchLabels}
+              onSearchChange={onSearchChange}
+            />
           ) : null}
         </div>
       </section>
