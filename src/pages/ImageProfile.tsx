@@ -391,6 +391,7 @@ export function ImageProfile() {
                   <WatermarkedPhotoPreview
                     src={photo.src}
                     alt={photo.rider}
+                    photographer={photo.photographer}
                     onLoad={e => {
                       const img = e.currentTarget;
                       setDetectedPortrait(img.naturalHeight > img.naturalWidth);
@@ -737,6 +738,7 @@ export function ImageProfile() {
               <WatermarkedPhotoPreview
                 src={photo.src}
                 alt={photo.rider}
+                photographer={photo.photographer}
                 className="!bg-transparent max-w-[95vw] max-h-[95vh]"
               />
             </div>
