@@ -3013,6 +3013,15 @@ textarea.auth-input {
 }
 
 /* Photo card wrapper — selection ring & scale */
+.pg-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 280px));
+  justify-content: center;
+  gap: var(--grid-gap, 16px);
+  width: 100%;
+  padding-bottom: var(--spacing-xl);
+}
+
 .pg-photo-card-wrapper {
   position: relative;
   cursor: pointer;

@@ -12,7 +12,6 @@ import {
   type PgEvent,
   type Photo,
 } from '../../context/PhotographerContext';
-import { MasonryGrid } from '../../components/MasonryGrid';
 import { PhotoCard } from '../../components/PhotoCard';
 import { PgSelectionPanel } from './PgSelectionPanel';
 import { PgToast } from './PgToast';
@@ -1233,7 +1232,7 @@ export const EventDetail: React.FC = () => {
                           )}
                         </div>
                       ) : (
-                        <MasonryGrid isLoading={false}>
+                        <div className="pg-photo-grid">
                           {displayedPhotos.map(photo => {
                             const uiPhoto = mapToUiPhoto(photo);
                             const isSelected = selectedIds.has(photo.id);
@@ -1360,7 +1359,7 @@ export const EventDetail: React.FC = () => {
                               </div>
                             );
                           })}
-                        </MasonryGrid>
+                        </div>
                       )}
                       {activeTab === 'uploads' &&
                         !isDuplicatesFolder &&
