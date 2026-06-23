@@ -3022,6 +3022,16 @@ textarea.auth-input {
   padding-bottom: var(--spacing-xl);
 }
 
+.event-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 300px));
+  justify-content: center;
+  align-items: start;
+  gap: var(--grid-gap, 16px);
+  width: 100%;
+  padding-bottom: var(--spacing-xl);
+}
+
 .pg-photo-card-wrapper {
   position: relative;
   cursor: pointer;

@@ -13,7 +13,6 @@ import { Header } from '../components/Header';
 import { TitleHeader } from '../components/TitleHeader';
 import { Breadcrumbs } from '../components/Breadcrumbs';
 import { Footer } from '../components/Footer';
-import { MasonryGrid } from '../components/MasonryGrid';
 import { PhotoCard } from '../components/PhotoCard';
 import { ModernDropdown } from '../components/ModernDropdown';
 import { InfoChip } from '../components/InfoChip';
@@ -484,52 +483,56 @@ export function EventProfile() {
                 </div>
               </div>
 
-              <MasonryGrid
-                isLoading={loading}
-                renderSkeleton={() => (
-                  <div className="photo-card skeleton-card">
-                    <div className="card-image-wrapper aspect-[3/4] bg-[var(--ui-bg-subtle)]"></div>
-                    <div className="card-content">
-                      <div className="h-4 w-[70%] bg-[var(--color-border)] mb-1.5 rounded-[4px]"></div>
-                      <div className="h-3 w-[40%] bg-[var(--color-border)] rounded-[4px]"></div>
-                    </div>
-                  </div>
-                )}
-              >
-                {activePhotos.map(photo => (
-                  <div
-                    key={photo.id}
-                    className={`relative group ${
-                      isPhotographerMyEventView ? 'event-photo-manage-card' : ''
-                    }`}
-                  >
-                    <PhotoCard
-                      photo={photo}
-                      showCartActions={true}
-                      showShareActions={false}
-                      onClick={p =>
-                        navigate(
-                          `/photo/${p.id}?from=epro&eventId=${meeting.id}`,
-                          { state: { photo: p, eventReturnState } }
-                        )
-                      }
-                    />
-                    {isPhotographerMyEventView && (
-                      <button
-                        className="icon-btn-glass delete-action absolute top-3 right-3 z-40 opacity-100"
-                        onClick={e => {
-                          e.stopPropagation();
-                          setPhotoToDelete(photo);
-                        }}
-                        title="Delete photo"
-                        aria-label="Delete photo"
+              <div className="event-photo-grid">
+                {loading
+                  ? Array.from({ length: 12 }).map((_, index) => (
+                      <div
+                        className="photo-card skeleton-card"
+                        key={`event-skeleton-${index}`}
                       >
-                        <Trash2 size={18} />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </MasonryGrid>
+                        <div className="card-image-wrapper aspect-[3/4] bg-[var(--ui-bg-subtle)]"></div>
+                        <div className="card-content">
+                          <div className="h-4 w-[70%] bg-[var(--color-border)] mb-1.5 rounded-[4px]"></div>
+                          <div className="h-3 w-[40%] bg-[var(--color-border)] rounded-[4px]"></div>
+                        </div>
+                      </div>
+                    ))
+                  : activePhotos.map(photo => (
+                      <div
+                        key={photo.id}
+                        className={`relative group ${
+                          isPhotographerMyEventView
+                            ? 'event-photo-manage-card'
+                            : ''
+                        }`}
+                      >
+                        <PhotoCard
+                          photo={photo}
+                          showCartActions={true}
+                          showShareActions={false}
+                          onClick={p =>
+                            navigate(
+                              `/photo/${p.id}?from=epro&eventId=${meeting.id}`,
+                              { state: { photo: p, eventReturnState } }
+                            )
+                          }
+                        />
+                        {isPhotographerMyEventView && (
+                          <button
+                            className="icon-btn-glass delete-action absolute top-3 right-3 z-40 opacity-100"
+                            onClick={e => {
+                              e.stopPropagation();
+                              setPhotoToDelete(photo);
+                            }}
+                            title="Delete photo"
+                            aria-label="Delete photo"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+              </div>
             </>
           ) : (
             <div className="event-classes-section">
