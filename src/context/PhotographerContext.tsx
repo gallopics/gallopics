@@ -485,6 +485,7 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
     userId: clerkUserId,
   } = useClerkAuth();
   const photographerId = user?.id || '';
+  const photographerDisplayName = user?.displayName || 'Photographer';
   const [events, setEvents] = useState<PgEvent[]>(
     SHOW_EVENTS ? MOCK_EVENTS : []
   );
@@ -660,6 +661,7 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
           batch: '',
           classId: getApiPhotoClassId(p),
           className: getApiPhotoClassName(p),
+          photographer: photographerDisplayName,
           isDuplicate: false,
           storedLocation: 'Uncategorised',
           priceStandard: 499,
@@ -1130,6 +1132,7 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
               uploadMetadata.classSectionId ||
               uploadMetadata.eventClassId ||
               '',
+            photographer: photographerDisplayName,
           };
         });
 

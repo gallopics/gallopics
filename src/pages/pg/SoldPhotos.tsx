@@ -234,6 +234,7 @@ export const SoldPhotos: React.FC = () => {
       height: photo.height,
       className: 'photo-grid-item',
       arena: 'Arena 1',
+      photographer: event?.assignedPhotographers?.[0]?.name,
       soldCount: photo.soldCount,
     };
   };

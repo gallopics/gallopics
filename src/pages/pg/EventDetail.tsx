@@ -778,6 +778,7 @@ export const EventDetail: React.FC = () => {
     arena: event?.venueName || 'Arena 1',
     isDuplicate: validDuplicateIds.has(photo.id),
     duplicateGroupId: photo.duplicateGroupId,
+    photographer: event?.assignedPhotographers?.[0]?.name,
     priceStandard: photo.priceStandard,
     priceHigh: photo.priceHigh,
   });
