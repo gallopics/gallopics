@@ -536,9 +536,6 @@ const SignInForm: React.FC<FormProps> = ({
         </div>
 
         {errors.form && <span className="auth-error-msg">{errors.form}</span>}
-        <a href="#" className="auth-helper-link">
-          Forgot password?
-        </a>
       </form>
     </div>
   );
