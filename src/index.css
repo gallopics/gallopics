@@ -3228,6 +3228,33 @@ textarea.auth-input {
   cursor: not-allowed;
   background: #f9fafb;
 }
+.pg-custom-select-input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--color-text-primary);
+  font: inherit;
+  line-height: inherit;
+}
+.pg-custom-select-input::placeholder {
+  color: var(--color-text-secondary);
+}
+.pg-custom-select-toggle {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.pg-custom-select-toggle:disabled {
+  cursor: not-allowed;
+}
 .pg-custom-select-list {
   position: absolute;
   top: 50px;
