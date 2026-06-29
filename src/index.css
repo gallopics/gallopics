@@ -2721,6 +2721,25 @@ textarea.auth-input {
   line-height: 1.4;
 }
 
+.pg-card-match {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.pg-card-rider {
+  color: var(--color-text-primary, #111);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.pg-card-horse {
+  color: var(--color-text-secondary, #666);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
 .pg-meta-prices {
   display: flex;
   gap: 8px;

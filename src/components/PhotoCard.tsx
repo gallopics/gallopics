@@ -192,6 +192,14 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({
 
     if (!pgMeta) return null;
 
+    const isMatchedValue = (value?: string) =>
+      Boolean(
+        value &&
+          !['unknown', 'unassigned', 'none'].includes(value.toLowerCase())
+      );
+    const matchedRider = isMatchedValue(photo.rider) ? photo.rider : undefined;
+    const matchedHorse = isMatchedValue(photo.horse) ? photo.horse : undefined;
+
     // Duplicates variant - shows "Stored in:"
     if (config.showDuplicateMeta) {
       return (
@@ -210,10 +218,10 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({
       );
     }
 
-    // Uploads & Published show FileName + Bundle Dots + Sold Badge
+    // Uploads & Published show matched rider/horse + Bundle Dots + Sold Badge
     const web = pgMeta.priceStandard || 0;
     const high = pgMeta.priceHigh || 0;
-    const commercial = (pgMeta as any).priceCommercial || 0;
+    const commercial = pgMeta.priceCommercial || 0;
     const soldCount = pgMeta.soldCount || 0;
     const totalBucketSales = pgMeta.totalBucketSales || 0;
 
@@ -232,8 +240,15 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({
     return (
       <div className="card-content pg-upload-meta">
         <div className="pg-meta-row flex justify-between items-center w-full">
-          <div className="pg-card-filename flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
-            {pgMeta.fileName || 'Untitled'}
+          <div className="pg-card-match flex-1 min-w-0">
+            <div className="pg-card-rider overflow-hidden text-ellipsis whitespace-nowrap">
+              {matchedRider || matchedHorse || pgMeta.fileName || 'Untitled'}
+            </div>
+            {matchedRider && matchedHorse && (
+              <div className="pg-card-horse overflow-hidden text-ellipsis whitespace-nowrap">
+                {matchedHorse}
+              </div>
+            )}
           </div>
 
           <div className="pg-meta-right-actions flex items-center gap-1.5 pl-2">
