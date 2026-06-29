@@ -795,6 +795,7 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
                               <PgCustomSelect
                                 value={rider}
                                 onChange={val => handleChange('rider', val)}
+                                searchable
                                 options={[
                                   { label: 'None', value: 'None' },
                                   ...riderOptions,
@@ -816,6 +817,7 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
                               <PgCustomSelect
                                 value={horse}
                                 onChange={val => handleChange('horse', val)}
+                                searchable
                                 options={[
                                   { label: 'None', value: 'None' },
                                   ...horseOptions,
