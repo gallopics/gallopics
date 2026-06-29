@@ -9,6 +9,7 @@ import {
   AlertCircle,
   Trash2,
   Pencil,
+  X,
 } from 'lucide-react';
 import { Header } from '../components/Header';
 import { TitleHeader } from '../components/TitleHeader';
@@ -97,6 +98,7 @@ export function EventProfile() {
   );
   const [photoToDelete, setPhotoToDelete] = useState<EventPhoto | null>(null);
   const [photoToEditId, setPhotoToEditId] = useState<string | null>(null);
+  const [previewPhoto, setPreviewPhoto] = useState<EventPhoto | null>(null);
   const [isDeletingPhoto, setIsDeletingPhoto] = useState(false);
   const eventReturnState = useMemo(
     () => ({
@@ -513,12 +515,17 @@ export function EventProfile() {
                           photo={photo}
                           showCartActions={true}
                           showShareActions={false}
-                          onClick={p =>
+                          onClick={p => {
+                            if (isPhotographerMyEventView) {
+                              setPreviewPhoto(p);
+                              return;
+                            }
+
                             navigate(
                               `/photo/${p.id}?from=epro&eventId=${meeting.id}`,
                               { state: { photo: p, eventReturnState } }
-                            )
-                          }
+                            );
+                          }}
                         />
                         {isPhotographerMyEventView && (
                           <div className="absolute top-3 right-3 z-40 flex flex-col gap-2">
@@ -649,6 +656,28 @@ export function EventProfile() {
           )}
         </div>
       </section>
+
+      {previewPhoto && (
+        <div
+          className="fixed inset-0 z-[3000] bg-black/95 flex items-center justify-center animate-[fadeIn_0.2s_ease]"
+          onClick={() => setPreviewPhoto(null)}
+        >
+          <img
+            src={previewPhoto.src}
+            alt={`${previewPhoto.rider} on ${previewPhoto.horse}`}
+            className="max-w-[95vw] max-h-[95vh] object-contain rounded-[4px] shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
+            onClick={event => event.stopPropagation()}
+          />
+          <button
+            type="button"
+            className="absolute top-6 right-6 bg-white/10 text-white rounded-full w-11 h-11 flex items-center justify-center backdrop-blur-[10px] transition-[background] duration-200"
+            onClick={() => setPreviewPhoto(null)}
+            aria-label="Close photo preview"
+          >
+            <X size={24} />
+          </button>
+        </div>
+      )}
 
       {isPhotographerMyEventView && eventId && (
         <PgSelectionPanel
