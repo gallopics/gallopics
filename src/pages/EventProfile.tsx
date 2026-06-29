@@ -8,6 +8,7 @@ import {
   UploadCloud,
   AlertCircle,
   Trash2,
+  Pencil,
 } from 'lucide-react';
 import { Header } from '../components/Header';
 import { TitleHeader } from '../components/TitleHeader';
@@ -36,6 +37,7 @@ import { PageTabs } from '../components/PageTabs';
 import type { Photo as EventPhoto, ClassSection, EventDetail } from '../types';
 import { usePhotographer } from '../context/PhotographerContext';
 import { useAuth } from '../context/AuthContext';
+import { PgSelectionPanel } from './pg/PgSelectionPanel';
 
 export function EventProfile() {
   const { eventId } = useParams();
@@ -94,6 +96,7 @@ export function EventProfile() {
     initialEventTab
   );
   const [photoToDelete, setPhotoToDelete] = useState<EventPhoto | null>(null);
+  const [photoToEditId, setPhotoToEditId] = useState<string | null>(null);
   const [isDeletingPhoto, setIsDeletingPhoto] = useState(false);
   const eventReturnState = useMemo(
     () => ({
@@ -518,17 +521,30 @@ export function EventProfile() {
                           }
                         />
                         {isPhotographerMyEventView && (
-                          <button
-                            className="icon-btn-glass delete-action absolute top-3 right-3 z-40 opacity-100"
-                            onClick={e => {
-                              e.stopPropagation();
-                              setPhotoToDelete(photo);
-                            }}
-                            title="Delete photo"
-                            aria-label="Delete photo"
-                          >
-                            <Trash2 size={18} />
-                          </button>
+                          <div className="absolute top-3 right-3 z-40 flex flex-col gap-2">
+                            <button
+                              className="icon-btn-glass opacity-100"
+                              onClick={e => {
+                                e.stopPropagation();
+                                setPhotoToEditId(photo.id);
+                              }}
+                              title="Edit rider and horse"
+                              aria-label="Edit rider and horse"
+                            >
+                              <Pencil size={18} />
+                            </button>
+                            <button
+                              className="icon-btn-glass delete-action opacity-100"
+                              onClick={e => {
+                                e.stopPropagation();
+                                setPhotoToDelete(photo);
+                              }}
+                              title="Delete photo"
+                              aria-label="Delete photo"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
                         )}
                       </div>
                     ))}
@@ -633,6 +649,19 @@ export function EventProfile() {
           )}
         </div>
       </section>
+
+      {isPhotographerMyEventView && eventId && (
+        <PgSelectionPanel
+          isOpen={Boolean(photoToEditId)}
+          selectedIds={
+            photoToEditId ? new Set([photoToEditId]) : new Set<string>()
+          }
+          allPhotos={getPhotosByEvent(eventId)}
+          activeTab="tags"
+          currentTab="uploads"
+          onClose={() => setPhotoToEditId(null)}
+        />
+      )}
 
       {photoToDelete && (
         <div className="pg-modal-overlay" style={{ zIndex: 3000 }}>
