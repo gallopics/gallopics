@@ -1,49 +1,69 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useState } from "react"
 import {
-  X,
+  ChevronLeft,
+  ChevronRight,
   Clock,
-  Trash2,
+  HelpCircle,
+  Info,
   MoreVertical,
+  Pencil,
+  Plus,
   Save,
   Slash,
-  ChevronDown,
-  Plus,
-  Pencil,
-  Info,
-  ChevronRight,
-  HelpCircle,
-  ChevronLeft,
-} from 'lucide-react';
-import { usePhotographer, type Photo } from '../../context/PhotographerContext';
-import { RIDERS, HORSES } from '../../data/mockData';
-import { fetchClassSectionStarts } from '../../data/eventsApi';
-import { PgCustomSelect } from './PgCustomSelect';
-import { PgToast } from './PgToast';
-import { TOAST_TOKENS } from '../../context/ToastTokens';
+  Trash2,
+  X,
+} from "lucide-react"
 
-interface PgSelectionPanelProps {
-  isOpen: boolean;
-  selectedIds: Set<string>;
-  allPhotos: Photo[];
-  onClose: () => void;
-  activeTab?: 'tags' | 'price';
-  currentTab?: 'uploads' | 'published' | 'archive';
-  onShowToast?: (
-    msg: string,
-    type: 'success' | 'moved' | 'warning' | 'danger',
-    onUndo?: () => void
-  ) => void;
+import { notify, type NotifyType } from "@/lib/notify"
+import { cn } from "@/lib/utils"
+import { usePhotographer, type Photo } from "@/context/PhotographerContext"
+import { TOAST_TOKENS } from "@/context/ToastTokens"
+import { fetchClassSectionStarts } from "@/data/eventsApi"
+import { HORSES, RIDERS } from "@/data/mockData"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogBody,
+  DialogCancel,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Textarea } from "@/components/ui/textarea"
+import { ConfirmDialog } from "@/components/ConfirmDialog"
+import { ModernDropdown } from "@/components/ModernDropdown"
+
+export type PanelToastType = "success" | "moved" | "warning" | "danger"
+
+const PANEL_TOAST_TYPES: Record<PanelToastType, NotifyType> = {
+  success: "success",
+  moved: "success",
+  warning: "info",
+  danger: "error",
 }
 
-const BATCHES = ['Random', 'Misc', 'Uncategorised'];
+interface PgSelectionPanelProps {
+  isOpen: boolean
+  selectedIds: Set<string>
+  allPhotos: Photo[]
+  onClose: () => void
+  activeTab?: "tags" | "price"
+  currentTab?: "uploads" | "published" | "archive"
+  onShowToast?: (msg: string, type: PanelToastType, onUndo?: () => void) => void
+}
+
+const BATCHES = ["Random", "Misc", "Uncategorised"]
 
 const BUNDLES = {
-  basic: { web: 499, high: 999, commercial: 1500, label: 'Basic' },
-  standard: { web: 499, high: 999, commercial: 1500, label: 'Standard' },
-  premium: { web: 499, high: 999, commercial: 1500, label: 'Premium' },
-};
+  basic: { web: 499, high: 999, commercial: 1500, label: "Basic" },
+  standard: { web: 499, high: 999, commercial: 1500, label: "Standard" },
+  premium: { web: 499, high: 999, commercial: 1500, label: "Premium" },
+}
 
-export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
+export function PgSelectionPanel({
   isOpen,
   selectedIds,
   allPhotos,
@@ -51,349 +71,333 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
   activeTab: activeTabProp,
   currentTab,
   onShowToast,
-}) => {
-  const {
-    updatePhotoMetadata,
-    deletePhotos,
-    restorePhotos,
-  } = usePhotographer();
+}: PgSelectionPanelProps) {
+  const { updatePhotoMetadata, deletePhotos, restorePhotos } = usePhotographer()
 
   // Derived Selection
   const selectedPhotos = useMemo(() => {
-    return allPhotos.filter(p => selectedIds.has(p.id));
-  }, [selectedIds, allPhotos]);
+    return allPhotos.filter((p) => selectedIds.has(p.id))
+  }, [selectedIds, allPhotos])
 
-  const isSingle = selectedPhotos.length === 1;
-  const count = selectedPhotos.length;
-  const firstPhoto = selectedPhotos[0];
+  const isSingle = selectedPhotos.length === 1
+  const count = selectedPhotos.length
+  const firstPhoto = selectedPhotos[0]
 
   // State for Edits (Tags)
-  const [rider, setRider] = useState<string>('');
-  const [horse, setHorse] = useState<string>('');
-  const [cls, setCls] = useState<string>('');
-  const [isGeneric, setIsGeneric] = useState(false);
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [viewMode, setViewMode] = useState<'edit' | 'summary'>('edit');
-  const [editFromSummary, setEditFromSummary] = useState(false);
+  const [rider, setRider] = useState<string>("")
+  const [horse, setHorse] = useState<string>("")
+  const [cls, setCls] = useState<string>("")
+  const [isGeneric, setIsGeneric] = useState(false)
+  const [title, setTitle] = useState("")
+  const [description, setDescription] = useState("")
+  const [viewMode, setViewMode] = useState<"edit" | "summary">("edit")
+  const [editFromSummary, setEditFromSummary] = useState(false)
 
   // State for Edits (Price)
   const [priceBundle, setPriceBundle] = useState<
-    'basic' | 'standard' | 'premium' | 'custom'
-  >('standard');
-  const [customPriceWeb, setCustomPriceWeb] = useState<string>('');
-  const [customPriceHigh, setCustomPriceHigh] = useState<string>('');
-  const [customPriceCommercial, setCustomPriceCommercial] =
-    useState<string>('');
+    "basic" | "standard" | "premium" | "custom"
+  >("standard")
+  const [customPriceWeb, setCustomPriceWeb] = useState<string>("")
+  const [customPriceHigh, setCustomPriceHigh] = useState<string>("")
+  const [customPriceCommercial, setCustomPriceCommercial] = useState<string>("")
 
   // Panel Tab State
-  const [panelTab, setPanelTab] = useState<'tags' | 'price'>('tags');
+  const [panelTab, setPanelTab] = useState<"tags" | "price">("tags")
 
   // Info Panel State
-  const [isInfoOpen, setIsInfoOpen] = useState(false);
+  const [isInfoOpen, setIsInfoOpen] = useState(false)
 
   // Original State for dirty check (stores VALUES for price)
   const [originalState, setOriginalState] = useState<{
-    rider: string;
-    horse: string;
-    cls: string;
-    isGeneric: boolean;
-    title: string;
-    description: string;
-    priceWeb: number;
-    priceHigh: number;
-    priceCommercial: number;
-    priceBundle: string;
-  } | null>(null);
+    rider: string
+    horse: string
+    cls: string
+    isGeneric: boolean
+    title: string
+    description: string
+    priceWeb: number
+    priceHigh: number
+    priceCommercial: number
+    priceBundle: string
+  } | null>(null)
 
   // Modal State
-  const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
-  const [targetBatch, setTargetBatch] = useState<string>('');
-  const [isCreatingBatch, setIsCreatingBatch] = useState(false);
-  const [newBatchName, setNewBatchName] = useState('');
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isMoveModalOpen, setIsMoveModalOpen] = useState(false)
+  const [targetBatch, setTargetBatch] = useState<string>("")
+  const [isCreatingBatch, setIsCreatingBatch] = useState(false)
+  const [newBatchName, setNewBatchName] = useState("")
   const [classStarts, setClassStarts] = useState<
     Array<{ riderName?: string | null; horseName?: string | null }>
-  >([]);
+  >([])
 
   // Confirmation Modals State
   const [confirmModal, setConfirmModal] = useState<{
-    type: 'delete' | 'close';
-    isOpen: boolean;
-  }>({ type: 'close', isOpen: false });
+    type: "delete" | "close"
+    isOpen: boolean
+  }>({ type: "close", isOpen: false })
 
   const selectedClassId = useMemo(() => {
     const ids = new Set(
       selectedPhotos
-        .map(photo => photo.classId)
+        .map((photo) => photo.classId)
         .filter((value): value is string => Boolean(value))
-    );
-    return ids.size === 1 ? Array.from(ids)[0] : '';
-  }, [selectedPhotos]);
+    )
+    return ids.size === 1 ? Array.from(ids)[0] : ""
+  }, [selectedPhotos])
 
   useEffect(() => {
-    let cancelled = false;
-    setClassStarts([]);
+    let cancelled = false
+    setClassStarts([])
 
-    if (!isOpen || !selectedClassId) return;
+    if (!isOpen || !selectedClassId) return
 
     fetchClassSectionStarts(selectedClassId)
-      .then(starts => {
-        if (cancelled) return;
+      .then((starts) => {
+        if (cancelled) return
         setClassStarts(
-          starts.map(start => ({
+          starts.map((start) => ({
             riderName: start.rider_name,
             horseName: start.horse_name,
           }))
-        );
+        )
       })
       .catch(() => {
-        if (!cancelled) setClassStarts([]);
-      });
+        if (!cancelled) setClassStarts([])
+      })
 
     return () => {
-      cancelled = true;
-    };
-  }, [isOpen, selectedClassId]);
+      cancelled = true
+    }
+  }, [isOpen, selectedClassId])
 
   const riderOptions = useMemo(() => {
-    const names = new Set<string>();
-    classStarts.forEach(start => {
-      if (start.riderName) names.add(start.riderName);
-    });
-    selectedPhotos.forEach(photo => {
-      if (photo.rider && photo.rider !== 'None') names.add(photo.rider);
-    });
+    const names = new Set<string>()
+    classStarts.forEach((start) => {
+      if (start.riderName) names.add(start.riderName)
+    })
+    selectedPhotos.forEach((photo) => {
+      if (photo.rider && photo.rider !== "None") names.add(photo.rider)
+    })
 
     if (names.size === 0) {
-      RIDERS.forEach(rider =>
+      RIDERS.forEach((rider) =>
         names.add(`${rider.firstName} ${rider.lastName}`)
-      );
+      )
     }
 
     return Array.from(names)
       .sort((a, b) => a.localeCompare(b))
-      .map(name => ({ label: name, value: name }));
-  }, [classStarts, selectedPhotos]);
+      .map((name) => ({ label: name, value: name }))
+  }, [classStarts, selectedPhotos])
 
   const horseOptions = useMemo(() => {
-    const names = new Set<string>();
-    classStarts.forEach(start => {
-      if (start.horseName) names.add(start.horseName);
-    });
-    selectedPhotos.forEach(photo => {
-      if (photo.horse && photo.horse !== 'None') names.add(photo.horse);
-    });
+    const names = new Set<string>()
+    classStarts.forEach((start) => {
+      if (start.horseName) names.add(start.horseName)
+    })
+    selectedPhotos.forEach((photo) => {
+      if (photo.horse && photo.horse !== "None") names.add(photo.horse)
+    })
 
     if (names.size === 0) {
-      HORSES.forEach(horse => names.add(horse.name));
+      HORSES.forEach((horse) => names.add(horse.name))
     }
 
     return Array.from(names)
       .sort((a, b) => a.localeCompare(b))
-      .map(name => ({ label: name, value: name }));
-  }, [classStarts, selectedPhotos]);
+      .map((name) => ({ label: name, value: name }))
+  }, [classStarts, selectedPhotos])
 
-  // Toast State
-  const [toast, setToast] = useState<{
-    msg: string;
-    undo?: () => void;
-    type: 'success' | 'moved' | 'warning' | 'danger';
-    context: 'global' | 'panel';
-  } | null>(null);
-  const toastTimeoutRef = useRef<any>(null);
-
+  // Toasts: "global" ones go to the parent when it handles them
   const triggerToast = (
     msg: string,
-    type: 'success' | 'moved' | 'warning' | 'danger',
-    context: 'global' | 'panel',
+    type: PanelToastType,
+    _context: "global" | "panel",
     undo?: () => void
   ) => {
-    if (context === 'global' && onShowToast) {
-      onShowToast(msg, type, undo);
-      return;
+    if (_context === "global" && onShowToast) {
+      onShowToast(msg, type, undo)
+      return
     }
-    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
-    setToast({ msg, undo, type, context });
-    toastTimeoutRef.current = setTimeout(() => setToast(null), 6000);
-  };
+    notify(msg, PANEL_TOAST_TYPES[type], undo)
+  }
 
   // Helper to get effective current price based on selection
   const getEffectivePrice = () => {
-    if (priceBundle === 'custom') {
+    if (priceBundle === "custom") {
       return {
         web: Number(customPriceWeb) || 0,
         high: Number(customPriceHigh) || 0,
         commercial: Number(customPriceCommercial) || 0,
-      };
+      }
     } else {
-      const b = BUNDLES[priceBundle];
+      const b = BUNDLES[priceBundle]
       return {
         web: b.web,
         high: b.high,
         commercial: b.commercial,
-      };
+      }
     }
-  };
+  }
 
   // Sync State on Selection Change
   useEffect(() => {
     if (isOpen && activeTabProp) {
-      setPanelTab(activeTabProp);
+      setPanelTab(activeTabProp)
     }
-  }, [isOpen, activeTabProp]);
+  }, [isOpen, activeTabProp])
 
   useEffect(() => {
     if (selectedPhotos.length > 0) {
-      const p = selectedPhotos[0];
-      const inMissingBucket = !p.batch || p.batch === 'Uncategorised';
+      const p = selectedPhotos[0]
+      const inMissingBucket = !p.batch || p.batch === "Uncategorised"
 
       // Metadata State
-      const displayTitle = /^Photo \d+$/.test(p.title || '')
-        ? ''
-        : p.title || '';
+      const displayTitle = /^Photo \d+$/.test(p.title || "")
+        ? ""
+        : p.title || ""
 
       // Price State (Multi: take first)
-      const pWeb = p.priceStandard || 499;
-      const pHigh = p.priceHigh || 999;
-      const pComm = p.priceCommercial || 1500;
+      const pWeb = p.priceStandard || 499
+      const pHigh = p.priceHigh || 999
+      const pComm = p.priceCommercial || 1500
 
-      let bundle: 'basic' | 'standard' | 'premium' | 'custom' = 'custom';
+      let bundle: "basic" | "standard" | "premium" | "custom" = "custom"
       if (
         pWeb === BUNDLES.basic.web &&
         pHigh === BUNDLES.basic.high &&
         pComm === BUNDLES.basic.commercial
       )
-        bundle = 'basic';
+        bundle = "basic"
       else if (
         pWeb === BUNDLES.standard.web &&
         pHigh === BUNDLES.standard.high &&
         pComm === BUNDLES.standard.commercial
       )
-        bundle = 'standard';
+        bundle = "standard"
       else if (
         pWeb === BUNDLES.premium.web &&
         pHigh === BUNDLES.premium.high &&
         pComm === BUNDLES.premium.commercial
       )
-        bundle = 'premium';
+        bundle = "premium"
 
       // Special case logic for Multi selection:
       if (selectedPhotos.length > 1) {
-        setRider('');
-        setHorse('');
-        setCls('');
-        setIsGeneric(false);
-        setTitle('');
-        setDescription('');
+        setRider("")
+        setHorse("")
+        setCls("")
+        setIsGeneric(false)
+        setTitle("")
+        setDescription("")
 
-        setPriceBundle(bundle);
+        setPriceBundle(bundle)
         // If custom bundle, pre-fill custom inputs. If standard bundle, empty.
-        if (bundle === 'custom') {
-          setCustomPriceWeb(pWeb.toString());
-          setCustomPriceHigh(pHigh.toString());
-          setCustomPriceCommercial(pComm.toString());
+        if (bundle === "custom") {
+          setCustomPriceWeb(pWeb.toString())
+          setCustomPriceHigh(pHigh.toString())
+          setCustomPriceCommercial(pComm.toString())
         } else {
-          setCustomPriceWeb('');
-          setCustomPriceHigh('');
-          setCustomPriceCommercial('');
+          setCustomPriceWeb("")
+          setCustomPriceHigh("")
+          setCustomPriceCommercial("")
         }
 
         setOriginalState({
-          rider: '',
-          horse: '',
-          cls: '',
+          rider: "",
+          horse: "",
+          cls: "",
           isGeneric: false,
-          title: '',
-          description: '',
+          title: "",
+          description: "",
           priceWeb: pWeb,
           priceHigh: pHigh,
           priceCommercial: pComm,
           priceBundle: bundle,
-        });
-        setViewMode('edit');
+        })
+        setViewMode("edit")
       } else {
         // Single
-        setRider(p.rider || (inMissingBucket ? 'None' : ''));
-        setHorse(p.horse || (inMissingBucket ? 'None' : ''));
-        setCls(p.className || (inMissingBucket ? 'None' : ''));
-        setIsGeneric(p.isGeneric || false);
-        setTitle(displayTitle);
-        setDescription(p.description || '');
+        setRider(p.rider || (inMissingBucket ? "None" : ""))
+        setHorse(p.horse || (inMissingBucket ? "None" : ""))
+        setCls(p.className || (inMissingBucket ? "None" : ""))
+        setIsGeneric(p.isGeneric || false)
+        setTitle(displayTitle)
+        setDescription(p.description || "")
 
-        setPriceBundle(bundle);
-        if (bundle === 'custom') {
-          setCustomPriceWeb(pWeb.toString());
-          setCustomPriceHigh(pHigh.toString());
-          setCustomPriceCommercial(pComm.toString());
+        setPriceBundle(bundle)
+        if (bundle === "custom") {
+          setCustomPriceWeb(pWeb.toString())
+          setCustomPriceHigh(pHigh.toString())
+          setCustomPriceCommercial(pComm.toString())
         } else {
-          setCustomPriceWeb('');
-          setCustomPriceHigh('');
-          setCustomPriceCommercial('');
+          setCustomPriceWeb("")
+          setCustomPriceHigh("")
+          setCustomPriceCommercial("")
         }
 
         setOriginalState({
-          rider: p.rider || (inMissingBucket ? 'None' : ''),
-          horse: p.horse || (inMissingBucket ? 'None' : ''),
-          cls: p.className || (inMissingBucket ? 'None' : ''),
+          rider: p.rider || (inMissingBucket ? "None" : ""),
+          horse: p.horse || (inMissingBucket ? "None" : ""),
+          cls: p.className || (inMissingBucket ? "None" : ""),
           isGeneric: p.isGeneric || false,
           title: displayTitle,
-          description: p.description || '',
+          description: p.description || "",
           priceWeb: pWeb,
           priceHigh: pHigh,
           priceCommercial: pComm,
           priceBundle: bundle,
-        });
+        })
 
         if (p.isGeneric && (displayTitle || p.description)) {
-          setViewMode('summary');
+          setViewMode("summary")
         } else {
-          setViewMode('edit');
+          setViewMode("edit")
         }
       }
     }
-  }, [selectedPhotos]);
+  }, [selectedPhotos])
 
   // Computed Dirty
-  const [touched, setTouched] = useState(false);
+  const [touched, setTouched] = useState(false)
 
   const isDirty = useMemo(() => {
-    if (!originalState) return false;
+    if (!originalState) return false
 
     // Price check
-    const currentPrice = getEffectivePrice();
+    const currentPrice = getEffectivePrice()
     const priceDirty =
       priceBundle !== originalState.priceBundle ||
       currentPrice.web !== originalState.priceWeb ||
       currentPrice.high !== originalState.priceHigh ||
-      currentPrice.commercial !== originalState.priceCommercial;
+      currentPrice.commercial !== originalState.priceCommercial
 
     // Tags and Mode check
-    let tagsDirty = false;
-    let modeDirty = false;
+    let tagsDirty = false
+    let modeDirty = false
 
     if (isSingle) {
       tagsDirty =
         rider !== originalState.rider ||
         horse !== originalState.horse ||
-        cls !== originalState.cls;
-      modeDirty = isGeneric !== originalState.isGeneric;
+        cls !== originalState.cls
+      modeDirty = isGeneric !== originalState.isGeneric
       if (isGeneric) {
         // If currently generic, check title/description
         tagsDirty =
           tagsDirty ||
           title !== originalState.title ||
-          description !== originalState.description;
+          description !== originalState.description
       }
     } else {
       // For multi-selection, we rely on the 'touched' state for tags.
       // If any tag field was edited, 'touched' would be true.
       // If the current values are different from the original (which would be empty for multi-edit), it's dirty.
       // This is a simplified check for multi-select tags.
-      tagsDirty = touched && (!!rider || !!horse || !!cls || isGeneric);
+      tagsDirty = touched && (!!rider || !!horse || !!cls || isGeneric)
     }
 
-    return tagsDirty || modeDirty || priceDirty;
+    return tagsDirty || modeDirty || priceDirty
   }, [
     rider,
     horse,
@@ -409,55 +413,55 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
     isSingle,
     touched,
     description,
-  ]);
+  ])
 
   // Handlers
   const handleChange = (field: string, value: string) => {
-    setTouched(true);
-    if (field === 'rider') setRider(value);
-    if (field === 'horse') setHorse(value);
-    if (field === 'cls') setCls(value);
-    if (field === 'title') setTitle(value);
-    if (field === 'description') setDescription(value);
+    setTouched(true)
+    if (field === "rider") setRider(value)
+    if (field === "horse") setHorse(value)
+    if (field === "cls") setCls(value)
+    if (field === "title") setTitle(value)
+    if (field === "description") setDescription(value)
 
-    if (field === 'customPriceWeb') {
-      setCustomPriceWeb(value);
-      setCustomPriceHigh(value);
-      setCustomPriceCommercial(value);
-      setPriceBundle('custom');
+    if (field === "customPriceWeb") {
+      setCustomPriceWeb(value)
+      setCustomPriceHigh(value)
+      setCustomPriceCommercial(value)
+      setPriceBundle("custom")
     }
-  };
+  }
 
   const handleBundleSelect = (
-    bundle: 'basic' | 'standard' | 'premium' | 'custom'
+    bundle: "basic" | "standard" | "premium" | "custom"
   ) => {
-    setTouched(true);
-    setPriceBundle(bundle);
+    setTouched(true)
+    setPriceBundle(bundle)
     // Do NOT overwrite custom inputs from bundle values
-  };
+  }
 
   const enterEditMode = () => {
-    setViewMode('edit');
-    setEditFromSummary(true);
-  };
+    setViewMode("edit")
+    setEditFromSummary(true)
+  }
 
   const onCloseSafe = () => {
     if (isDirty) {
-      setConfirmModal({ type: 'close', isOpen: true });
+      setConfirmModal({ type: "close", isOpen: true })
     } else {
-      propsOnClose();
+      propsOnClose()
     }
-  };
+  }
 
   const confirmCloseDiscard = () => {
-    setTouched(false);
-    setConfirmModal({ type: 'close', isOpen: false });
-    propsOnClose();
-  };
+    setTouched(false)
+    setConfirmModal({ type: "close", isOpen: false })
+    propsOnClose()
+  }
 
   const handleSave = async () => {
-    const ids = selectedPhotos.map(p => p.id);
-    const prevMetadata = selectedPhotos.map(p => ({
+    const ids = selectedPhotos.map((p) => p.id)
+    const prevMetadata = selectedPhotos.map((p) => ({
       id: p.id,
       rider: p.rider,
       horse: p.horse,
@@ -468,75 +472,64 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
       priceStandard: p.priceStandard,
       priceHigh: p.priceHigh,
       priceCommercial: p.priceCommercial,
-    }));
+    }))
 
     const updates: Partial<Photo> & {
-      description?: string;
-      isGeneric?: boolean;
-    } = {};
+      description?: string
+      isGeneric?: boolean
+    } = {}
 
     // Tag Updates
     if (isSingle) {
-      updates.rider = rider === 'None' ? '' : rider;
-      updates.horse = horse === 'None' ? '' : horse;
-      updates.className = cls === 'None' ? '' : cls;
-      updates.isGeneric = isGeneric;
+      updates.rider = rider === "None" ? "" : rider
+      updates.horse = horse === "None" ? "" : horse
+      updates.className = cls === "None" ? "" : cls
+      updates.isGeneric = isGeneric
       if (isGeneric) {
-        updates.title = title;
-        updates.description = description;
+        updates.title = title
+        updates.description = description
       }
     } else {
-      if (rider) updates.rider = rider === 'None' ? '' : rider;
-      if (horse) updates.horse = horse === 'None' ? '' : horse;
-      if (cls) updates.className = cls === 'None' ? '' : cls;
+      if (rider) updates.rider = rider === "None" ? "" : rider
+      if (horse) updates.horse = horse === "None" ? "" : horse
+      if (cls) updates.className = cls === "None" ? "" : cls
       if (isGeneric) {
-        updates.isGeneric = true;
-        updates.rider = '';
-        updates.horse = '';
-        updates.className = '';
+        updates.isGeneric = true
+        updates.rider = ""
+        updates.horse = ""
+        updates.className = ""
       }
     }
 
     // Price Updates
-    const finalPrice = getEffectivePrice();
-    updates.priceStandard = finalPrice.web;
-    updates.priceHigh = finalPrice.high;
-    updates.priceCommercial = finalPrice.commercial;
+    const finalPrice = getEffectivePrice()
+    updates.priceStandard = finalPrice.web
+    updates.priceHigh = finalPrice.high
+    updates.priceCommercial = finalPrice.commercial
 
-    try {
-      await updatePhotoMetadata(ids, updates);
-
-      triggerToast('Changes saved', 'success', 'panel', () => {
-        prevMetadata.forEach(meta => {
-          void updatePhotoMetadata([meta.id], {
-            rider: meta.rider,
-            horse: meta.horse,
-            className: meta.className,
-            isGeneric: meta.isGeneric,
-            title: meta.title || '',
-            description: meta.description || '',
-            priceStandard: meta.priceStandard,
-            priceHigh: meta.priceHigh,
-            priceCommercial: meta.priceCommercial,
-          }).catch(() => undefined);
-        });
-      });
-    } catch {
-      prevMetadata.forEach(meta => {
+    const restorePrevious = () => {
+      prevMetadata.forEach((meta) => {
         void updatePhotoMetadata([meta.id], {
           rider: meta.rider,
           horse: meta.horse,
           className: meta.className,
           isGeneric: meta.isGeneric,
-          title: meta.title || '',
-          description: meta.description || '',
+          title: meta.title || "",
+          description: meta.description || "",
           priceStandard: meta.priceStandard,
           priceHigh: meta.priceHigh,
           priceCommercial: meta.priceCommercial,
-        }).catch(() => undefined);
-      });
-      triggerToast('Unable to save changes', 'danger', 'panel');
-      return;
+        }).catch(() => undefined)
+      })
+    }
+
+    try {
+      await updatePhotoMetadata(ids, updates)
+      triggerToast("Changes saved", "success", "panel", restorePrevious)
+    } catch {
+      restorePrevious()
+      triggerToast("Unable to save changes", "danger", "panel")
+      return
     }
 
     setOriginalState({
@@ -550,58 +543,58 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
       priceHigh: finalPrice.high,
       priceCommercial: finalPrice.commercial,
       priceBundle,
-    });
-    setTouched(false);
+    })
+    setTouched(false)
 
     if (isSingle && isGeneric && (title || description)) {
-      setViewMode('summary');
+      setViewMode("summary")
     }
-    setEditFromSummary(false);
-  };
+    setEditFromSummary(false)
+  }
 
   const handleCancel = () => {
     if (originalState) {
-      setRider(originalState.rider);
-      setHorse(originalState.horse);
-      setCls(originalState.cls);
-      setIsGeneric(originalState.isGeneric);
-      setTitle(originalState.title);
-      setDescription(originalState.description);
+      setRider(originalState.rider)
+      setHorse(originalState.horse)
+      setCls(originalState.cls)
+      setIsGeneric(originalState.isGeneric)
+      setTitle(originalState.title)
+      setDescription(originalState.description)
 
       // Re-calc bundle from original state
-      const pWeb = originalState.priceWeb;
-      const pHigh = originalState.priceHigh;
-      const pComm = originalState.priceCommercial;
+      const pWeb = originalState.priceWeb
+      const pHigh = originalState.priceHigh
+      const pComm = originalState.priceCommercial
 
-      let bundle: 'basic' | 'standard' | 'premium' | 'custom' = 'custom';
+      let bundle: "basic" | "standard" | "premium" | "custom" = "custom"
       if (
         pWeb === BUNDLES.basic.web &&
         pHigh === BUNDLES.basic.high &&
         pComm === BUNDLES.basic.commercial
       )
-        bundle = 'basic';
+        bundle = "basic"
       else if (
         pWeb === BUNDLES.standard.web &&
         pHigh === BUNDLES.standard.high &&
         pComm === BUNDLES.standard.commercial
       )
-        bundle = 'standard';
+        bundle = "standard"
       else if (
         pWeb === BUNDLES.premium.web &&
         pHigh === BUNDLES.premium.high &&
         pComm === BUNDLES.premium.commercial
       )
-        bundle = 'premium';
+        bundle = "premium"
 
-      setPriceBundle(bundle);
-      if (bundle === 'custom') {
-        setCustomPriceWeb(pWeb.toString());
-        setCustomPriceHigh(pHigh.toString());
-        setCustomPriceCommercial(pComm.toString());
+      setPriceBundle(bundle)
+      if (bundle === "custom") {
+        setCustomPriceWeb(pWeb.toString())
+        setCustomPriceHigh(pHigh.toString())
+        setCustomPriceCommercial(pComm.toString())
       } else {
-        setCustomPriceWeb('');
-        setCustomPriceHigh('');
-        setCustomPriceCommercial('');
+        setCustomPriceWeb("")
+        setCustomPriceHigh("")
+        setCustomPriceCommercial("")
       }
       // Ensure inputs are reset if we were in custom mode editing but then cancelled to a bundle?
       // "If user typed custom values, switching away... preserve custom values internally... switching back restores".
@@ -609,134 +602,156 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
       // My implementation clears custom inputs if restored state is Bundle. Correct.
       // If restored state was Custom, it restores custom inputs. Correct.
 
-      setTouched(false);
+      setTouched(false)
       if (
         originalState.isGeneric &&
         (originalState.title || originalState.description)
       ) {
-        setViewMode('summary');
+        setViewMode("summary")
       } else {
-        setViewMode('edit');
+        setViewMode("edit")
       }
-      setEditFromSummary(false);
+      setEditFromSummary(false)
     }
-  };
+  }
 
   const handleDeleteInit = () => {
-    setConfirmModal({ type: 'delete', isOpen: true });
-  };
+    setConfirmModal({ type: "delete", isOpen: true })
+  }
 
   const confirmDelete = () => {
-    const ids = selectedPhotos.map(p => p.id);
-    const undoSnapshot = [...selectedPhotos];
+    const ids = selectedPhotos.map((p) => p.id)
+    const undoSnapshot = [...selectedPhotos]
 
-    deletePhotos(ids);
-    setConfirmModal({ type: 'delete', isOpen: false });
-    propsOnClose();
+    deletePhotos(ids)
+    setConfirmModal({ type: "delete", isOpen: false })
+    propsOnClose()
 
-    triggerToast('Photo deleted', TOAST_TOKENS.DELETE.type, 'global', () => {
-      restorePhotos(undoSnapshot);
-      triggerToast('Delete undone', 'moved', 'global');
-    });
-  };
+    triggerToast("Photo deleted", TOAST_TOKENS.DELETE.type, "global", () => {
+      restorePhotos(undoSnapshot)
+      triggerToast("Delete undone", "moved", "global")
+    })
+  }
 
   const handleMoveInit = () => {
-    setIsMoveModalOpen(true);
-    setTargetBatch('');
-    setIsCreatingBatch(false);
-    setIsDropdownOpen(false);
-  };
+    setIsMoveModalOpen(true)
+    setTargetBatch("")
+    setIsCreatingBatch(false)
+  }
 
   const handleMoveConfirm = () => {
-    const finalBatch = isCreatingBatch ? newBatchName : targetBatch;
-    if (!finalBatch) return;
+    const finalBatch = isCreatingBatch ? newBatchName : targetBatch
+    if (!finalBatch) return
 
-    const ids = selectedPhotos.map(p => p.id);
-    const prevMetadata = selectedPhotos.map(p => ({
+    const ids = selectedPhotos.map((p) => p.id)
+    const prevMetadata = selectedPhotos.map((p) => ({
       id: p.id,
-      batch: p.batch || 'Uncategorised',
+      batch: p.batch || "Uncategorised",
       storedLocation: p.storedLocation,
-    }));
+    }))
 
     updatePhotoMetadata(ids, {
       batch: finalBatch,
-      storedLocation: (['Random', 'Misc', 'Uncategorised'].includes(finalBatch)
+      storedLocation: (["Random", "Misc", "Uncategorised"].includes(finalBatch)
         ? finalBatch
-        : 'Misc') as any,
-    });
+        : "Misc") as any,
+    })
 
     const undoAction = () => {
-      const batches = new Set(prevMetadata.map(p => p.batch));
-      batches.forEach(b => {
+      const batches = new Set(prevMetadata.map((p) => p.batch))
+      batches.forEach((b) => {
         const idsForBatch = prevMetadata
-          .filter(p => p.batch === b)
-          .map(p => p.id);
+          .filter((p) => p.batch === b)
+          .map((p) => p.id)
         const loc = (
-          ['Random', 'Misc', 'Uncategorised'].includes(b) ? b : 'Misc'
-        ) as any;
+          ["Random", "Misc", "Uncategorised"].includes(b) ? b : "Misc"
+        ) as any
         updatePhotoMetadata(idsForBatch, {
-          batch: b === 'Uncategorised' ? '' : b,
+          batch: b === "Uncategorised" ? "" : b,
           storedLocation: loc,
-        });
-      });
-      triggerToast('Move undone', 'moved', 'global');
-    };
+        })
+      })
+      triggerToast("Move undone", "moved", "global")
+    }
 
     triggerToast(
-      `Moved ${isSingle ? 'photo' : `${count} photos`} to ${finalBatch}`,
-      'moved',
-      'global',
+      `Moved ${isSingle ? "photo" : `${count} photos`} to ${finalBatch}`,
+      "moved",
+      "global",
       undoAction
-    );
+    )
 
-    setIsMoveModalOpen(false);
-    propsOnClose();
-  };
+    setIsMoveModalOpen(false)
+    propsOnClose()
+  }
 
   const currentBatch = useMemo(() => {
-    if (selectedPhotos.length === 0) return null;
-    const first = selectedPhotos[0].batch || 'Uncategorised';
+    if (selectedPhotos.length === 0) return null
+    const first = selectedPhotos[0].batch || "Uncategorised"
     const allMatch = selectedPhotos.every(
-      p => (p.batch || 'Uncategorised') === first
-    );
-    return allMatch ? first : null;
-  }, [selectedPhotos]);
+      (p) => (p.batch || "Uncategorised") === first
+    )
+    return allMatch ? first : null
+  }, [selectedPhotos])
+
+  const confirmCopy = {
+    delete: {
+      title: "Delete photo?",
+      description:
+        "This will remove the photo from this event. You can undo right after deleting.",
+      label: "Delete",
+      tone: "danger",
+      onConfirm: confirmDelete,
+    },
+    close: {
+      title: "Discard changes?",
+      description:
+        "You have unsaved changes. Are you sure you want to discard them?",
+      label: "Discard",
+      tone: "danger",
+      onConfirm: confirmCloseDiscard,
+    },
+  } as const
+  const confirm = confirmCopy[confirmModal.type]
 
   return (
     <>
-      <div className={`pg-selection-panel ${isOpen ? 'is-open' : ''}`}>
-        <div className="pg-panel-header">
-          <span className="pg-panel-title">Selection details</span>
-          <button
-            className="pg-panel-close"
-            onClick={onCloseSafe}
-            title="Close"
-          >
-            <X size={20} />
-          </button>
-        </div>
+      <aside
+        aria-label="Selection details"
+        inert={!isOpen}
+        className={cn(
+          "fixed inset-y-0 right-0 z-50 flex w-100 max-w-full flex-col bg-card shadow-[-4px_0_24px_rgba(0,0,0,0.12)] transition-transform duration-300 ease-[cubic-bezier(0.2,0,0.2,1)]",
+          isOpen ? "translate-x-0" : "translate-x-[110%]"
+        )}
+      >
+        <PanelHeader title="Selection details" onClose={onCloseSafe} />
 
-        <div className="pg-panel-scroll-area relative">
+        <div className="relative flex-1 overflow-y-auto p-6 leading-[1.3]">
           {!isSingle && count > 0 && (
-            <div className="pg-panel-section">
-              <div className="pg-panel-label mb-4">
-                Multiple selection ({count})
-              </div>
+            <div className="mb-8">
+              <SectionLabel>Multiple selection ({count})</SectionLabel>
             </div>
           )}
 
           {isSingle && firstPhoto && (
-            <div className="pg-panel-meta-block">
-              <img src={firstPhoto.url} alt="" className="pg-panel-thumb" />
-              <div className="pg-meta-info">
-                <div className="pg-meta-filename" title={firstPhoto.fileName}>
+            <div className="mb-4 flex items-start gap-4">
+              <img
+                src={firstPhoto.url}
+                alt=""
+                className="size-20 rounded-lg bg-muted object-cover"
+              />
+              <div className="min-w-0 flex-1">
+                <div
+                  className="mb-1 truncate text-sm font-semibold text-foreground"
+                  title={firstPhoto.fileName}
+                >
                   {firstPhoto.fileName}
                 </div>
-                <div className="pg-meta-id">
+                <div className="mb-2 inline-block rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
                   {firstPhoto.photoCode || firstPhoto.id}
                 </div>
-                <div className="pg-meta-date">
-                  <Clock size={14} />
+                <div className="flex items-center gap-1.5 text-[0.8125rem] text-muted-foreground">
+                  <Clock className="size-3.5" />
                   <span>
                     {firstPhoto.uploadDate} • {firstPhoto.timestamp}
                   </span>
@@ -746,211 +761,138 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
           )}
 
           {(isSingle || count > 0) && (
-            <div className="pg-panel-section">
-              {/* COMPACT TABS */}
-              <div className="pg-panel-compact-tabs">
-                <button
-                  className={`pg-panel-compact-tab ${
-                    panelTab === 'tags' ? 'active' : ''
-                  }`}
-                  onClick={() => setPanelTab('tags')}
-                >
-                  Tags
-                </button>
-                <button
-                  className={`pg-panel-compact-tab ${
-                    panelTab === 'price' ? 'active' : ''
-                  }`}
-                  onClick={() => setPanelTab('price')}
-                >
-                  Price
-                </button>
-              </div>
+            <div className="mb-8">
+              <Tabs
+                value={panelTab}
+                onValueChange={(next) => setPanelTab(next as "tags" | "price")}
+              >
+                <TabsList variant="line" className="mb-6 gap-4">
+                  <TabsTrigger value="tags" className={compactTab}>
+                    Tags
+                  </TabsTrigger>
+                  <TabsTrigger value="price" className={compactTab}>
+                    Price
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
 
-              {/* TAGS TAB CONTENT */}
-              {panelTab === 'tags' && (
+              {panelTab === "tags" && (
                 <>
-                  <div className="pg-panel-section-header">
-                    <span className="pg-panel-label">
-                      What do you see in the image
-                    </span>
-                    {/* <button
-                      className="reset-btn"
-                      onClick={handleReset}
-                      title={canReset ? 'Refresh tags' : 'Nothing to reset'}
-                      disabled={!canReset}
-                    >
-                      <RotateCcw size={18} />
-                    </button> */}
+                  {/* develop: "Refresh tags" button removed */}
+                  <div className="mb-3 flex items-center justify-between">
+                    <SectionLabel>What do you see in the image</SectionLabel>
                   </div>
 
-                  {/* EDIT MODE */}
-                  {viewMode === 'edit' ? (
+                  {viewMode === "edit" ? (
                     <>
                       {!isGeneric ? (
                         <>
-                          <div className="pg-form-group">
-                            <Label text="Rider" />
-                            <div className="pg-form-row">
-                              <PgCustomSelect
-                                value={rider}
-                                onChange={val => handleChange('rider', val)}
-                                searchable
-                                options={[
-                                  { label: 'None', value: 'None' },
-                                  ...riderOptions,
-                                ]}
-                                placeholder={
-                                  isSingle
-                                    ? 'Select Rider...'
-                                    : rider
-                                    ? 'Mixed (Overwriting)'
-                                    : 'Mixed (Keep existing)'
-                                }
-                              />
-                            </div>
-                          </div>
+                          <FormGroup label="Rider">
+                            <ModernDropdown
+                              showSearch
+                              value={rider}
+                              onChange={(val) => handleChange("rider", val)}
+                              options={[
+                                { label: "None", value: "None" },
+                                ...riderOptions,
+                              ]}
+                              placeholder={
+                                isSingle
+                                  ? "Select Rider..."
+                                  : rider
+                                    ? "Mixed (Overwriting)"
+                                    : "Mixed (Keep existing)"
+                              }
+                              className={selectClass}
+                            />
+                          </FormGroup>
 
-                          <div className="pg-form-group">
-                            <Label text="Horse" />
-                            <div className="pg-form-row">
-                              <PgCustomSelect
-                                value={horse}
-                                onChange={val => handleChange('horse', val)}
-                                searchable
-                                options={[
-                                  { label: 'None', value: 'None' },
-                                  ...horseOptions,
-                                ]}
-                                placeholder={
-                                  isSingle
-                                    ? 'Select Horse...'
-                                    : 'Mixed (Keep existing)'
-                                }
-                              />
-                            </div>
-                          </div>
+                          <FormGroup label="Horse">
+                            <ModernDropdown
+                              showSearch
+                              value={horse}
+                              onChange={(val) => handleChange("horse", val)}
+                              options={[
+                                { label: "None", value: "None" },
+                                ...horseOptions,
+                              ]}
+                              placeholder={
+                                isSingle
+                                  ? "Select Horse..."
+                                  : "Mixed (Keep existing)"
+                              }
+                              className={selectClass}
+                            />
+                          </FormGroup>
 
-                          <div className="pg-form-group">
-                            <Label text="Class" />
-                            <div className="pg-form-row">
-                              <div className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-bg-subtle)] px-3 py-2 text-[15px] text-[var(--color-text-primary)]">
-                                {cls && cls !== 'None'
-                                  ? cls
-                                  : 'No class selected'}
-                              </div>
+                          <FormGroup label="Class">
+                            {/* develop: class comes from Equipe and is read-only */}
+                            <div className="w-full rounded-lg border bg-muted px-3 py-2 text-[15px] text-foreground">
+                              {cls && cls !== "None"
+                                ? cls
+                                : "No class selected"}
                             </div>
-                          </div>
+                          </FormGroup>
                         </>
                       ) : (
-                        <div className="mb-6 py-3 text-[var(--color-border)] text-[0.75rem] italic">
+                        <div className="mb-6 py-3 text-xs text-muted-foreground/60 italic">
                           No rider, horse, or class info.
                         </div>
                       )}
 
-                      {/* OR Separator */}
-                      {/* {!isGeneric && (
-                        <div className="pg-tags-or-separator flex items-center my-4 gap-3">
-                          <div className="flex-1 h-px bg-[var(--color-border)]" />
-                          <span className="text-[0.625rem] font-bold text-[var(--color-text-tertiary)] tracking-[0.05em]">
-                            OR
-                          </span>
-                          <div className="flex-1 h-px bg-[var(--color-border)]" />
-                        </div>
-                      )} */}
-
-                      {/* Generic Option — available for single and multi-select */}
-                      {/* <div
-                        className={`pg-form-group${isGeneric ? '' : ' mt-4'}`}
-                      >
-                        <div
-                          className="pg-scan-checkbox-row flex items-center gap-[10px] cursor-pointer"
-                          onClick={toggleGeneric}
-                        >
-                          <div
-                            className={`pg-new-checkbox ${
-                              isGeneric ? 'checked' : ''
-                            }`}
-                          >
-                            {isGeneric && (
-                              <Check size={12} color="#fff" strokeWidth={3} />
-                            )}
-                          </div>
-                          <span className="text-[0.8125rem] font-medium text-[var(--color-text-primary)]">
-                            {isSingle
-                              ? 'Mark this as a generic photo'
-                              : `Mark all ${count} photos as generic`}
-                          </span>
-                        </div>
-                        {!isSingle && isGeneric && (
-                          <p className="text-[0.75rem] text-[var(--color-text-secondary)] mt-2 ml-[26px] leading-[1.4]">
-                            Rider, horse, and class tags will be cleared for all
-                            selected photos.
-                          </p>
-                        )}
-                      </div> */}
-
-                      {/* Specific Fields (Generic Only) */}
+                      {/* develop: the "generic photo" checkbox and OR divider are hidden */}
                       {isGeneric && (
-                        <div className="mt-4 p-4 bg-[var(--ui-bg-subtle)] rounded-lg">
-                          <div className="pg-form-group">
-                            <Label text="Title" />
-                            <input
-                              className="pg-panel-input"
+                        <div className="mt-4 rounded-lg bg-muted p-4">
+                          <FormGroup label="Title">
+                            <Input
+                              className="h-10"
                               value={title}
-                              onChange={e =>
-                                handleChange('title', e.target.value)
+                              onChange={(e) =>
+                                handleChange("title", e.target.value)
                               }
                               maxLength={20}
                               placeholder="Pricing ceremony"
                             />
-                          </div>
-                          <div className="pg-form-group">
-                            <Label text="Description" />
-                            <textarea
-                              className="pg-panel-textarea"
+                          </FormGroup>
+                          <FormGroup label="Description" className="mb-0">
+                            <Textarea
+                              className="min-h-20"
                               value={description}
-                              onChange={e =>
-                                handleChange('description', e.target.value)
+                              onChange={(e) =>
+                                handleChange("description", e.target.value)
                               }
                               maxLength={30}
-                              placeholder=""
                               rows={2}
                             />
-                          </div>
+                          </FormGroup>
                         </div>
                       )}
                     </>
                   ) : (
-                    /* SUMMARY MODE (Generic Saved) */
-                    <div className="mt-4 p-4 bg-[var(--ui-bg-subtle)] rounded-lg">
-                      <div className="flex items-start justify-between mb-2">
-                        <div
-                          style={{
-                            fontSize: '0.6875rem',
-                            fontWeight: 600,
-                            color: 'var(--color-text-secondary)',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.06em',
-                          }}
-                        >
+                    /* Summary mode (saved generic photo) */
+                    <div className="mt-4 rounded-lg bg-muted p-4">
+                      <div className="mb-2 flex items-start justify-between">
+                        <SectionLabel className="text-muted-foreground">
                           Generic photo
-                        </div>
-                        <button
+                        </SectionLabel>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
                           onClick={enterEditMode}
-                          className="bg-transparent border-none cursor-pointer p-1 text-[var(--color-border)] hover:text-[var(--color-text-secondary)]"
                           title="Edit"
+                          aria-label="Edit"
+                          className="text-muted-foreground/60 hover:bg-transparent"
                         >
-                          <Pencil size={14} />
-                        </button>
+                          <Pencil className="size-3.5" />
+                        </Button>
                       </div>
                       {title && (
-                        <div className="text-[0.875rem] font-medium text-[var(--color-text-primary)] mb-1">
+                        <div className="mb-1 text-sm font-medium text-foreground">
                           {title}
                         </div>
                       )}
                       {description && (
-                        <div className="text-[0.8125rem] text-[var(--color-text-secondary)] leading-[1.4]">
+                        <div className="text-[0.8125rem] leading-[1.4] text-muted-foreground">
                           {description}
                         </div>
                       )}
@@ -959,186 +901,133 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
                 </>
               )}
 
-              {/* PRICE TAB CONTENT */}
-              {panelTab === 'price' && (
+              {panelTab === "price" && (
                 <div>
-                  <div className="pg-panel-section-header">
-                    <span className="pg-panel-label">Pricing bundle</span>
-                    <button
-                      className="reset-btn"
+                  <div className="mb-3 flex items-center justify-between">
+                    <SectionLabel>Pricing bundle</SectionLabel>
+                    <RoundIconButton
                       onClick={() => setIsInfoOpen(!isInfoOpen)}
                       title="Pricing Info"
+                      aria-label="Pricing info"
                     >
-                      <Info size={18} />
-                    </button>
+                      <Info />
+                    </RoundIconButton>
                   </div>
 
-                  <div className="pg-price-bundle-list flex flex-col gap-3 mb-6">
+                  <div
+                    role="radiogroup"
+                    aria-label="Pricing bundle"
+                    className="mb-6 flex flex-col gap-3"
+                  >
                     {(Object.keys(BUNDLES) as Array<keyof typeof BUNDLES>).map(
-                      key => {
-                        const b = BUNDLES[key];
-                        const isSelected = priceBundle === key;
-                        // Bundle Colors: Basic=Grey, Standard=Orange, Premium=Purple
-                        const colors = {
-                          basic: {
-                            dot: 'var(--color-text-secondary)',
-                            bg: 'var(--ui-bg-subtle)',
-                            border: 'var(--color-border)',
-                          },
-                          standard: {
-                            dot: '#f97316',
-                            bg: '#ffedd5',
-                            border: '#fed7aa',
-                          },
-                          premium: {
-                            dot: '#a855f7',
-                            bg: '#f3e8ff',
-                            border: '#e9d5ff',
-                          },
-                        };
-                        const c = (colors as any)[key] || colors.basic;
-
+                      (key) => {
+                        const b = BUNDLES[key]
+                        const isSelected = priceBundle === key
                         const info = {
                           basic: {
-                            subtitle: 'Web quality',
-                            support: 'Best for social media and screen use.',
+                            subtitle: "Web quality",
+                            support: "Best for social media and screen use.",
                             primaryPrice: b.web,
-                            others: `High ${b.high} / Comm. ${b.commercial}`,
                           },
                           standard: {
-                            subtitle: 'High quality',
-                            support: 'Best for printing and large displays.',
+                            subtitle: "High quality",
+                            support: "Best for printing and large displays.",
                             primaryPrice: b.high,
-                            others: `Web ${b.web} / Comm. ${b.commercial}`,
                           },
                           premium: {
-                            subtitle: 'Commercial use',
-                            support: 'Best for printing and large displays.',
+                            subtitle: "Commercial use",
+                            support: "Best for printing and large displays.",
                             primaryPrice: b.commercial,
-                            others: `Web ${b.web} / High ${b.high}`,
                           },
-                        }[key];
+                        }[key]
 
                         return (
-                          <div
+                          <BundleOption
                             key={key}
-                            onClick={() => handleBundleSelect(key)}
-                            style={{
-                              position: 'relative',
-                              overflow: 'hidden',
-                              padding: '12px 12px 12px 16px',
-                              border: `1px solid ${
-                                isSelected ? c.dot : 'var(--color-border)'
-                              }`,
-                              borderRadius: 8,
-                              background: isSelected ? c.bg : '#fff',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'flex-start',
-                              gap: 12,
-                            }}
+                            selected={isSelected}
+                            onSelect={() => handleBundleSelect(key)}
+                            className={cn(
+                              "relative overflow-hidden py-3 pr-3 pl-4",
+                              isSelected && BUNDLE_COLORS[key].selected
+                            )}
                           >
-                            {/* Left Accent Bar */}
+                            {/* Left accent bar */}
                             <div
-                              className="absolute left-0 top-0 bottom-0 w-1"
-                              style={{ background: c.dot }}
-                            />
-                            <div
-                              className="w-4 h-4 rounded-full bg-white mt-0.5 flex items-center justify-center shrink-0"
-                              style={{
-                                border: `1px solid ${
-                                  isSelected
-                                    ? 'var(--color-brand-primary)'
-                                    : 'var(--color-border)'
-                                }`,
-                              }}
-                            >
-                              {isSelected && (
-                                <div className="w-2 h-2 rounded-full bg-[var(--color-brand-primary)]" />
+                              className={cn(
+                                "absolute inset-y-0 left-0 w-1",
+                                BUNDLE_COLORS[key].bar
                               )}
-                            </div>
+                            />
+                            <RadioDot selected={isSelected} />
                             <div className="flex-1">
-                              <div className="flex justify-between items-baseline mb-0.5">
-                                <div className="text-[0.8125rem] font-medium text-primary">
+                              <div className="mb-0.5 flex items-baseline justify-between">
+                                <div className="text-[0.8125rem] font-medium text-foreground">
                                   {b.label}
                                 </div>
-                                <div className="text-[0.8125rem] font-normal text-secondary">
+                                <div className="text-[0.8125rem] text-muted-foreground">
                                   {info.primaryPrice} SEK
                                 </div>
                               </div>
-                              <div className="text-[0.75rem] text-[var(--color-text-secondary)] mb-0.5">
+                              <div className="mb-0.5 text-xs text-muted-foreground">
                                 {info.subtitle}
                               </div>
-                              <div className="text-[0.75rem] text-secondary leading-[1.4]">
+                              <div className="text-xs leading-[1.4] text-muted-foreground">
                                 {info.support}
                               </div>
                             </div>
-                          </div>
-                        );
+                          </BundleOption>
+                        )
                       }
                     )}
-                    {/* Custom Bundle Card */}
-                    <div
-                      onClick={() => handleBundleSelect('custom')}
-                      style={{
-                        padding: 12,
-                        border: `1px solid ${
-                          priceBundle === 'custom'
-                            ? '#facc15'
-                            : 'var(--color-border)'
-                        }`,
-                        borderRadius: 8,
-                        background:
-                          priceBundle === 'custom' ? '#fef9c3' : '#fff',
-                        cursor: 'pointer',
-                      }}
+
+                    <BundleOption
+                      selected={priceBundle === "custom"}
+                      onSelect={() => handleBundleSelect("custom")}
+                      className={cn(
+                        "flex-col gap-0 p-3",
+                        priceBundle === "custom" &&
+                          "border-[#facc15] bg-[#fef9c3]"
+                      )}
                     >
-                      <div className="flex items-start gap-3">
-                        <div
-                          className="w-4 h-4 rounded-full bg-white mt-0.5 flex items-center justify-center"
-                          style={{
-                            border: `1px solid ${
-                              priceBundle === 'custom'
-                                ? '#facc15'
-                                : 'var(--color-border)'
-                            }`,
-                          }}
-                        >
-                          {priceBundle === 'custom' && (
-                            <div className="w-2 h-2 rounded-full bg-[#facc15]" />
-                          )}
-                        </div>
+                      <div className="flex w-full items-start gap-3">
+                        <RadioDot
+                          selected={priceBundle === "custom"}
+                          className={
+                            priceBundle === "custom"
+                              ? "border-[#facc15] *:bg-[#facc15]"
+                              : undefined
+                          }
+                        />
                         <div className="flex-1">
-                          <div className="text-[0.8125rem] font-medium text-primary">
+                          <div className="text-[0.8125rem] font-medium text-foreground">
                             Custom
                           </div>
-                          {priceBundle !== 'custom' && (
-                            <div className="text-[0.75rem] text-secondary">
+                          {priceBundle !== "custom" && (
+                            <div className="text-xs text-muted-foreground">
                               Set your own price for all levels
                             </div>
                           )}
                         </div>
                       </div>
-                      {/* Inputs for Custom */}
-                      {priceBundle === 'custom' && (
-                        <div className="pg-form-group mt-3 ml-7">
-                          <div className="text-[var(--fs-xs)] text-secondary mb-1">
+                      {priceBundle === "custom" && (
+                        <div className="mt-3 ml-7">
+                          <div className="mb-1 text-xs text-muted-foreground">
                             Price (SEK)
                           </div>
-                          <input
-                            className="pg-panel-input w-1/2"
+                          <Input
+                            className="h-10 w-1/2"
                             type="text"
                             inputMode="numeric"
                             value={customPriceWeb}
-                            onChange={e => {
-                              const val = e.target.value.replace(/[^0-9]/g, '');
-                              handleChange('customPriceWeb', val);
+                            onChange={(e) => {
+                              const val = e.target.value.replace(/[^0-9]/g, "")
+                              handleChange("customPriceWeb", val)
                             }}
                             placeholder="0"
                           />
                         </div>
                       )}
-                    </div>
+                    </BundleOption>
                   </div>
                 </div>
               )}
@@ -1148,364 +1037,390 @@ export const PgSelectionPanel: React.FC<PgSelectionPanelProps> = ({
 
         {/* Footer */}
         <div
-          className={`pg-panel-footer ${
-            isDirty || editFromSummary ? 'dirty-state' : ''
-          }`}
+          className={cn(
+            "flex shrink-0 items-center justify-between gap-3 border-t border-muted px-6 py-4",
+            (isDirty || editFromSummary) && "justify-end"
+          )}
         >
           {isDirty || editFromSummary ? (
             <>
-              <button className="pg-panel-btn secondary" onClick={handleCancel}>
-                <Slash size={16} /> Cancel
-              </button>
-              <button className="pg-panel-btn primary" onClick={handleSave}>
-                <Save size={16} /> Save changes
-              </button>
+              <Button
+                variant="outline"
+                size="md"
+                className={panelSecondary}
+                onClick={handleCancel}
+              >
+                <Slash /> Cancel
+              </Button>
+              <Button size="md" className="min-w-25" onClick={handleSave}>
+                <Save /> Save changes
+              </Button>
             </>
           ) : (
             <>
+              {/* develop: Publish / Unpublish removed */}
               <div className="flex gap-2">
-                {currentTab !== 'published' && (
-                  <button
-                    className="pg-panel-btn icon-only secondary delete-action"
+                {currentTab !== "published" && (
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className={cn(
+                      panelSecondary,
+                      "size-10 min-w-0 hover:text-destructive"
+                    )}
                     title="Delete"
+                    aria-label="Delete"
                     onClick={handleDeleteInit}
                   >
-                    <Trash2 size={18} />
-                  </button>
+                    <Trash2 className="size-4.5" />
+                  </Button>
                 )}
-                <button
-                  className="pg-panel-btn icon-only secondary"
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className={cn(panelSecondary, "size-10 min-w-0")}
                   title="Move to..."
+                  aria-label="Move to..."
                   onClick={handleMoveInit}
                 >
-                  <MoreVertical size={18} />
-                </button>
+                  <MoreVertical className="size-4.5" />
+                </Button>
               </div>
             </>
           )}
         </div>
 
-        {/* Confirm Modals etc ... same as before */}
-        {isMoveModalOpen && (
-          <div
-            className="pg-panel-confirm-overlay"
-            onClick={() => setIsMoveModalOpen(false)}
-          >
-            <div
-              className="pg-panel-confirm-card"
-              onClick={e => e.stopPropagation()}
-            >
-              <h3>Move to other folder</h3>
-              <div className="pg-modal-body mb-6">
-                {!isCreatingBatch ? (
-                  <>
-                    <div className="text-[0.8125rem] font-semibold text-secondary mb-2">
-                      Select Folder
-                    </div>
-                    <div
-                      className="pg-custom-select-trigger"
-                      onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                    >
-                      <span>{targetBatch || 'Select folder...'}</span>
-                      <ChevronDown
-                        size={16}
-                        color="var(--color-text-secondary)"
-                      />
-                      {isDropdownOpen && (
-                        <div
-                          className="pg-custom-select-list"
-                          onClick={e => e.stopPropagation()}
-                        >
-                          {BATCHES.map(b => {
-                            const isDisabled = b === currentBatch;
-                            return (
-                              <div
-                                key={b}
-                                className={`pg-select-option ${
-                                  isDisabled ? 'disabled' : ''
-                                }`}
-                                onClick={() => {
-                                  if (!isDisabled) {
-                                    setTargetBatch(b);
-                                    setIsDropdownOpen(false);
-                                  }
-                                }}
-                              >
-                                {b}
-                                {isDisabled && (
-                                  <span className="text-[var(--fs-xs)] text-[var(--color-text-secondary)]">
-                                    Current folder
-                                  </span>
-                                )}
-                              </div>
-                            );
-                          })}
-                          <div
-                            className="pg-select-option create-new"
-                            onClick={() => {
-                              setIsCreatingBatch(true);
-                              setTargetBatch('');
-                              setIsDropdownOpen(false);
-                            }}
-                          >
-                            <Plus size={14} className="mr-1.5" />
-                            Create new folder...
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <div className="pg-form-group">
-                    <div className="text-[0.8125rem] font-semibold text-secondary mb-2">
-                      New Folder Name
-                    </div>
-                    <div className="flex gap-2">
-                      <input
-                        className="pg-panel-input"
-                        placeholder="Enter name..."
-                        value={newBatchName}
-                        onChange={e => setNewBatchName(e.target.value)}
-                        autoFocus
-                      />
-                      <button
-                        className="pg-panel-btn secondary icon-only"
-                        onClick={() => setIsCreatingBatch(false)}
-                      >
-                        <X size={16} />
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="pg-panel-confirm-actions">
-                <button
-                  className="pg-panel-btn secondary"
-                  onClick={() => setIsMoveModalOpen(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="pg-panel-btn primary"
-                  onClick={handleMoveConfirm}
-                  disabled={!isCreatingBatch ? !targetBatch : !newBatchName}
-                >
-                  Confirm
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Unified Confirmation Modal */}
-        {confirmModal.isOpen && (
-          <div className="pg-panel-confirm-overlay">
-            <div className="pg-panel-confirm-card">
-              <h3>
-                {confirmModal.type === 'delete' && 'Delete photo?'}
-                {confirmModal.type === 'close' && 'Discard changes?'}
-              </h3>
-              <p>
-                {confirmModal.type === 'delete' &&
-                  'This will remove the photo from this event. You can undo right after deleting.'}
-                {confirmModal.type === 'close' &&
-                  'You have unsaved changes. Are you sure you want to discard them?'}
-              </p>
-              <div className="pg-panel-confirm-actions">
-                <button
-                  className="pg-panel-btn secondary"
-                  onClick={() =>
-                    setConfirmModal({ ...confirmModal, isOpen: false })
-                  }
-                >
-                  Cancel
-                </button>
-                {confirmModal.type === 'delete' && (
-                  <button
-                    className="pg-panel-btn destructive"
-                    onClick={confirmDelete}
-                  >
-                    Delete
-                  </button>
-                )}
-                {confirmModal.type === 'close' && (
-                  <button
-                    className="pg-panel-btn destructive"
-                    onClick={confirmCloseDiscard}
-                  >
-                    Discard
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Info Panel Overlay (Covering entire panel) */}
+        {/* Info overlay (covers the whole panel) */}
         {isInfoOpen && (
-          <div className="absolute inset-0 bg-[var(--color-surface)] z-[2000] flex flex-col [animation:fadeIn_0.2s_ease-out]">
-            {/* Header: Back + Info + Close */}
-            <div className="pg-panel-header justify-between pr-6 pl-4">
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setIsInfoOpen(false)}
-                  className="bg-transparent border-none cursor-pointer p-2 -m-2 flex items-center justify-center text-primary"
-                >
-                  <ChevronLeft size={20} />
-                </button>
-                <span className="pg-panel-title">Info</span>
-              </div>
-              <button
-                className="pg-panel-close"
-                onClick={onCloseSafe}
-                title="Close"
-              >
-                <X size={20} />
-              </button>
-            </div>
+          <div className="absolute inset-0 z-10 flex animate-in flex-col bg-card duration-200 fade-in-0">
+            <PanelHeader
+              title="Info"
+              onClose={onCloseSafe}
+              onBack={() => setIsInfoOpen(false)}
+            />
 
-            <div className="pg-panel-scroll-area p-6">
-              {/* Quality Info */}
+            <div className="flex-1 overflow-y-auto p-6 leading-[1.3]">
               <div className="mb-6">
-                <div className="text-[0.875rem] font-semibold text-primary mb-4">
+                <div className="mb-4 text-sm font-semibold text-foreground">
                   Quality info
                 </div>
                 <div className="flex flex-col gap-4">
-                  <div>
-                    <div className="text-[0.875rem] font-medium text-primary mb-0.5">
-                      Web quality
+                  {[
+                    ["Web quality", "Best for screen and social media."],
+                    ["High quality", "Best for print and large displays."],
+                    ["Commercial use", "Best for print and large displays."],
+                  ].map(([name, text]) => (
+                    <div key={name}>
+                      <div className="mb-0.5 text-sm font-medium text-foreground">
+                        {name}
+                      </div>
+                      <div className="text-[0.8125rem] text-muted-foreground">
+                        {text}
+                      </div>
                     </div>
-                    <div className="text-[0.8125rem] text-secondary">
-                      Best for screen and social media.
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-[0.875rem] font-medium text-primary mb-0.5">
-                      High quality
-                    </div>
-                    <div className="text-[0.8125rem] text-secondary">
-                      Best for print and large displays.
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-[0.875rem] font-medium text-primary mb-0.5">
-                      Commercial use
-                    </div>
-                    <div className="text-[0.8125rem] text-secondary">
-                      Best for print and large displays.
-                    </div>
-                  </div>
-                  <div className="text-[0.75rem] text-[var(--ui-icon-muted)] leading-[1.5]">
+                  ))}
+                  <div className="text-xs leading-normal text-muted-foreground/70">
                     Gallopics automatically delivers the right resolution—no
                     extra prep needed.
                   </div>
                 </div>
               </div>
 
-              <div className="border-b border-[var(--ui-bg-subtle)] mb-6" />
+              <div className="mb-6 border-b border-muted" />
 
-              {/* Earnings Split */}
               <div className="mb-6">
-                <div className="text-[0.875rem] font-semibold text-primary mb-4">
+                <div className="mb-4 text-sm font-semibold text-foreground">
                   Earnings split
                 </div>
                 <div className="flex flex-col gap-2">
-                  <div className="flex justify-between text-[0.875rem]">
-                    <span className="text-secondary">Photographer</span>
-                    <span className="font-semibold text-primary">75%</span>
-                  </div>
-                  <div className="flex justify-between text-[0.875rem]">
-                    <span className="text-secondary">Gallopics</span>
-                    <span className="font-semibold text-primary">15%</span>
-                  </div>
-                  <div className="flex justify-between text-[0.875rem]">
-                    <span className="text-secondary">Organiser</span>
-                    <span className="font-semibold text-primary">10%</span>
-                  </div>
-                  <div className="text-[0.8125rem] text-[var(--ui-icon-muted)] mt-2 leading-[1.5]">
+                  {[
+                    ["Photographer", "75%"],
+                    ["Gallopics", "15%"],
+                    ["Organiser", "10%"],
+                  ].map(([name, share]) => (
+                    <div key={name} className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">{name}</span>
+                      <span className="font-semibold text-foreground">
+                        {share}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="mt-2 text-[0.8125rem] leading-normal text-muted-foreground/70">
                     Taxes depend on your status (freelancer vs business).
                     Receipts are generated automatically.
                   </div>
                 </div>
               </div>
 
-              <div className="border-b border-[var(--ui-bg-subtle)] mb-6" />
+              <div className="mb-6 border-b border-muted" />
 
-              {/* Links */}
               <div className="flex flex-col gap-3">
                 {[
-                  {
-                    label: 'Terms of Service',
-                    icon: (
-                      <ChevronRight size={15} color="var(--color-border)" />
-                    ),
-                  },
-                  {
-                    label: 'Privacy Policy',
-                    icon: (
-                      <ChevronRight size={15} color="var(--color-border)" />
-                    ),
-                  },
-                  {
-                    label: 'FAQ',
-                    icon: <HelpCircle size={15} color="var(--color-border)" />,
-                  },
-                ].map(({ label, icon }) => (
+                  { label: "Terms of Service", Icon: ChevronRight },
+                  { label: "Privacy Policy", Icon: ChevronRight },
+                  { label: "FAQ", Icon: HelpCircle },
+                ].map(({ label, Icon }) => (
                   <a
                     key={label}
                     href="#"
-                    className="no-underline flex items-center justify-between py-1"
-                    style={{
-                      fontSize: '0.8125rem',
-                      color: 'var(--color-text-primary)',
-                    }}
-                    onMouseEnter={e =>
-                      (e.currentTarget.style.color =
-                        'var(--color-brand-primary)')
-                    }
-                    onMouseLeave={e =>
-                      (e.currentTarget.style.color =
-                        'var(--color-text-primary)')
-                    }
+                    className="flex items-center justify-between py-1 text-[0.8125rem] text-foreground transition-colors hover:text-primary"
                   >
-                    {label} {icon}
+                    {label} <Icon className="size-3.75 text-border" />
                   </a>
                 ))}
               </div>
             </div>
           </div>
         )}
+      </aside>
 
-        {toast && toast.context === 'panel' && (
-          <PgToast
-            type={
-              toast.type === 'moved'
-                ? 'success'
-                : toast.type === 'warning'
-                ? 'info'
-                : toast.type === 'danger'
-                ? 'danger'
-                : 'success'
-            }
-            message={toast.msg}
-            onUndo={toast.undo}
-            className="bottom-[84px] left-6 right-6 w-auto min-w-[200px]"
-          />
-        )}
-      </div>
+      <Dialog
+        open={isMoveModalOpen}
+        onOpenChange={(open) => {
+          if (!open) setIsMoveModalOpen(false)
+        }}
+      >
+        <DialogContent className="sm:max-w-100">
+          <DialogHeader>
+            <DialogTitle>Move to other folder</DialogTitle>
+          </DialogHeader>
+          <DialogBody>
+            {!isCreatingBatch ? (
+              <FormGroup label="Select Folder" className="mb-0">
+                <ModernDropdown
+                  value={targetBatch}
+                  onChange={(val) => {
+                    if (val === NEW_FOLDER) {
+                      setIsCreatingBatch(true)
+                      setTargetBatch("")
+                    } else {
+                      setTargetBatch(val)
+                    }
+                  }}
+                  options={[
+                    ...BATCHES.map((b) => ({
+                      label: b,
+                      value: b,
+                      disabled: b === currentBatch,
+                      subtext:
+                        b === currentBatch ? "Current folder" : undefined,
+                    })),
+                    {
+                      label: "Create new folder...",
+                      value: NEW_FOLDER,
+                      icon: <Plus className="size-3.5 text-primary" />,
+                    },
+                  ]}
+                  placeholder="Select folder..."
+                />
+              </FormGroup>
+            ) : (
+              <FormGroup label="New Folder Name" className="mb-0">
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Enter name..."
+                    value={newBatchName}
+                    onChange={(e) => setNewBatchName(e.target.value)}
+                    autoFocus
+                  />
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className={cn(panelSecondary, "min-w-0")}
+                    aria-label="Back to folder list"
+                    onClick={() => setIsCreatingBatch(false)}
+                  >
+                    <X />
+                  </Button>
+                </div>
+              </FormGroup>
+            )}
+          </DialogBody>
+          <DialogFooter>
+            <DialogCancel />
+            <Button
+              onClick={handleMoveConfirm}
+              disabled={!isCreatingBatch ? !targetBatch : !newBatchName}
+            >
+              Confirm
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmDialog
+        open={confirmModal.isOpen}
+        onCancel={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+        onConfirm={confirm.onConfirm}
+        title={confirm.title}
+        description={confirm.description}
+        confirmLabel={confirm.label}
+        tone={confirm.tone}
+      />
     </>
-  );
-};
+  )
+}
 
-const Label: React.FC<{ text: string }> = ({ text }) => (
-  <div
-    style={{
-      fontSize: '0.75rem',
-      fontWeight: 600,
-      color: 'var(--color-text-secondary)',
-      marginBottom: 6,
-    }}
-  >
-    {text}
-  </div>
-);
+const NEW_FOLDER = "__new__"
+
+const BUNDLE_COLORS: Record<
+  keyof typeof BUNDLES,
+  { bar: string; selected: string }
+> = {
+  basic: {
+    bar: "bg-muted-foreground",
+    selected: "border-muted-foreground bg-muted",
+  },
+  standard: { bar: "bg-[#f97316]", selected: "border-[#f97316] bg-[#ffedd5]" },
+  premium: { bar: "bg-[#a855f7]", selected: "border-[#a855f7] bg-[#f3e8ff]" },
+}
+
+// Old .pg-panel-btn.secondary: white, gray text, gray hover (no brand tint)
+const panelSecondary = "min-w-25 text-muted-foreground"
+
+const selectClass = "h-10 min-h-10 py-0 data-[size=default]:h-10"
+
+// Old .pg-panel-compact-tab: smaller underline tabs
+const compactTab =
+  "group-data-[variant=line]/tabs-list:px-0 group-data-[variant=line]/tabs-list:py-2 group-data-[variant=line]/tabs-list:text-sm"
+
+function PanelHeader({
+  title,
+  onClose,
+  onBack,
+}: {
+  title: string
+  onClose: () => void
+  onBack?: () => void
+}) {
+  return (
+    <div className="flex h-16 shrink-0 items-center justify-between border-b border-muted px-6">
+      <div className="flex items-center gap-3">
+        {onBack && (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="-ml-2 text-foreground"
+            onClick={onBack}
+            aria-label="Back"
+          >
+            <ChevronLeft className="size-5" />
+          </Button>
+        )}
+        <span className="text-base font-semibold text-foreground">{title}</span>
+      </div>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        onClick={onClose}
+        title="Close"
+        aria-label="Close"
+      >
+        <X className="size-5" />
+      </Button>
+    </div>
+  )
+}
+
+function SectionLabel({
+  className,
+  children,
+}: {
+  className?: string
+  children: React.ReactNode
+}) {
+  return (
+    <span
+      className={cn(
+        "text-[0.6875rem] leading-none font-semibold tracking-[0.06em] text-muted-foreground/70 uppercase",
+        className
+      )}
+    >
+      {children}
+    </span>
+  )
+}
+
+function FormGroup({
+  label,
+  className,
+  children,
+}: {
+  label: string
+  className?: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className={cn("mb-5", className)}>
+      <div className="mb-1.5 text-xs font-semibold text-muted-foreground">
+        {label}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function RoundIconButton(props: React.ComponentProps<typeof Button>) {
+  return (
+    <Button
+      variant="secondary"
+      size="icon-xs"
+      className="text-muted-foreground/70 [&_svg:not([class*='size-'])]:size-3.5"
+      {...props}
+    />
+  )
+}
+
+function BundleOption({
+  selected,
+  onSelect,
+  className,
+  children,
+}: {
+  selected: boolean
+  onSelect: () => void
+  className?: string
+  children: React.ReactNode
+}) {
+  return (
+    <div
+      role="radio"
+      aria-checked={selected}
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          onSelect()
+        }
+      }}
+      className={cn(
+        "flex cursor-pointer items-start gap-3 rounded-lg border bg-card outline-none focus-visible:ring-4 focus-visible:ring-ring/12",
+        className
+      )}
+    >
+      {children}
+    </div>
+  )
+}
+
+function RadioDot({
+  selected,
+  className,
+}: {
+  selected: boolean
+  className?: string
+}) {
+  return (
+    <span
+      className={cn(
+        "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border bg-card",
+        selected && "border-primary",
+        className
+      )}
+    >
+      {selected && <span className="size-2 rounded-full bg-primary" />}
+    </span>
+  )
+}

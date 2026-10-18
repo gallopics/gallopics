@@ -1,32 +1,50 @@
-import React from 'react';
-import { Download } from 'lucide-react';
-import { TitleHeader } from '../../components/TitleHeader';
+import { Download } from "lucide-react"
 
-export const Receipts: React.FC = () => {
-  const mockReceipts = [
-    {
-      id: 'REC-001',
-      date: '2026-01-15',
-      amount: '€1,250.00',
-      status: 'Paid',
-      description: 'Payout for Dec 2025',
-    },
-    {
-      id: 'REC-002',
-      date: '2025-12-15',
-      amount: '€850.00',
-      status: 'Paid',
-      description: 'Payout for Nov 2025',
-    },
-    {
-      id: 'REC-003',
-      date: '2025-11-15',
-      amount: '€2,100.00',
-      status: 'Paid',
-      description: 'Payout for Oct 2025',
-    },
-  ];
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { TitleHeader } from "@/components/TitleHeader"
+import {
+  WorkspaceCard,
+  WorkspacePageBody,
+} from "@/components/WorkspacePageBody"
 
+// Mock data, as in the old app
+const mockReceipts = [
+  {
+    id: "REC-001",
+    date: "2026-01-15",
+    amount: "€1,250.00",
+    status: "Paid",
+    description: "Payout for Dec 2025",
+  },
+  {
+    id: "REC-002",
+    date: "2025-12-15",
+    amount: "€850.00",
+    status: "Paid",
+    description: "Payout for Nov 2025",
+  },
+  {
+    id: "REC-003",
+    date: "2025-11-15",
+    amount: "€2,100.00",
+    status: "Paid",
+    description: "Payout for Oct 2025",
+  },
+]
+
+const headClass =
+  "h-auto bg-card px-5 py-3.5 font-medium tracking-wide normal-case"
+
+export function Receipts() {
   return (
     <div className="w-full">
       <TitleHeader
@@ -35,83 +53,78 @@ export const Receipts: React.FC = () => {
         subtitle="Download and manage your payout receipts and invoices."
       />
 
-      <div className="pg-page-body">
-        {/* Receipts Table */}
-        <div className="bg-white rounded-xl border border-[var(--color-border)] overflow-hidden max-w-[800px] mb-6 mx-auto">
-          <table className="w-full border-collapse text-left">
-            <thead className="border-b border-[var(--ui-bg-subtle)]">
-              <tr>
-                <th className="px-5 py-3.5 text-[0.75rem] font-500 text-[var(--color-text-secondary)] uppercase tracking-wide">
-                  ID
-                </th>
-                <th className="px-5 py-3.5 text-[0.75rem] font-500 text-[var(--color-text-secondary)] uppercase tracking-wide">
-                  Date
-                </th>
-                <th className="px-5 py-3.5 text-[0.75rem] font-500 text-[var(--color-text-secondary)] uppercase tracking-wide">
-                  Description
-                </th>
-                <th className="px-5 py-3.5 text-[0.75rem] font-500 text-[var(--color-text-secondary)] uppercase tracking-wide">
-                  Amount
-                </th>
-                <th className="px-5 py-3.5 text-[0.75rem] font-500 text-[var(--color-text-secondary)] uppercase tracking-wide">
-                  Status
-                </th>
-                <th className="px-5 py-3.5 text-[0.75rem] font-500 text-[var(--color-text-secondary)] uppercase tracking-wide text-right">
+      <WorkspacePageBody>
+        <WorkspaceCard className="overflow-hidden p-0">
+          <Table>
+            <TableHeader className="[&_tr]:border-muted">
+              <TableRow className="hover:bg-transparent">
+                {["ID", "Date", "Description", "Amount", "Status"].map(
+                  (label) => (
+                    <TableHead key={label} className={`${headClass} uppercase`}>
+                      {label}
+                    </TableHead>
+                  )
+                )}
+                <TableHead className={`${headClass} text-right uppercase`}>
                   Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {mockReceipts.map(receipt => (
-                <tr
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {mockReceipts.map((receipt) => (
+                <TableRow
                   key={receipt.id}
-                  className="border-b border-[var(--ui-bg-subtle)] last:border-0"
+                  className="border-muted hover:bg-transparent"
                 >
-                  <td className="px-5 py-4 text-[0.875rem] text-[var(--color-text-secondary)] font-medium">
+                  <TableCell className="px-5 py-4 font-medium text-muted-foreground">
                     {receipt.id}
-                  </td>
-                  <td className="px-5 py-4 text-[0.875rem] text-[var(--color-text-secondary)]">
+                  </TableCell>
+                  <TableCell className="px-5 py-4 text-muted-foreground">
                     {receipt.date}
-                  </td>
-                  <td className="px-5 py-4 text-[0.875rem] text-[var(--color-text-primary)]">
+                  </TableCell>
+                  <TableCell className="px-5 py-4">
                     {receipt.description}
-                  </td>
-                  <td className="px-5 py-4 text-[0.875rem] text-[var(--color-text-primary)] font-semibold">
+                  </TableCell>
+                  <TableCell className="px-5 py-4 font-semibold">
                     {receipt.amount}
-                  </td>
-                  <td className="px-5 py-4">
-                    <span className="px-2.5 py-1 rounded-full text-[0.75rem] font-medium bg-[var(--color-success-tint)] text-[var(--color-success)]">
+                  </TableCell>
+                  <TableCell className="px-5 py-4">
+                    <Badge variant="success" className="font-medium">
                       {receipt.status}
-                    </span>
-                  </td>
-                  <td className="px-5 py-4 text-right">
-                    <button className="inline-flex items-center gap-1.5 text-[0.875rem] text-[var(--color-brand-primary)] font-medium bg-transparent border-0 cursor-pointer hover:opacity-75">
-                      <Download size={15} />
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="px-5 py-4 text-right">
+                    <Button
+                      variant="link"
+                      className="h-auto p-0 font-medium hover:no-underline hover:opacity-75"
+                    >
+                      <Download className="size-3.75" />
                       PDF
-                    </button>
-                  </td>
-                </tr>
+                    </Button>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
+        </WorkspaceCard>
 
-        {/* Payout Details */}
-        <div className="bg-white rounded-xl border border-[var(--color-border)] p-6 max-w-[800px] mb-6 mx-auto">
-          <div className="mb-3">
-            <h2 className="text-[1.125rem] font-semibold text-[var(--color-text-primary)] mb-1.5">
-              Payout Details
-            </h2>
-            <p className="text-[0.875rem] text-[var(--color-text-secondary)] leading-[1.6]">
-              Payouts are processed automatically on the 15th of every month for
-              the previous month's sales.
-            </p>
-          </div>
-          <button className="pg-btn pg-btn-secondary mt-2">
+        <WorkspaceCard>
+          <h2 className="mb-1.5 text-lg font-semibold text-foreground">
+            Payout Details
+          </h2>
+          <p className="mb-3 text-sm leading-[1.6] text-muted-foreground">
+            Payouts are processed automatically on the 15th of every month for
+            the previous month&apos;s sales.
+          </p>
+          <Button
+            variant="outline"
+            size="md"
+            className="mt-2 text-muted-foreground"
+          >
             Update payout method
-          </button>
-        </div>
-      </div>
+          </Button>
+        </WorkspaceCard>
+      </WorkspacePageBody>
     </div>
-  );
-};
+  )
+}

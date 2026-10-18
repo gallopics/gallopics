@@ -1,18 +1,51 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { usePhotographer } from '../../context/PhotographerContext';
-import { ManageHighlightsModal } from '../../components/ManageHighlightsModal';
-import { TitleHeader } from '../../components/TitleHeader';
+import { useState } from "react"
+import { Link } from "react-router"
 
-export const Settings: React.FC = () => {
+import { usePhotographer } from "@/context/PhotographerContext"
+import { Button } from "@/components/ui/button"
+import { Switch } from "@/components/ui/switch"
+import { ManageHighlightsModal } from "@/components/ManageHighlightsModal"
+import { TitleHeader } from "@/components/TitleHeader"
+import {
+  WorkspaceCard,
+  WorkspacePageBody,
+} from "@/components/WorkspacePageBody"
+
+function SettingRow({
+  title,
+  description,
+  control,
+  last,
+}: {
+  title: string
+  description: React.ReactNode
+  control: React.ReactNode
+  last?: boolean
+}) {
+  return (
+    <div
+      className={`flex items-center justify-between py-4 ${last ? "" : "border-b"}`}
+    >
+      <div className="flex-1 pr-6">
+        <div className="mb-1 text-sm font-medium text-foreground">{title}</div>
+        <div className="text-[0.8125rem] text-muted-foreground">
+          {description}
+        </div>
+      </div>
+      {control}
+    </div>
+  )
+}
+
+export function Settings() {
   const {
     highlights,
     updateHighlights,
     availableToHire,
     toggleAvailableToHire,
     photographerId,
-  } = usePhotographer();
-  const [isHighlightsModalOpen, setIsHighlightsModalOpen] = useState(false);
+  } = usePhotographer()
+  const [isHighlightsModalOpen, setIsHighlightsModalOpen] = useState(false)
 
   return (
     <div className="w-full">
@@ -20,71 +53,53 @@ export const Settings: React.FC = () => {
         variant="workspace"
         title="Settings"
         rightContent={
-          <Link
-            to={`/photographer/${photographerId}`}
-            className="pg-btn pg-btn-secondary"
-            target="_blank"
+          <Button
+            variant="outline"
+            className="text-muted-foreground"
+            size="md"
+            nativeButton={false}
+            render={
+              <Link to={`/photographer/${photographerId}`} target="_blank" />
+            }
           >
             Visit my public profile
-          </Link>
+          </Button>
         }
       />
 
-      <div className="pg-page-body">
-        <div className="bg-white border border-[var(--color-border)] rounded-xl p-6 max-w-[800px] mb-6 mx-auto">
-          <h2 className="text-[1.1rem] font-semibold text-[var(--color-text-primary)] mt-0 mb-5 pb-4 border-b border-[var(--color-border)]">
+      <WorkspacePageBody>
+        <WorkspaceCard>
+          <h2 className="mb-5 border-b pb-4 text-[1.1rem] font-semibold text-foreground">
             Profile & public page
           </h2>
 
-          <div className="flex justify-between items-center py-4 border-b border-[var(--color-border)]">
-            <div className="flex-1 pr-6">
-              <div className="text-[0.875rem] font-medium text-[var(--color-text-primary)] mb-1">
-                Highlight photos
-              </div>
-              <div className="text-[0.8125rem] text-[var(--color-text-secondary)]">
-                {highlights.length} / 10 selected
-              </div>
-            </div>
-            <button
-              className="pg-btn pg-btn-secondary"
-              onClick={() => setIsHighlightsModalOpen(true)}
-            >
-              Manage
-            </button>
-          </div>
-
-          <div className="flex justify-between items-center py-4">
-            <div className="flex-1 pr-6">
-              <div className="text-[0.875rem] font-medium text-[var(--color-text-primary)] mb-1">
-                Available to hire
-              </div>
-              <div className="text-[0.8125rem] text-[var(--color-text-secondary)]">
-                Allow potential clients to hire you from your public profile
-              </div>
-            </div>
-            <label className="relative inline-block w-12 h-[26px]">
-              <input
-                type="checkbox"
-                className="opacity-0 w-0 h-0"
-                checked={availableToHire}
-                onChange={e => toggleAvailableToHire(e.target.checked)}
-              />
-              <span
-                className="absolute cursor-pointer inset-0 transition-[background-color] duration-[0.4s] rounded-[34px]"
-                style={{
-                  backgroundColor: availableToHire
-                    ? 'var(--color-brand-primary)'
-                    : 'var(--color-border)',
-                }}
+          <SettingRow
+            title="Highlight photos"
+            description={`${highlights.length} / 10 selected`}
+            control={
+              <Button
+                variant="outline"
+                className="text-muted-foreground"
+                size="md"
+                onClick={() => setIsHighlightsModalOpen(true)}
               >
-                <span
-                  className="absolute w-5 h-5 bottom-[3px] bg-white rounded-full shadow-[0_2px_4px_rgba(0,0,0,0.1)] transition-[left] duration-[0.4s]"
-                  style={{ left: availableToHire ? 25 : 3 }}
-                />
-              </span>
-            </label>
-          </div>
-        </div>
+                Manage
+              </Button>
+            }
+          />
+          <SettingRow
+            last
+            title="Available to hire"
+            description="Allow potential clients to hire you from your public profile"
+            control={
+              <Switch
+                aria-label="Available to hire"
+                checked={availableToHire}
+                onCheckedChange={(checked) => toggleAvailableToHire(checked)}
+              />
+            }
+          />
+        </WorkspaceCard>
 
         <ManageHighlightsModal
           isOpen={isHighlightsModalOpen}
@@ -92,7 +107,7 @@ export const Settings: React.FC = () => {
           initialIds={highlights}
           onSave={updateHighlights}
         />
-      </div>
+      </WorkspacePageBody>
     </div>
-  );
-};
+  )
+}

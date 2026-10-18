@@ -1,44 +1,45 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import type { CartItem, Photo } from '../types';
+import React, { createContext, useContext, useEffect, useState } from "react"
+
+import type { CartItem, Photo } from "../types"
 
 interface CartContextType {
-  cart: CartItem[];
+  cart: CartItem[]
   addToCart: (
     photo: Photo,
     quality: string,
     qualityLabel: string,
-    price: number,
-  ) => void;
-  removeFromCart: (cartId: string) => void;
-  removeFromCartByPhotoId: (photoId: string) => void;
-  clearCart: () => void;
-  total: number;
-  isInCart: (photoId: string) => boolean;
+    price: number
+  ) => void
+  removeFromCart: (cartId: string) => void
+  removeFromCartByPhotoId: (photoId: string) => void
+  clearCart: () => void
+  total: number
+  isInCart: (photoId: string) => boolean
 }
 
-const CartContext = createContext<CartContextType | undefined>(undefined);
+const CartContext = createContext<CartContextType | undefined>(undefined)
 
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [cart, setCart] = useState<CartItem[]>([])
 
   useEffect(() => {
-    localStorage.setItem('gallopics_cart', JSON.stringify(cart));
-  }, [cart]);
+    localStorage.setItem("gallopics_cart", JSON.stringify(cart))
+  }, [cart])
 
   const addToCart = (
     photo: Photo,
     quality: string,
     qualityLabel: string,
-    price: number,
+    price: number
   ) => {
-    setCart(prev => {
+    setCart((prev) => {
       // Prevent duplicates
       const exists = prev.some(
-        item => item.photoId === photo.id && item.quality === quality,
-      );
-      if (exists) return prev;
+        (item) => item.photoId === photo.id && item.quality === quality
+      )
+      if (exists) return prev
 
       const newItem: CartItem = {
         cartId: Math.random().toString(36).substr(2, 9),
@@ -47,25 +48,25 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
         quality,
         qualityLabel,
         price,
-      };
-      return [...prev, newItem];
-    });
-  };
+      }
+      return [...prev, newItem]
+    })
+  }
 
   const removeFromCart = (cartId: string) => {
-    setCart(prev => prev.filter(item => item.cartId !== cartId));
-  };
+    setCart((prev) => prev.filter((item) => item.cartId !== cartId))
+  }
 
   const removeFromCartByPhotoId = (photoId: string) => {
-    setCart(prev => prev.filter(item => item.photoId !== photoId));
-  };
+    setCart((prev) => prev.filter((item) => item.photoId !== photoId))
+  }
 
-  const clearCart = () => setCart([]);
+  const clearCart = () => setCart([])
 
-  const total = cart.reduce((sum, item) => sum + item.price, 0);
+  const total = cart.reduce((sum, item) => sum + item.price, 0)
 
   const isInCart = (photoId: string) =>
-    cart.some(item => item.photoId === photoId);
+    cart.some((item) => item.photoId === photoId)
 
   return (
     <CartContext.Provider
@@ -81,11 +82,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
     >
       {children}
     </CartContext.Provider>
-  );
-};
+  )
+}
 
 export const useCart = () => {
-  const context = useContext(CartContext);
-  if (!context) throw new Error('useCart must be used within a CartProvider');
-  return context;
-};
+  const context = useContext(CartContext)
+  if (!context) throw new Error("useCart must be used within a CartProvider")
+  return context
+}

@@ -1,155 +1,205 @@
-import { useState, useMemo, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useCart } from '../context/CartContext';
-import { Header } from '../components/Header';
-import { Breadcrumbs } from '../components/Breadcrumbs';
-import type { BreadcrumbItem } from '../components/Breadcrumbs';
-import { Footer } from '../components/Footer';
-import { Trash2, ArrowLeft, ShoppingBag, Check, Eye } from 'lucide-react';
-import { CheckoutPanel } from '../components/CheckoutPanel';
-import { COMPETITIONS } from '../data/mockData';
-import { PhotoCard } from '../components/PhotoCard';
-import { getDefaultCartTier } from '../constants/qualityTiers';
-import { api, type CheckoutLineItem, type CheckoutOrder } from '../data/apiClient';
-import type { CartItem } from '../types';
+import { useMemo, useState } from "react"
+import { useNavigate, useSearchParams } from "react-router"
+import { ArrowLeft, Check, Eye, ShoppingBag, Trash2 } from "lucide-react"
+
+import { getDefaultCartTier } from "@/constants/qualityTiers"
+import { useCart } from "@/context/CartContext"
+import {
+  api,
+  type CheckoutLineItem,
+  type CheckoutOrder,
+} from "@/data/apiClient"
+import { COMPETITIONS } from "@/data/mockData"
+import type { CartItem, Photo } from "@/types"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card } from "@/components/ui/card"
+import { toast } from "@/components/ui/toast"
+import { Breadcrumbs } from "@/components/Breadcrumbs"
+import type { BreadcrumbItem } from "@/components/Breadcrumbs"
+import { CheckoutPanel } from "@/components/CheckoutPanel"
+import { Footer } from "@/components/Footer"
+import { Header } from "@/components/Header"
+import { PhotoCard } from "@/components/PhotoCard"
+
+/** "Recently viewed" photo row (desktop only) */
+function RecentlyViewed({
+  photos,
+  onOpen,
+  onAddToCart,
+}: {
+  photos: Photo[]
+  onOpen: (photo: Photo) => void
+  onAddToCart: (photo: Photo) => void
+}) {
+  if (photos.length === 0) return null
+
+  return (
+    <div className="mt-8 hidden border-t border-black/6 pt-6 md:block">
+      <div className="mb-5 flex items-center gap-2">
+        <Eye className="size-4.5 text-muted-foreground opacity-70" />
+        <h2 className="text-sm font-semibold tracking-[0.02em] text-muted-foreground">
+          Recently viewed
+        </h2>
+      </div>
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {photos.map((photo) => (
+          <PhotoCard
+            key={photo.id}
+            photo={photo}
+            onClick={() => onOpen(photo)}
+            onAddToCart={() => onAddToCart(photo)}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
 
 export function Cart() {
-  const { cart, addToCart, removeFromCart, total, clearCart } = useCart();
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const [isSuccess, setIsSuccess] = useState(false);
-  const [capturedOrderId, setCapturedOrderId] = useState<string | null>(null);
-  const [purchasedItems, setPurchasedItems] = useState<CartItem[]>([]);
-  const [downloadError, setDownloadError] = useState<string | null>(null);
-  const [downloadingPhotoId, setDownloadingPhotoId] = useState<string | null>(null);
-  const [toast, setToast] = useState<{
-    message: string;
-    action?: { label: string; onClick: () => void };
-  } | null>(null);
+  const { cart, addToCart, removeFromCart, total, clearCart } = useCart()
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const [isSuccess, setIsSuccess] = useState(false)
+  const [capturedOrderId, setCapturedOrderId] = useState<string | null>(null)
+  const [purchasedItems, setPurchasedItems] = useState<CartItem[]>([])
+  const [downloadError, setDownloadError] = useState<string | null>(null)
+  const [downloadingPhotoId, setDownloadingPhotoId] = useState<string | null>(
+    null
+  )
 
-  // Auto-hide toast
-  useEffect(() => {
-    if (toast) {
-      const timer = setTimeout(() => setToast(null), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [toast]);
-
-  const handleAddToCart = (photo: any) => {
-    const tier = getDefaultCartTier();
+  const handleAddToCart = (photo: Photo) => {
+    // Default to high quality tier
+    const tier = getDefaultCartTier()
     const exists = cart.some(
-      item => item.photoId === photo.id && item.quality === tier.id,
-    );
+      (item) => item.photoId === photo.id && item.quality === tier.id
+    )
 
     if (exists) {
-      setToast({ message: 'Already in cart' });
+      toast.add({ title: "Already in cart", type: "info" })
     } else {
-      addToCart(photo, tier.id, tier.label, tier.price);
-      setToast({ message: 'Added to cart' });
+      addToCart(photo, tier.id, tier.label, tier.price)
+      toast.add({ title: "Added to cart", type: "success" })
     }
-  };
+  }
 
-  const fromPath = searchParams.get('from');
+  const fromPath = searchParams.get("from")
 
   const breadcrumbs = useMemo<BreadcrumbItem[]>(() => {
-    const items: BreadcrumbItem[] = [];
+    const items: BreadcrumbItem[] = []
 
     if (fromPath) {
-      const decoded = decodeURIComponent(fromPath);
+      const decoded = decodeURIComponent(fromPath)
       // Handle /event/:id
-      if (decoded.includes('/event/')) {
-        const eventId = decoded.split('/event/')[1]?.split('?')[0];
-        const event = COMPETITIONS.find(c => c.id === eventId);
+      if (decoded.includes("/event/")) {
+        const eventId = decoded.split("/event/")[1]?.split("?")[0]
+        const event = COMPETITIONS.find((c) => c.id === eventId)
         if (event) {
-          items.push({ label: event.name, onClick: () => navigate(decoded) });
+          items.push({ label: event.name, onClick: () => navigate(decoded) })
         } else {
-          items.push({ label: 'Events', onClick: () => navigate('/') });
+          items.push({ label: "Events", onClick: () => navigate("/") })
         }
       }
       // Handle /photo/:id
-      else if (decoded.includes('/photo/')) {
+      else if (decoded.includes("/photo/")) {
         items.push({
-          label: 'Photo detail',
+          label: "Photo detail",
           onClick: () => navigate(decoded),
-        });
+        })
       }
       // Handle /photographer/:id
-      else if (decoded.includes('/photographer/')) {
-        items.push({ label: 'Photographer', onClick: () => navigate(decoded) });
+      else if (decoded.includes("/photographer/")) {
+        items.push({ label: "Photographer", onClick: () => navigate(decoded) })
       } else {
-        items.push({ label: 'Events', onClick: () => navigate('/') });
+        items.push({ label: "Events", onClick: () => navigate("/") })
       }
     } else {
-      items.push({ label: 'Events', onClick: () => navigate('/') });
+      items.push({ label: "Events", onClick: () => navigate("/") })
     }
 
-    items.push({ label: 'Cart', active: true });
-    return items;
-  }, [fromPath, navigate]);
+    items.push({ label: "Cart", active: true })
+    return items
+  }, [fromPath, navigate])
 
   const handlePay = (order?: CheckoutOrder) => {
-    setPurchasedItems(cart);
-    setCapturedOrderId(order?.id ?? null);
-    setDownloadError(null);
-    setIsSuccess(true);
-    clearCart();
-  };
+    setPurchasedItems(cart)
+    setCapturedOrderId(order?.id ?? null)
+    setDownloadError(null)
+    setIsSuccess(true)
+    clearCart()
+  }
 
   const handleDownload = async (item: CartItem) => {
     if (!capturedOrderId) {
-      setDownloadError('Download is not ready yet. Please try again in a moment.');
-      return;
+      setDownloadError(
+        "Download is not ready yet. Please try again in a moment."
+      )
+      return
     }
 
-    setDownloadingPhotoId(item.photoId);
-    setDownloadError(null);
+    setDownloadingPhotoId(item.photoId)
+    setDownloadError(null)
 
     try {
-      const download = await api.createPhotoDownload(item.photoId, capturedOrderId);
-      window.location.assign(download.url);
+      const download = await api.createPhotoDownload(
+        item.photoId,
+        capturedOrderId
+      )
+      window.location.assign(download.url)
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
-          : 'Could not prepare the download.';
-      setDownloadError(message);
+          : "Could not prepare the download."
+      setDownloadError(message)
     } finally {
-      setDownloadingPhotoId(null);
+      setDownloadingPhotoId(null)
     }
-  };
+  }
 
   const checkoutLineItems = useMemo<CheckoutLineItem[]>(
     () =>
-      cart.map(item => {
-        const amount = Math.round(item.price * 100);
+      cart.map((item) => {
+        const amount = Math.round(item.price * 100)
         return {
           name: `${item.photo.rider} / ${item.photo.horse} - ${item.qualityLabel}`,
           quantity: 1,
           unit_price: amount,
           total_amount: amount,
           reference: item.photoId,
-          type: 'digital',
+          type: "digital",
           tax_rate: 0,
           total_tax_amount: 0,
           photo_id: item.photoId,
           quality: item.quality,
-        };
+        }
       }),
     [cart]
-  );
+  )
 
-  const recentPhotos = useMemo(() => [], []);
+  // develop: recently viewed came from mock photos; empty until there is an API for it
+  const recentPhotos = useMemo<Photo[]>(() => [], [])
+
+  const recentlyViewed = (
+    <RecentlyViewed
+      photos={recentPhotos}
+      onOpen={(photo) =>
+        navigate(`/photo/${photo.id}?from=cart&eventId=${photo.eventId}`)
+      }
+      onAddToCart={handleAddToCart}
+    />
+  )
 
   return (
-    <div className="page-wrapper">
+    <div className="flex min-h-screen flex-col">
       <Header />
 
-      <div className="cart-header-group">
+      <div>
         <Breadcrumbs items={breadcrumbs} />
         {!isSuccess && (
-          <div className="bg-[var(--color-surface)] pb-6 max-md:pb-5 border-b border-[var(--color-border)]">
+          <div className="border-b bg-card pb-6 max-md:pb-5">
             <div className="container">
-              <h1 className="text-[1.75rem] max-md:text-[1.375rem] font-extrabold mb-0 text-[var(--color-text-primary)] leading-[1.2]">
+              <h1 className="text-[1.75rem] leading-[1.2] font-extrabold text-foreground max-md:text-[1.375rem]">
                 Cart
               </h1>
             </div>
@@ -157,280 +207,200 @@ export function Cart() {
         )}
       </div>
 
-      <main className="pt-10 pb-20 max-md:pt-6 max-md:pb-[60px] flex-1">
+      <main className="flex-1 pt-10 pb-20 max-md:pt-6 max-md:pb-15">
         <div className="container">
           {isSuccess ? (
-            <div className="flex flex-col gap-[60px]">
-              <div className="flex justify-center py-[60px]">
-                <div className="bg-white rounded-[var(--radius-lg)] border border-[var(--color-border)] px-10 py-[60px] max-w-[500px] w-full text-center shadow-[0_10px_40px_rgba(0,0,0,0.05)]">
-                  <div className="w-[100px] h-[100px] bg-[var(--color-success-tint)] text-[var(--color-success)] rounded-full flex items-center justify-center mx-auto mb-8">
-                    <Check size={64} />
+            <div className="flex flex-col gap-15">
+              <div className="flex justify-center py-15">
+                <Card className="w-full max-w-125 gap-0 rounded-3xl px-10 py-15 text-center shadow-[0_10px_40px_rgba(0,0,0,0.05)]">
+                  <div className="mx-auto mb-8 flex size-25 items-center justify-center rounded-full bg-success/10 text-success">
+                    <Check className="size-16" />
                   </div>
-                  <h1 className="text-[2rem] font-extrabold mb-4">
+                  <h1 className="mb-4 text-[2rem] font-extrabold">
                     Payment Successful!
                   </h1>
-                  <p className="text-[var(--color-text-secondary)] leading-[1.6] mb-10">
-                    Thank you for your purchase. Your Gallopics receipt has
-                    been sent by email, and your download links are ready.
+                  <p className="mb-10 leading-[1.6] text-muted-foreground">
+                    Thank you for your purchase. Your Gallopics receipt has been
+                    sent by email, and your download links are ready.
                   </p>
                   {capturedOrderId && (
-                    <p className="mb-6 break-all text-[0.75rem] text-[var(--color-text-secondary)]">
+                    <p className="mb-6 text-xs break-all text-muted-foreground">
                       Order ID: {capturedOrderId}
                     </p>
                   )}
 
                   {purchasedItems.length > 0 && (
                     <div className="mb-8 flex flex-col gap-3 text-left">
-                      {purchasedItems.map(item => (
+                      {purchasedItems.map((item) => (
                         <div
                           key={item.cartId}
-                          className="flex items-center justify-between gap-4 rounded-[var(--radius-md)] border border-[var(--color-border)] p-3"
+                          className="flex items-center justify-between gap-4 rounded-xl border p-3"
                         >
                           <div className="min-w-0">
-                            <div className="truncate text-[0.875rem] font-semibold text-[var(--color-text-primary)]">
+                            <div className="truncate text-sm font-semibold text-foreground">
                               {item.photo.rider} / {item.photo.horse}
                             </div>
-                            <div className="text-[0.75rem] text-[var(--color-text-secondary)]">
+                            <div className="text-xs text-muted-foreground">
                               {item.qualityLabel}
                             </div>
                           </div>
-                          <button
-                            className="shrink-0 rounded-[var(--radius-full)] bg-black px-4 py-2 text-[0.8125rem] font-semibold text-white transition-all duration-200 ease-in-out hover:bg-[var(--color-text-primary)] disabled:cursor-not-allowed disabled:opacity-60"
+                          <Button
+                            size="sm"
+                            className="shrink-0 bg-black hover:bg-foreground"
                             onClick={() => handleDownload(item)}
                             disabled={downloadingPhotoId === item.photoId}
                           >
                             {downloadingPhotoId === item.photoId
-                              ? 'Preparing'
-                              : 'Download'}
-                          </button>
+                              ? "Preparing"
+                              : "Download"}
+                          </Button>
                         </div>
                       ))}
                     </div>
                   )}
 
                   {downloadError && (
-                    <div className="mb-6 rounded-[var(--radius-md)] border border-[var(--color-danger)] bg-[var(--color-danger-tint)] p-3 text-left text-[0.875rem] text-[var(--color-danger)]">
+                    <div className="mb-6 rounded-xl border border-destructive bg-destructive/8 p-3 text-left text-sm text-destructive">
                       {downloadError}
                     </div>
                   )}
 
                   <div className="flex flex-col gap-4">
-                    <button
-                      className="py-[14px] px-8 bg-black text-white border-none rounded-[var(--radius-full)] font-semibold cursor-pointer transition-all duration-200 ease-in-out hover:bg-[var(--color-text-primary)] hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(0,0,0,0.1)]"
-                      onClick={() => navigate('/')}
+                    <Button
+                      className="h-12 bg-black hover:bg-foreground"
+                      onClick={() => navigate("/")}
                     >
                       Continue browsing
-                    </button>
-                    <p className="text-[0.8125rem] text-[var(--color-text-secondary)] opacity-70">
+                    </Button>
+                    <p className="text-[0.8125rem] text-muted-foreground opacity-70">
                       Download links are active for 24 hours.
                     </p>
                   </div>
-                </div>
+                </Card>
               </div>
-
-              {recentPhotos.length > 0 && (
-                <div className="mt-8 border-t border-black/[0.06] pt-6 hidden md:block">
-                  <div className="mb-5">
-                    <div className="flex items-center gap-2">
-                      <Eye
-                        size={20}
-                        className="text-[var(--color-text-secondary)] opacity-70 w-[18px] h-[18px]"
-                      />
-                      <h2 className="text-[0.875rem] font-semibold text-[var(--color-text-secondary)] m-0 tracking-[0.02em]">
-                        Recently viewed
-                      </h2>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    {recentPhotos.map((photo: any) => (
-                      <PhotoCard
-                        key={photo.id}
-                        photo={photo}
-                        onClick={() =>
-                          navigate(
-                            `/photo/${photo.id}?from=cart&eventId=${photo.eventId}`,
-                          )
-                        }
-                        onAddToCart={() => handleAddToCart(photo)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
+              {recentlyViewed}
             </div>
           ) : cart.length === 0 ? (
-            <div className="flex flex-col gap-[60px]">
-              <div className="text-center py-24 max-w-[480px] mx-auto">
-                <div className="flex justify-center text-[var(--color-border)] mb-6">
-                  <ShoppingBag size={52} />
+            <div className="flex flex-col gap-15">
+              <div className="mx-auto max-w-120 py-24 text-center">
+                <div className="mb-6 flex justify-center text-border">
+                  <ShoppingBag className="size-13" />
                 </div>
-                <h2 className="text-[1.5rem] font-bold mb-3 text-[var(--color-text-primary)]">
+                <h2 className="mb-3 text-2xl leading-normal font-bold text-foreground">
                   Your cart is empty
                 </h2>
-                <p className="text-[var(--color-text-secondary)] mb-8 leading-relaxed">
+                <p className="mb-8 leading-relaxed text-muted-foreground">
                   Browse our events to find your best moments captured on
                   camera.
                 </p>
-                <button
-                  className="py-[14px] px-8 bg-[var(--color-brand-primary)] text-white border-none rounded-[var(--radius-full)] font-semibold cursor-pointer transition-all duration-200 ease-in-out hover:bg-[var(--color-brand-hover)] hover:-translate-y-px hover:shadow-[0_4px_12px_rgba(27,58,236,0.25)]"
-                  onClick={() => navigate('/')}
+                <Button
+                  className="h-13 px-8 text-base leading-normal"
+                  onClick={() => navigate("/")}
                 >
                   Start browsing
-                </button>
+                </Button>
               </div>
-
-              {recentPhotos.length > 0 && (
-                <div className="mt-8 border-t border-black/[0.06] pt-6 hidden md:block">
-                  <div className="mb-5">
-                    <div className="flex items-center gap-2">
-                      <Eye
-                        size={20}
-                        className="text-[var(--color-text-secondary)] opacity-70 w-[18px] h-[18px]"
-                      />
-                      <h2 className="text-[0.875rem] font-semibold text-[var(--color-text-secondary)] m-0 tracking-[0.02em]">
-                        Recently viewed
-                      </h2>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    {recentPhotos.map((photo: any) => (
-                      <PhotoCard
-                        key={photo.id}
-                        photo={photo}
-                        onClick={() =>
-                          navigate(
-                            `/photo/${photo.id}?from=cart&eventId=${photo.eventId}`,
-                          )
-                        }
-                        onAddToCart={() => handleAddToCart(photo)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              )}
+              {recentlyViewed}
             </div>
           ) : (
-            <div className="grid grid-cols-1 max-lg:grid-cols-1 lg:grid-cols-[1fr_360px] gap-8 items-start">
-              <div className="cart-items-section">
-                <div className="bg-white rounded-[var(--radius-lg)] border border-[var(--color-border)] overflow-hidden mb-6">
-                  {cart.map(item => (
+            <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-[1fr_360px]">
+              <div>
+                <Card className="mb-6 gap-0 rounded-3xl py-0">
+                  {cart.map((item) => (
                     <div
                       key={item.cartId}
-                      className="flex max-sm:flex-col gap-6 max-sm:gap-4 p-6 border-b border-[var(--color-border)] transition-all duration-200 cursor-pointer last:border-b-0 hover:bg-[var(--ui-bg-subtle)] hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(0,0,0,0.04)] hover:z-[1] hover:border-transparent"
+                      role="link"
+                      tabIndex={0}
                       onClick={() =>
                         navigate(
                           `/photo/${item.photoId}?from=cart&eventId=${item.photo.eventId}`,
                           { state: { photo: item.photo } }
                         )
                       }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && e.target === e.currentTarget)
+                          e.currentTarget.click()
+                      }}
+                      className="flex cursor-pointer gap-6 border-b p-6 transition-all duration-200 outline-none last:border-b-0 hover:z-1 hover:-translate-y-0.5 hover:border-transparent hover:bg-muted hover:shadow-[0_4px_12px_rgba(0,0,0,0.04)] focus-visible:bg-muted max-sm:flex-col max-sm:gap-4"
                     >
-                      <div className="w-[120px] max-sm:w-full h-[90px] max-sm:h-[180px] rounded-[var(--radius-md)] overflow-hidden flex-shrink-0 bg-[var(--ui-bg-subtle)]">
+                      <div className="h-22.5 w-30 shrink-0 overflow-hidden rounded-xl bg-muted max-sm:h-45 max-sm:w-full">
                         <img
                           src={item.photo.src}
                           alt={item.photo.rider}
-                          className="w-full h-full object-cover"
+                          className="size-full object-cover"
                         />
                       </div>
-                      <div className="flex-1 flex max-sm:flex-col justify-between max-sm:gap-4">
+                      <div className="flex flex-1 justify-between max-sm:flex-col max-sm:gap-4">
                         <div className="flex flex-col gap-1">
-                          <div className="text-[0.75rem] font-bold text-[var(--color-text-secondary)] tracking-[0.05em]">
+                          <div className="text-xs font-bold tracking-[0.05em] text-muted-foreground">
                             #{item.photoId.toUpperCase()}
                           </div>
-                          <h3 className="text-[1rem] font-bold text-[var(--color-text-primary)] m-0">
+                          <h3 className="text-base font-bold text-foreground">
                             {item.photo.rider} / {item.photo.horse}
                           </h3>
-                          <div className="text-[0.8125rem] text-[var(--color-text-secondary)]">
+                          <div className="text-[0.8125rem] text-muted-foreground">
                             {item.photo.event}
                           </div>
-                          <div className="text-[0.75rem] text-[var(--color-text-secondary)] bg-[var(--ui-bg-subtle)] px-2 py-0.5 rounded-[4px] inline-block w-fit mt-1">
+                          <Badge
+                            variant="secondary"
+                            className="mt-1 h-auto rounded-sm px-2 py-0.5 font-normal"
+                          >
                             {item.qualityLabel}
-                          </div>
+                          </Badge>
                         </div>
                         <div
-                          className="flex flex-col max-sm:flex-row items-end max-sm:items-center justify-between"
-                          onClick={e => e.stopPropagation()}
+                          className="flex flex-col items-end justify-between max-sm:flex-row max-sm:items-center"
+                          onClick={(e) => e.stopPropagation()}
                         >
-                          <div className="text-[1.125rem] font-bold text-[var(--color-text-primary)]">
+                          <div className="text-lg font-bold text-foreground">
                             {item.price} SEK
                           </div>
-                          <button
-                            className="bg-none border-none text-[var(--color-danger)] cursor-pointer p-2 rounded-lg transition-all duration-200 ease-in-out flex items-center justify-center hover:bg-[var(--color-danger-tint)] hover:text-[var(--color-danger)]"
-                            onClick={() => removeFromCart(item.cartId)}
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
                             aria-label="Remove item"
+                            className="rounded-lg text-destructive hover:bg-destructive/8 hover:text-destructive"
+                            onClick={() => removeFromCart(item.cartId)}
                           >
-                            <Trash2 size={18} />
-                          </button>
+                            <Trash2 className="size-4.5" />
+                          </Button>
                         </div>
                       </div>
                     </div>
                   ))}
-                </div>
-                <button
-                  className="bg-none border-none flex items-center gap-2 text-[0.875rem] font-semibold text-[var(--color-text-secondary)] cursor-pointer py-2 px-0 transition-colors duration-200 ease-in-out hover:text-[var(--color-text-primary)]"
+                </Card>
+                <Button
+                  variant="ghost"
+                  className="h-auto px-0 py-2 hover:bg-transparent"
                   onClick={() =>
                     fromPath
                       ? navigate(decodeURIComponent(fromPath))
                       : navigate(-1)
                   }
                 >
-                  <ArrowLeft size={18} />
+                  <ArrowLeft className="size-4.5" />
                   Continue browsing
-                </button>
+                </Button>
 
-                {recentPhotos.length > 0 && (
-                  <div className="mt-8 border-t border-black/[0.06] pt-6 hidden md:block">
-                    <div className="mb-5">
-                      <div className="flex items-center gap-2">
-                        <Eye
-                          size={20}
-                          className="text-[var(--color-text-secondary)] opacity-70 w-[18px] h-[18px]"
-                        />
-                        <h2 className="text-[0.875rem] font-semibold text-[var(--color-text-secondary)] m-0 tracking-[0.02em]">
-                          Recently viewed
-                        </h2>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                      {recentPhotos.map((photo: any) => (
-                        <PhotoCard
-                          key={photo.id}
-                          photo={photo}
-                          onClick={() =>
-                            navigate(
-                              `/photo/${photo.id}?from=cart&eventId=${photo.eventId}`,
-                            )
-                          }
-                          onAddToCart={() => handleAddToCart(photo)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
+                {recentlyViewed}
               </div>
 
-              <div className="cart-summary-section max-lg:order-2 max-lg:mt-6 max-md:order-[2] max-md:mt-6 max-md:mb-0">
-                <div className="bg-white rounded-[var(--radius-lg)] border border-[var(--color-border)] p-6 max-lg:static sticky top-[100px]">
+              <div className="max-lg:order-2 max-lg:mt-6">
+                <Card className="sticky top-25 gap-0 rounded-3xl p-6 max-lg:static">
                   <CheckoutPanel
                     total={total}
                     lineItems={checkoutLineItems}
                     onPaymentSuccess={handlePay}
                     onPay={() => handlePay()}
                   />
-                </div>
+                </Card>
               </div>
             </div>
           )}
         </div>
       </main>
 
-      {/* Toast Notification */}
-      {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[var(--color-text-primary)] text-white px-6 py-3 rounded-[99px] flex items-center gap-4 shadow-[0_4px_12px_rgba(0,0,0,0.15)] z-[1000] animate-[fadeUp_0.3s_ease-out]">
-          <span>{toast.message}</span>
-        </div>
-      )}
-
-      <Footer minimal={true} />
+      <Footer minimal />
     </div>
-  );
+  )
 }

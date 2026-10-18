@@ -1,169 +1,171 @@
-const SERVER_API_BASE_URL = 'http://82.96.43.103:8081';
+const SERVER_API_BASE_URL = "http://82.96.43.103:8081"
 
 export function getApiBaseUrl() {
-  const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+  const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim()
 
   if (import.meta.env.DEV) {
     if (!configuredBaseUrl || configuredBaseUrl === SERVER_API_BASE_URL) {
-      return window.location.origin;
+      return window.location.origin
     }
 
-    return configuredBaseUrl;
+    return configuredBaseUrl
   }
 
   if (configuredBaseUrl) {
-    return configuredBaseUrl;
+    return configuredBaseUrl
   }
 
-  return SERVER_API_BASE_URL;
+  return SERVER_API_BASE_URL
 }
 
 export function resolveApiAssetUrl(path: string | null | undefined) {
   if (!path) {
-    return null;
+    return null
   }
 
   if (/^(https?:|data:|blob:)/i.test(path)) {
-    return path;
+    return path
   }
 
-  return new URL(path, getApiBaseUrl()).toString();
+  return new URL(path, getApiBaseUrl()).toString()
 }
 
 function resolveApiDownloadUrl(url: string) {
-  const downloadUrl = new URL(url, getApiBaseUrl());
+  const downloadUrl = new URL(url, getApiBaseUrl())
 
   if (
     /^\/api\/v1\/photos\/[^/]+\/download$/i.test(downloadUrl.pathname) &&
-    downloadUrl.searchParams.has('order_id')
+    downloadUrl.searchParams.has("order_id")
   ) {
-    const apiBaseUrl = new URL(getApiBaseUrl());
-    return new URL(`${downloadUrl.pathname}${downloadUrl.search}`, apiBaseUrl)
-      .toString();
+    const apiBaseUrl = new URL(getApiBaseUrl())
+    return new URL(
+      `${downloadUrl.pathname}${downloadUrl.search}`,
+      apiBaseUrl
+    ).toString()
   }
 
-  return downloadUrl.toString();
+  return downloadUrl.toString()
 }
 
 export interface ApiUser {
-  id: string;
-  clerk_user_id: string;
-  email: string;
-  role: 'user' | 'photographer' | 'admin';
-  created_at: string;
-  updated_at: string;
+  id: string
+  clerk_user_id: string
+  email: string
+  role: "user" | "photographer" | "admin"
+  created_at: string
+  updated_at: string
 }
 
 export interface ApiPhotographer {
-  id: string;
-  user_id: string;
-  slug: string;
-  display_name: string;
-  city: string | null;
-  country: string | null;
-  avatar_url: string | null;
-  phone: string | null;
-  is_available_to_hire: boolean;
-  highlights: string[];
-  status: 'pending' | 'approved' | 'suspended';
-  created_at: string;
-  updated_at: string;
+  id: string
+  user_id: string
+  slug: string
+  display_name: string
+  city: string | null
+  country: string | null
+  avatar_url: string | null
+  phone: string | null
+  is_available_to_hire: boolean
+  highlights: string[]
+  status: "pending" | "approved" | "suspended"
+  created_at: string
+  updated_at: string
 }
 
 export interface ApiEvent {
-  id: string;
-  tdb_id?: string | null;
-  equipe_id?: string | null;
-  name: string;
-  slug: string;
-  discipline?: string | null;
-  horse_type?: string | null;
-  organizer_name?: string | null;
-  district?: string | null;
-  venue_name?: string | null;
-  city?: string | null;
-  country: string;
-  start_date: string;
-  end_date?: string | null;
-  status: 'upcoming' | 'ongoing' | 'completed' | 'cancelled';
-  is_sustainable: boolean;
-  match_status: 'unmatched' | 'matched' | 'manual' | 'rejected';
-  match_score?: number | null;
-  created_at: string;
-  updated_at: string;
+  id: string
+  tdb_id?: string | null
+  equipe_id?: string | null
+  name: string
+  slug: string
+  discipline?: string | null
+  horse_type?: string | null
+  organizer_name?: string | null
+  district?: string | null
+  venue_name?: string | null
+  city?: string | null
+  country: string
+  start_date: string
+  end_date?: string | null
+  status: "upcoming" | "ongoing" | "completed" | "cancelled"
+  is_sustainable: boolean
+  match_status: "unmatched" | "matched" | "manual" | "rejected"
+  match_score?: number | null
+  created_at: string
+  updated_at: string
 }
 
 export interface UpsertPhotographerProfile {
-  slug?: string;
-  display_name: string;
-  city?: string | null;
-  country?: string | null;
-  avatar_url?: string | null;
-  phone?: string | null;
-  is_available_to_hire?: boolean;
+  slug?: string
+  display_name: string
+  city?: string | null
+  country?: string | null
+  avatar_url?: string | null
+  phone?: string | null
+  is_available_to_hire?: boolean
 }
 
 export interface CheckoutLineItem {
-  name: string;
-  quantity: number;
-  unit_price: number;
-  total_amount: number;
-  reference?: string;
-  type?: string;
-  tax_rate?: number;
-  total_tax_amount?: number;
-  photo_id?: string;
-  quality?: string;
+  name: string
+  quantity: number
+  unit_price: number
+  total_amount: number
+  reference?: string
+  type?: string
+  tax_rate?: number
+  total_tax_amount?: number
+  photo_id?: string
+  quality?: string
 }
 
 export interface CheckoutSession {
-  session_id: string;
-  client_token: string;
-  order_id: string;
+  session_id: string
+  client_token: string
+  order_id: string
 }
 
 export interface CheckoutOrder {
-  id: string;
-  user_id: string;
-  status: 'pending' | 'authorized' | 'captured' | 'refunded' | 'cancelled';
-  amount: number;
-  currency: string;
-  klarna_order_id: string | null;
+  id: string
+  user_id: string
+  status: "pending" | "authorized" | "captured" | "refunded" | "cancelled"
+  amount: number
+  currency: string
+  klarna_order_id: string | null
 }
 
 export interface PhotoDownloadResponse {
-  url: string;
-  expires_in: number;
+  url: string
+  expires_in: number
 }
 
 export interface UploadPhotoMetadata {
-  classId?: string;
-  eventClassId?: string;
-  classSectionId?: string;
-  equipeClassSectionId?: string;
-  className?: string;
-  takenAt?: string;
+  classId?: string
+  eventClassId?: string
+  classSectionId?: string
+  equipeClassSectionId?: string
+  className?: string
+  takenAt?: string
 }
 
-type TokenGetter = () => Promise<string | null>;
+type TokenGetter = () => Promise<string | null>
 
 const isUuid = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value
-  );
+  )
 
 type ApiRequestInit = RequestInit & {
-  timeoutMs?: number;
-  retryNetworkErrors?: number;
-};
+  timeoutMs?: number
+  retryNetworkErrors?: number
+}
 
 export class ApiError extends Error {
-  status: number;
+  status: number
 
   constructor(status: number, message: string) {
-    super(message);
-    this.name = 'ApiError';
-    this.status = status;
+    super(message)
+    this.name = "ApiError"
+    this.status = status
   }
 }
 
@@ -172,101 +174,104 @@ async function request<T>(
   options: ApiRequestInit = {},
   getToken?: TokenGetter
 ): Promise<T> {
-  const { timeoutMs = 30000, retryNetworkErrors = 0, ...fetchOptions } = options;
-  const headers = new Headers(options.headers);
-  headers.set('Accept', 'application/json');
+  const { timeoutMs = 30000, retryNetworkErrors = 0, ...fetchOptions } = options
+  const headers = new Headers(options.headers)
+  headers.set("Accept", "application/json")
 
   if (
     options.body &&
     !(options.body instanceof FormData) &&
-    !headers.has('Content-Type')
+    !headers.has("Content-Type")
   ) {
-    headers.set('Content-Type', 'application/json');
+    headers.set("Content-Type", "application/json")
   }
 
   if (getToken) {
-    const token = await getToken();
+    const token = await getToken()
     if (!token) {
-      throw new ApiError(401, 'No active Clerk session token was available.');
+      throw new ApiError(401, "No active Clerk session token was available.")
     }
     if (token) {
-      headers.set('Authorization', `Bearer ${token}`);
+      headers.set("Authorization", `Bearer ${token}`)
     }
   }
 
-  const url = new URL(path, getApiBaseUrl());
-  let lastNetworkError: unknown;
+  const url = new URL(path, getApiBaseUrl())
+  let lastNetworkError: unknown
   for (let attempt = 0; attempt <= retryNetworkErrors; attempt += 1) {
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+    const controller = new AbortController()
+    const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs)
 
     try {
       const response = await fetch(url, {
         ...fetchOptions,
         headers,
         signal: controller.signal,
-      });
+      })
 
       if (!response.ok) {
-        let message = `Request failed: ${response.status}`;
+        let message = `Request failed: ${response.status}`
         try {
-          const body = await response.json();
-          message = body.detail || body.message || message;
+          const body = await response.json()
+          message = body.detail || body.message || message
         } catch {
           // Keep the status-based message for non-JSON errors.
         }
-        throw new ApiError(response.status, message);
+        throw new ApiError(response.status, message)
       }
 
       if (response.status === 204) {
-        return undefined as T;
+        return undefined as T
       }
 
-      return (await response.json()) as T;
+      return (await response.json()) as T
     } catch (error) {
       if (error instanceof ApiError) {
-        throw error;
+        throw error
       }
 
-      lastNetworkError = error;
+      lastNetworkError = error
       if (attempt === retryNetworkErrors) {
-        break;
+        break
       }
     } finally {
-      window.clearTimeout(timeoutId);
+      window.clearTimeout(timeoutId)
     }
   }
 
-  if (lastNetworkError instanceof DOMException && lastNetworkError.name === 'AbortError') {
-    throw new Error(`The API took too long to respond: ${url.toString()}`);
+  if (
+    lastNetworkError instanceof DOMException &&
+    lastNetworkError.name === "AbortError"
+  ) {
+    throw new Error(`The API took too long to respond: ${url.toString()}`)
   }
 
-  throw new Error(`Could not reach the API: ${url.toString()}`);
+  throw new Error(`Could not reach the API: ${url.toString()}`)
 }
 
 export const api = {
   getMe: (getToken: TokenGetter) =>
-    request<ApiUser>('/api/v1/me', {}, getToken),
+    request<ApiUser>("/api/v1/me", {}, getToken),
   getMyPhotographer: (getToken: TokenGetter) =>
-    request<ApiPhotographer>('/api/v1/photographer/me', {}, getToken),
+    request<ApiPhotographer>("/api/v1/photographer/me", {}, getToken),
   upsertMyPhotographer: (
     getToken: TokenGetter,
     body: UpsertPhotographerProfile
   ) =>
     request<ApiPhotographer>(
-      '/api/v1/photographer/me',
-      { method: 'PUT', body: JSON.stringify(body) },
+      "/api/v1/photographer/me",
+      { method: "PUT", body: JSON.stringify(body) },
       getToken
     ),
   uploadMyAvatar: (getToken: TokenGetter, file: File) => {
-    const formData = new FormData();
-    formData.set('file', file);
+    const formData = new FormData()
+    formData.set("file", file)
 
     return request<ApiPhotographer>(
-      '/api/v1/photographer/me/avatar',
-      { method: 'POST', body: formData },
+      "/api/v1/photographer/me/avatar",
+      { method: "POST", body: formData },
       getToken
-    );
+    )
   },
   getPublicPhotographer: (slugOrId: string) =>
     request<ApiPhotographer>(
@@ -274,31 +279,31 @@ export const api = {
     ),
   getMyHighlights: (getToken: TokenGetter) =>
     request<{ highlights: string[] }>(
-      '/api/v1/photographer/highlights',
+      "/api/v1/photographer/highlights",
       {},
       getToken
     ),
   updateMyHighlights: (getToken: TokenGetter, photoIds: string[]) =>
     request<{ highlights: string[] }>(
-      '/api/v1/photographer/highlights',
+      "/api/v1/photographer/highlights",
       {
-        method: 'PUT',
+        method: "PUT",
         body: JSON.stringify({ photo_ids: photoIds }),
       },
       getToken
     ),
   listMyEventBookings: (getToken: TokenGetter) =>
-    request<ApiEvent[]>('/api/v1/photographer/bookings', {}, getToken),
+    request<ApiEvent[]>("/api/v1/photographer/bookings", {}, getToken),
   bookEvent: (getToken: TokenGetter, eventId: string) =>
     request<ApiEvent>(
       `/api/v1/photographer/bookings/${encodeURIComponent(eventId)}`,
-      { method: 'POST' },
+      { method: "POST" },
       getToken
     ),
   cancelEventBooking: (getToken: TokenGetter, eventId: string) =>
     request<void>(
       `/api/v1/photographer/bookings/${encodeURIComponent(eventId)}`,
-      { method: 'DELETE' },
+      { method: "DELETE" },
       getToken
     ),
 
@@ -309,44 +314,44 @@ export const api = {
     files: File[],
     metadata?: UploadPhotoMetadata
   ) => {
-    const formData = new FormData();
-    const classId = metadata?.classId;
-    const classIdIsInternal = classId ? isUuid(classId) : false;
+    const formData = new FormData()
+    const classId = metadata?.classId
+    const classIdIsInternal = classId ? isUuid(classId) : false
     const classSectionId =
-      metadata?.classSectionId || (classIdIsInternal ? classId : undefined);
-    const equipeClassSectionId = metadata?.equipeClassSectionId;
+      metadata?.classSectionId || (classIdIsInternal ? classId : undefined)
+    const equipeClassSectionId = metadata?.equipeClassSectionId
     const eventClassId =
-      metadata?.eventClassId || (!classIdIsInternal ? classId : undefined);
+      metadata?.eventClassId || (!classIdIsInternal ? classId : undefined)
 
-    formData.set('event_id', eventId);
+    formData.set("event_id", eventId)
     if (classSectionId) {
-      formData.set('class_section_id', classSectionId);
+      formData.set("class_section_id", classSectionId)
     }
     if (equipeClassSectionId) {
-      formData.set('equipe_class_section_id', equipeClassSectionId);
+      formData.set("equipe_class_section_id", equipeClassSectionId)
     }
     if (eventClassId) {
-      formData.set('event_class_id', eventClassId);
+      formData.set("event_class_id", eventClassId)
     }
     if (metadata?.className) {
-      formData.set('class_name', metadata.className);
+      formData.set("class_name", metadata.className)
     }
     if (metadata?.takenAt) {
-      formData.set('taken_at', metadata.takenAt);
+      formData.set("taken_at", metadata.takenAt)
     }
-    files.forEach(file => formData.append('files', file));
+    files.forEach((file) => formData.append("files", file))
     return request<ApiPhoto[]>(
-      '/api/v1/photographer/uploads',
-      { method: 'POST', body: formData },
+      "/api/v1/photographer/uploads",
+      { method: "POST", body: formData },
       getToken
-    );
+    )
   },
 
   completeUpload: (getToken: TokenGetter, sessionId: string) =>
     request<ApiPhoto[]>(
-      '/api/v1/photographer/uploads/complete',
+      "/api/v1/photographer/uploads/complete",
       {
-        method: 'POST',
+        method: "POST",
         body: JSON.stringify({ session_id: sessionId }),
       },
       getToken
@@ -358,36 +363,36 @@ export const api = {
     visibility?: string,
     classId?: string
   ) => {
-    const params = new URLSearchParams();
-    if (eventId) params.set('event_id', eventId);
-    if (visibility) params.set('visibility', visibility);
-    if (classId) params.set('class_id', classId);
+    const params = new URLSearchParams()
+    if (eventId) params.set("event_id", eventId)
+    if (visibility) params.set("visibility", visibility)
+    if (classId) params.set("class_id", classId)
     return request<PaginatedResponse<ApiPhoto>>(
       `/api/v1/photographer/photos?${params.toString()}`,
       {},
       getToken
-    );
+    )
   },
 
   updatePhoto: (
     getToken: TokenGetter,
     photoId: string,
     data: {
-      visibility?: string;
-      price?: number;
-      tags?: Array<{ type: string; value: string }>;
+      visibility?: string
+      price?: number
+      tags?: Array<{ type: string; value: string }>
     }
   ) =>
     request<ApiPhoto>(
       `/api/v1/photographer/photos/${encodeURIComponent(photoId)}`,
-      { method: 'PATCH', body: JSON.stringify(data) },
+      { method: "PATCH", body: JSON.stringify(data) },
       getToken
     ),
 
   deletePhoto: (getToken: TokenGetter, photoId: string) =>
     request<void>(
       `/api/v1/photographer/photos/${encodeURIComponent(photoId)}`,
-      { method: 'DELETE' },
+      { method: "DELETE" },
       getToken
     ),
 
@@ -397,13 +402,13 @@ export const api = {
     pageSize?: number,
     classId?: string
   ) => {
-    const params = new URLSearchParams();
-    if (page) params.set('page', String(page));
-    if (pageSize) params.set('page_size', String(pageSize));
-    if (classId) params.set('class_id', classId);
+    const params = new URLSearchParams()
+    if (page) params.set("page", String(page))
+    if (pageSize) params.set("page_size", String(pageSize))
+    if (classId) params.set("class_id", classId)
     return request<PaginatedResponse<ApiPhoto>>(
       `/api/v1/events/${eventId}/gallery?${params.toString()}`
-    );
+    )
   },
 
   searchGallery: (
@@ -412,20 +417,23 @@ export const api = {
     tagType?: string,
     classId?: string
   ) => {
-    const params = new URLSearchParams({ q });
-    if (tagType) params.set('tag_type', tagType);
-    if (classId) params.set('class_id', classId);
+    const params = new URLSearchParams({ q })
+    if (tagType) params.set("tag_type", tagType)
+    if (classId) params.set("class_id", classId)
     return request<ApiPhoto[]>(
       `/api/v1/events/${eventId}/gallery/search?${params.toString()}`
-    );
+    )
   },
 
   getPhoto: (photoId: string) =>
     request<ApiPhoto>(`/api/v1/photos/${encodeURIComponent(photoId)}`),
 
-  createCheckoutSession: (lineItems: CheckoutLineItem[], customerEmail?: string) =>
-    request<CheckoutSession>('/api/v1/checkout/sessions', {
-      method: 'POST',
+  createCheckoutSession: (
+    lineItems: CheckoutLineItem[],
+    customerEmail?: string
+  ) =>
+    request<CheckoutSession>("/api/v1/checkout/sessions", {
+      method: "POST",
       body: JSON.stringify({
         line_items: lineItems,
         customer_email: customerEmail,
@@ -434,8 +442,8 @@ export const api = {
     }),
 
   authorizeCheckout: (orderId: string, authorizationToken: string) =>
-    request<CheckoutOrder>('/api/v1/checkout/authorize', {
-      method: 'POST',
+    request<CheckoutOrder>("/api/v1/checkout/authorize", {
+      method: "POST",
       body: JSON.stringify({
         order_id: orderId,
         authorization_token: authorizationToken,
@@ -446,56 +454,56 @@ export const api = {
     const download = await request<PhotoDownloadResponse>(
       `/api/v1/photos/${encodeURIComponent(photoId)}/download`,
       {
-        method: 'POST',
+        method: "POST",
         body: JSON.stringify({ order_id: orderId }),
         retryNetworkErrors: 1,
       }
-    );
+    )
 
     return {
       ...download,
       url: resolveApiDownloadUrl(download.url),
-    };
+    }
   },
-};
+}
 
 // --- Additional Types for Upload/Gallery ---
 
 export interface ApiPhoto {
-  id: string;
-  event_id: string;
-  photographer_id: string;
-  photographer_display_name?: string | null;
-  photographer_avatar_url?: string | null;
-  price: number;
-  currency: string;
-  status: 'processing' | 'ready' | 'failed';
-  visibility: 'draft' | 'published';
-  tags: Array<{ type: string; value: string }>;
-  class_id?: string | null;
-  class_section_id?: string | null;
-  event_class_id?: string | null;
-  equipe_class_section_id?: string | null;
-  class_name?: string | null;
-  event_class_name?: string | null;
-  taken_at?: string | null;
-  equipe_start_id?: string | null;
-  equipe_rider_id?: string | null;
-  equipe_horse_id?: string | null;
-  matched_at?: string | null;
-  match_confidence?: 'high' | 'medium' | 'low' | 'none' | string | null;
-  match_delta_seconds?: number | null;
-  match_source?: string | null;
-  storage_key_original?: string | null;
-  storage_key_thumbnail?: string | null;
-  storage_key_preview?: string | null;
-  created_at: string;
-  updated_at: string;
+  id: string
+  event_id: string
+  photographer_id: string
+  photographer_display_name?: string | null
+  photographer_avatar_url?: string | null
+  price: number
+  currency: string
+  status: "processing" | "ready" | "failed"
+  visibility: "draft" | "published"
+  tags: Array<{ type: string; value: string }>
+  class_id?: string | null
+  class_section_id?: string | null
+  event_class_id?: string | null
+  equipe_class_section_id?: string | null
+  class_name?: string | null
+  event_class_name?: string | null
+  taken_at?: string | null
+  equipe_start_id?: string | null
+  equipe_rider_id?: string | null
+  equipe_horse_id?: string | null
+  matched_at?: string | null
+  match_confidence?: "high" | "medium" | "low" | "none" | string | null
+  match_delta_seconds?: number | null
+  match_source?: string | null
+  storage_key_original?: string | null
+  storage_key_thumbnail?: string | null
+  storage_key_preview?: string | null
+  created_at: string
+  updated_at: string
 }
 
 export interface PaginatedResponse<T> {
-  items: T[];
-  total: number;
-  page: number;
-  page_size: number;
+  items: T[]
+  total: number
+  page: number
+  page_size: number
 }

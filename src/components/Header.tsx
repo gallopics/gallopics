@@ -1,219 +1,192 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useUser } from '@clerk/clerk-react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { User, Camera, LayoutDashboard, ShoppingBag } from 'lucide-react';
-import { ModernSearchBar } from './ModernSearchBar';
-import { useCart } from '../context/CartContext';
-import { AuthModal } from './AuthModal';
-import { EditProfileModal } from './EditProfileModal';
-import { DesktopRecommendationModal } from './DesktopRecommendationModal';
-import { useAuth } from '../context/AuthContext';
-import { ContactSupportModal } from './ContactSupportModal';
-import { createPortal } from 'react-dom';
-import { PgToast } from '../pages/pg/PgToast';
-import { assetUrl } from '../lib/utils';
-import { Link } from 'react-router-dom';
-import type { EventData } from '../data/mockEvents';
+import { useEffect, useState } from "react"
+import { Link, useLocation, useNavigate } from "react-router"
+import { useUser } from "@clerk/clerk-react"
+import { Camera, LayoutDashboard, ShoppingBag, User } from "lucide-react"
 
-interface HeaderProps {
-  searchEvents?: EventData[];
-  eventSearchIndex?: Record<string, string>;
-  eventMatchLabels?: Record<string, string>;
-  onSearchChange?: (value: string) => void;
+import { assetUrl, cn } from "@/lib/utils"
+import { useMediaQuery } from "@/hooks/useMediaQuery"
+import { useScrolled } from "@/hooks/useScrolled"
+import { useAuth } from "@/context/AuthContext"
+import { useCart } from "@/context/CartContext"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Separator } from "@/components/ui/separator"
+import { AuthModal } from "@/components/AuthModal"
+import { ContactSupportModal } from "@/components/ContactSupportModal"
+import { DesktopRecommendationModal } from "@/components/DesktopRecommendationModal"
+import { EditProfileModal } from "@/components/EditProfileModal"
+import {
+  ModernSearchBar,
+  type EventSearchProps,
+} from "@/components/ModernSearchBar"
+
+type AuthTab = "signin" | "register"
+type AccountType = "photographer" | "buyer"
+
+const AVATAR_COLORS = [
+  "#3b82f6",
+  "#10b981",
+  "#f59e0b",
+  "#ef4444",
+  "#8b5cf6",
+  "#ec4899",
+]
+
+/** Stable colour per name for avatars without a photo */
+function getAvatarColor(name: string) {
+  let hash = 0
+  for (let i = 0; i < name.length; i++)
+    hash = name.charCodeAt(i) + ((hash << 5) - hash)
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]
 }
 
-export const Header: React.FC<HeaderProps> = ({
+const iconButtonClass =
+  "relative shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:scale-105 hover:border-border hover:shadow-[0_2px_4px_rgba(0,0,0,0.05)] aria-expanded:border-border"
+
+export function Header({
   searchEvents,
   eventSearchIndex,
   eventMatchLabels,
   onSearchChange,
-}) => {
-  const [scrolled, setScrolled] = useState(false);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [isEditProfileModalOpen, setIsEditProfileModalOpen] = useState(false);
-  const [
-    isDesktopRecommendationModalOpen,
-    setIsDesktopRecommendationModalOpen,
-  ] = useState(false);
-  const [isContactModalOpen, setIsContactModalOpen] = useState(false);
-  const [isContactPhotographerOnly, setIsContactPhotographerOnly] =
-    useState(false);
-  const [toast, setToast] = useState<{
-    type: 'success' | 'info' | 'danger';
-    message: string;
-  } | null>(null);
-  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
-  const [isGuestMenuOpen, setIsGuestMenuOpen] = useState(false);
-  const guestMenuRef = useRef<HTMLDivElement>(null);
+}: EventSearchProps = {}) {
+  const scrolled = useScrolled()
+  const isMobile = useMediaQuery("(max-width: 767px)")
+
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [authModalConfig, setAuthModalConfig] = useState<{
-    tab: 'signin' | 'register';
-    type: 'photographer' | 'buyer';
-  }>({ tab: 'signin', type: 'photographer' });
-  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+    tab: AuthTab
+    type: AccountType
+  }>({ tab: "signin", type: "photographer" })
+  const [isEditProfileModalOpen, setIsEditProfileModalOpen] = useState(false)
+  const [isRecommendationOpen, setIsRecommendationOpen] = useState(false)
+  const [isContactModalOpen, setIsContactModalOpen] = useState(false)
+  const [isContactPhotographerOnly, setIsContactPhotographerOnly] =
+    useState(false)
 
-  const { cart } = useCart();
-  const { isLoaded, isAuthenticated, user, logout } = useAuth();
-  const { user: clerkUser } = useUser();
+  const { cart } = useCart()
+  const { isLoaded, isAuthenticated, user, logout } = useAuth()
+  const { user: clerkUser } = useUser()
 
-  const navigate = useNavigate();
-  const location = useLocation();
-  const menuRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate()
+  const location = useLocation()
 
-  const currentPath = encodeURIComponent(location.pathname + location.search);
-  const isOnboarding = location.pathname.startsWith('/pg/onboarding');
-  const isHomePage = location.pathname === '/';
-  const isMobile = windowWidth < 768;
+  const currentPath = encodeURIComponent(location.pathname + location.search)
+  const isOnboarding = location.pathname.startsWith("/pg/onboarding")
+  const isHomePage = location.pathname === "/"
+
   const publicApprovalStatus =
-    typeof clerkUser?.publicMetadata?.approvalStatus === 'string'
+    typeof clerkUser?.publicMetadata?.approvalStatus === "string"
       ? clerkUser.publicMetadata.approvalStatus
-      : undefined;
+      : undefined
   const unsafeApprovalStatus =
-    typeof clerkUser?.unsafeMetadata?.approvalStatus === 'string'
+    typeof clerkUser?.unsafeMetadata?.approvalStatus === "string"
       ? clerkUser.unsafeMetadata.approvalStatus
-      : undefined;
+      : undefined
   const effectiveApprovalStatus =
-    user?.approvalStatus ?? publicApprovalStatus ?? unsafeApprovalStatus;
+    user?.approvalStatus ?? publicApprovalStatus ?? unsafeApprovalStatus
+  const isAdmin = user?.role === "admin"
   const isPendingPhotographer =
-    user?.role !== 'admin' && effectiveApprovalStatus !== 'approved';
-  const workspacePath =
-    user?.role === 'admin'
-      ? '/admin'
-      : isPendingPhotographer
-        ? '/pg/pending-approval'
-        : '/pg';
-  const accountShortcutLabel =
-    user?.role === 'admin'
-      ? 'My Console'
-      : isPendingPhotographer
-        ? 'Approval pending'
-        : 'My Studio';
+    !isAdmin && effectiveApprovalStatus !== "approved"
+  const workspacePath = isAdmin
+    ? "/admin"
+    : isPendingPhotographer
+      ? "/pg/pending-approval"
+      : "/pg"
+  const accountShortcutLabel = isAdmin
+    ? "My Console"
+    : isPendingPhotographer
+      ? "Approval pending"
+      : "My Studio"
 
-  // Window Resize Effect
-  useEffect(() => {
-    const handleResize = () => setWindowWidth(window.innerWidth);
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  const openAuth = (tab: AuthTab, type: AccountType = "photographer") => {
+    setAuthModalConfig({ tab, type })
+    setIsAuthModalOpen(true)
+  }
 
-  // Initial Scroll Effect
+  // Pages open the header modals through window events
   useEffect(() => {
-    let ticking = false;
-    const handleScroll = () => {
-      if (!ticking) {
-        window.requestAnimationFrame(() => {
-          const isScrolled = window.scrollY > 20;
-          setScrolled(prev => {
-            if (prev !== isScrolled) return isScrolled;
-            return prev;
-          });
-          ticking = false;
-        });
-        ticking = true;
-      }
-    };
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  useEffect(() => {
-    const handleOpenAuth = (e: any) => {
-      const { tab, type } = e.detail || { tab: 'signin', type: 'photographer' };
-      setAuthModalConfig({ tab, type });
-      setIsContactModalOpen(false); // Close other modals if open
-      setIsAuthModalOpen(true);
-    };
+    const handleOpenAuth = (e: Event) => {
+      const detail = (e as CustomEvent<{ tab: AuthTab; type: AccountType }>)
+        .detail
+      setIsContactModalOpen(false)
+      openAuth(detail?.tab ?? "signin", detail?.type ?? "photographer")
+    }
     const handleOpenMobileRecommendation = () => {
-      setIsAuthModalOpen(false);
-      setIsContactModalOpen(false);
-      setIsDesktopRecommendationModalOpen(true);
-    };
-    const handleOpenContact = (e: any) => {
-      setIsAuthModalOpen(false);
-      setIsEditProfileModalOpen(false);
-      setIsContactPhotographerOnly(!!e?.detail?.photographerOnly);
-      setIsContactModalOpen(true);
-    };
-    const handleShowToast = (e: any) => {
-      const { type, message } = e.detail;
-      setToast({ type, message });
-      setTimeout(() => setToast(null), 4000);
-    };
+      setIsAuthModalOpen(false)
+      setIsContactModalOpen(false)
+      setIsRecommendationOpen(true)
+    }
+    const handleOpenContact = (e: Event) => {
+      const detail = (e as CustomEvent<{ photographerOnly?: boolean }>).detail
+      setIsAuthModalOpen(false)
+      setIsEditProfileModalOpen(false)
+      setIsContactPhotographerOnly(!!detail?.photographerOnly)
+      setIsContactModalOpen(true)
+    }
 
-    window.addEventListener('open-auth-modal', handleOpenAuth);
+    window.addEventListener("open-auth-modal", handleOpenAuth)
     window.addEventListener(
-      'open-mobile-recommendation',
+      "open-mobile-recommendation",
       handleOpenMobileRecommendation
-    );
-    window.addEventListener('open-contact-support', handleOpenContact);
-    window.addEventListener('show-toast', handleShowToast);
-
+    )
+    window.addEventListener("open-contact-support", handleOpenContact)
     return () => {
-      window.removeEventListener('open-auth-modal', handleOpenAuth);
+      window.removeEventListener("open-auth-modal", handleOpenAuth)
       window.removeEventListener(
-        'open-mobile-recommendation',
+        "open-mobile-recommendation",
         handleOpenMobileRecommendation
-      );
-      window.removeEventListener('open-contact-support', handleOpenContact);
-      window.removeEventListener('show-toast', handleShowToast);
-    };
-  }, []);
+      )
+      window.removeEventListener("open-contact-support", handleOpenContact)
+    }
+  }, [])
 
-  // Close menus when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsUserMenuOpen(false);
-      }
-      if (
-        guestMenuRef.current &&
-        !guestMenuRef.current.contains(event.target as Node)
-      ) {
-        setIsGuestMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  const cartButton = (
+    <Button
+      variant="outline"
+      size="icon"
+      aria-label="Cart"
+      title="Cart"
+      className={iconButtonClass}
+      onClick={() => navigate(`/cart?from=${currentPath}`)}
+    >
+      <ShoppingBag className="size-5.5" />
+      {cart.length > 0 && (
+        <Badge className="absolute top-1.5 right-1.5 h-4.5 min-w-4.5 border-2 border-white px-1 text-[0.625rem] font-bold">
+          {cart.length}
+        </Badge>
+      )}
+    </Button>
+  )
 
-  // Helper: Generate stable random color based on name
-  const getAvatarColor = (name: string) => {
-    const colors = [
-      '#3b82f6',
-      '#10b981',
-      '#f59e0b',
-      '#ef4444',
-      '#8b5cf6',
-      '#ec4899',
-    ];
-    let hash = 0;
-    for (let i = 0; i < name.length; i++)
-      hash = name.charCodeAt(i) + ((hash << 5) - hash);
-    return colors[Math.abs(hash) % colors.length];
-  };
+  const displayName = user?.displayName || "Account"
 
   return (
     <>
       <header
-        className={[
-          'bg-white border border-black/[0.04] sticky top-0 z-[1000] overflow-visible transition-[background-color,box-shadow] duration-[400ms] ease-[cubic-bezier(0.2,0,0.2,1)]',
-          scrolled
-            ? 'bg-white/85 backdrop-blur-[12px] [-webkit-backdrop-filter:blur(12px)] border-b border-black/5 shadow-[0_4px_12px_rgba(0,0,0,0.03)]'
-            : '',
-        ].join(' ')}
+        className={cn(
+          "sticky top-0 z-40 border border-black/4 bg-card transition-[background-color,box-shadow] duration-400 ease-[cubic-bezier(0.2,0,0.2,1)]",
+          scrolled &&
+            "border-b-black/5 bg-card/85 shadow-[0_4px_12px_rgba(0,0,0,0.03)] backdrop-blur-md"
+        )}
       >
-        <div className="flex items-center justify-between gap-3 md:gap-6 min-h-16 md:h-[72px] container-fluid">
-          {/* 1. Logo (Left) */}
-          <Link to="/" className="flex items-center flex-shrink-0">
+        <div className="container flex min-h-16 max-w-none items-center justify-between gap-3 md:h-18 md:gap-6">
+          <Link to="/" className="flex shrink-0 items-center">
             <img
-              src={assetUrl('images/logo1-blue.svg')}
+              src={assetUrl("images/logo1-blue.svg")}
               alt="GALLOPICS"
-              className="h-6 min-[480px]:h-7 w-auto block"
+              className="block h-6 w-auto min-[480px]:h-7"
             />
           </Link>
 
-          {/* 3. Utility Icons (Right) */}
-          {!isOnboarding ? (
-            <div className="flex items-center gap-1.5 min-[480px]:gap-3 md:gap-3 ml-auto relative flex-wrap justify-end">
+          {!isOnboarding && (
+            <div className="relative ml-auto flex flex-wrap items-center justify-end gap-1.5 min-[480px]:gap-3">
               <ModernSearchBar
                 collapsible
                 eventOptions={searchEvents}
@@ -225,202 +198,137 @@ export const Header: React.FC<HeaderProps> = ({
 
               {!isLoaded ? null : isAuthenticated ? (
                 <>
-                  <button
-                    className="flex items-center justify-center w-11 h-11 rounded-full text-[var(--color-text-primary)] transition-[background-color,scale,box-shadow,border-color] duration-200 ease-in-out bg-white border border-[var(--color-border)] shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-[var(--ui-bg-subtle)] hover:border-[var(--color-border)] hover:scale-105 hover:shadow-[0_2px_4px_rgba(0,0,0,0.05)] relative"
-                    aria-label="Cart"
-                    title="Cart"
-                    onClick={() => navigate(`/cart?from=${currentPath}`)}
-                  >
-                    <ShoppingBag size={22} />
-                    {cart.length > 0 && (
-                      <span className="absolute top-1.5 right-1.5 bg-[var(--brand)] text-white text-[0.625rem] font-bold min-w-[18px] h-[18px] rounded-full flex items-center justify-center px-1 border-2 border-white">
-                        {cart.length}
-                      </span>
-                    )}
-                  </button>
+                  {cartButton}
 
-                  {/* Signed In: Workspace Button (Hidden on Mobile) */}
                   {!isMobile && (
                     <>
-                      <div className="w-px h-6 bg-[var(--color-border)] mx-1" />
-                      <button
-                        className="flex items-center justify-center w-11 h-11 rounded-full text-[var(--color-text-primary)] transition-[background-color,scale,box-shadow,border-color] duration-200 ease-in-out bg-white border border-[var(--color-border)] shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-[var(--ui-bg-subtle)] hover:border-[var(--color-border)] hover:scale-105 hover:shadow-[0_2px_4px_rgba(0,0,0,0.05)]"
+                      <Separator
+                        orientation="vertical"
+                        className="mx-1 h-6 data-vertical:self-center"
+                      />
+                      <Button
+                        variant="outline"
+                        size="icon"
                         aria-label="Workspace"
-                        onClick={() => navigate(workspacePath)}
                         title={`Go to ${accountShortcutLabel}`}
+                        className={iconButtonClass}
+                        onClick={() => navigate(workspacePath)}
                       >
-                        {user?.role === 'admin' ? (
-                          <LayoutDashboard size={20} />
+                        {isAdmin ? (
+                          <LayoutDashboard className="size-5" />
                         ) : (
-                          <Camera size={20} />
+                          <Camera className="size-5" />
                         )}
-                      </button>
+                      </Button>
                     </>
                   )}
 
-                  {/* User Chip with Dropdown */}
-                  <div className="relative" ref={menuRef}>
-                    <button
-                      className="flex items-center gap-3 px-4 py-1.5 pl-1.5 rounded-[32px] border border-[var(--color-border)] bg-white cursor-pointer transition-all duration-200 ease-in-out ml-2 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-[var(--ui-bg-subtle)] hover:border-[var(--color-border)] hover:scale-[1.02] hover:shadow-[0_2px_4px_rgba(0,0,0,0.05)] max-md:p-1 max-md:border-0"
-                      onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                    >
-                      <div
-                        className="w-9 h-9 rounded-full text-white font-semibold text-[0.875rem] flex items-center justify-center uppercase flex-shrink-0"
-                        style={{
-                          backgroundColor: user?.avatarUrl
-                            ? 'transparent'
-                            : getAvatarColor(user?.displayName || 'U'),
+                  <DropdownMenu>
+                    <DropdownMenuTrigger className="ml-2 flex items-center gap-3 rounded-full border bg-card py-1.5 pr-4 pl-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all hover:scale-[1.02] hover:bg-muted hover:shadow-[0_2px_4px_rgba(0,0,0,0.05)] max-md:border-0 max-md:p-1">
+                      <Avatar className="size-9">
+                        {user?.avatarUrl && (
+                          <AvatarImage src={user.avatarUrl} alt="Avatar" />
+                        )}
+                        <AvatarFallback
+                          className="text-sm font-semibold text-white uppercase"
+                          style={{
+                            backgroundColor: getAvatarColor(displayName),
+                          }}
+                        >
+                          {(user?.displayName || "U").charAt(0)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <span className="flex flex-col text-left leading-[1.2] max-md:hidden">
+                        <span className="text-sm leading-[1.2] font-semibold">
+                          {displayName}
+                        </span>
+                        <span className="text-[9px] font-medium tracking-[0.5px] text-muted-foreground uppercase">
+                          {isAdmin ? "Admin" : user?.city || "Photographer"}
+                        </span>
+                      </span>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-44 min-w-44">
+                      {(!isAdmin || isHomePage) && (
+                        <DropdownMenuItem
+                          onClick={() =>
+                            navigate(
+                              isAdmin || isPendingPhotographer || !user?.id
+                                ? workspacePath
+                                : `/photographer/${user.id}`
+                            )
+                          }
+                        >
+                          {accountShortcutLabel}
+                        </DropdownMenuItem>
+                      )}
+                      {!isAdmin && !isPendingPhotographer && (
+                        <DropdownMenuItem
+                          onClick={() => navigate("/pg/events")}
+                        >
+                          Events
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuItem
+                        variant="destructive"
+                        onClick={async () => {
+                          await logout()
+                          navigate("/")
                         }}
                       >
-                        {user?.avatarUrl ? (
-                          <img
-                            src={user.avatarUrl}
-                            alt="Avatar"
-                            className="w-full h-full rounded-full object-cover"
-                          />
-                        ) : (
-                          (user?.displayName || 'U').charAt(0)
-                        )}
-                      </div>
-                      <div className="flex flex-col text-left leading-[1.2] max-md:hidden">
-                        <span className="text-[0.875rem] font-semibold text-[var(--color-text-primary)]">
-                          {user?.displayName || 'Account'}
-                        </span>
-                        <span className="text-[9px] text-[var(--color-text-secondary)] uppercase tracking-[0.5px] font-medium">
-                          {user?.role === 'admin'
-                            ? 'Admin'
-                            : user?.city || 'Photographer'}
-                        </span>
-                      </div>
-                    </button>
-
-                    {isUserMenuOpen && (
-                      <div className="dropdown-menu absolute top-[120%] right-0 w-44 z-[1010] animate-[fadeInDropdown_0.15s_ease-out]">
-                        {/* <button
-                          className="dropdown-item"
-                          onClick={() => {
-                            setIsEditProfileModalOpen(true)
-                            setIsUserMenuOpen(false)
-                          }}
-                        >
-                          Edit contact
-                        </button> */}
-                        {(user?.role !== 'admin' || isHomePage) && (
-                          <button
-                            className="dropdown-item"
-                            onClick={() => {
-                              navigate(
-                                user?.role === 'admin'
-                                  ? workspacePath
-                                  : isPendingPhotographer
-                                    ? workspacePath
-                                    : user?.id
-                                      ? `/photographer/${user.id}`
-                                      : workspacePath
-                              );
-                              setIsUserMenuOpen(false);
-                            }}
-                          >
-                            {accountShortcutLabel}
-                          </button>
-                        )}
-                        {user?.role !== 'admin' &&
-                          !isPendingPhotographer && (
-                            <button
-                              className="dropdown-item"
-                              onClick={() => {
-                                navigate('/pg/events');
-                                setIsUserMenuOpen(false);
-                              }}
-                            >
-                              Events
-                            </button>
-                          )}
-                        {/* <div className="dropdown-divider" /> */}
-                        <button
-                          className="dropdown-item dropdown-item-danger"
-                          onClick={async () => {
-                            await logout();
-                            setIsUserMenuOpen(false);
-                            navigate('/');
-                          }}
-                        >
-                          Log out
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                        Log out
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </>
               ) : (
                 <>
-                  {/* Guest: Cart & Auth Icon */}
-                  <button
-                    className="flex items-center justify-center w-11 h-11 rounded-full text-[var(--color-text-primary)] transition-[background-color,scale,box-shadow,border-color] duration-200 ease-in-out bg-white border border-[var(--color-border)] shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-[var(--ui-bg-subtle)] hover:border-[var(--color-border)] hover:scale-105 hover:shadow-[0_2px_4px_rgba(0,0,0,0.05)] relative"
-                    aria-label="Cart"
-                    title="Cart"
-                    onClick={() => navigate(`/cart?from=${currentPath}`)}
-                  >
-                    <ShoppingBag size={22} />
-                    {cart.length > 0 && (
-                      <span className="absolute top-1.5 right-1.5 bg-[var(--brand)] text-white text-[0.625rem] font-bold min-w-[18px] h-[18px] rounded-full flex items-center justify-center px-1 border-2 border-white">
-                        {cart.length}
-                      </span>
-                    )}
-                  </button>
+                  {cartButton}
 
-                  <div className="w-px h-6 bg-[var(--color-border)] mx-1 max-md:hidden" />
+                  <Separator
+                    orientation="vertical"
+                    className="mx-1 h-6 max-md:hidden data-vertical:self-center"
+                  />
 
-                  <div className="relative" ref={guestMenuRef}>
-                    <button
-                      className="flex items-center justify-center w-11 h-11 rounded-full text-[var(--color-text-primary)] transition-[background-color,scale,box-shadow,border-color] duration-200 ease-in-out bg-white border border-[var(--color-border)] shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:bg-[var(--ui-bg-subtle)] hover:border-[var(--color-border)] hover:scale-105 hover:shadow-[0_2px_4px_rgba(0,0,0,0.05)]"
+                  {isMobile ? (
+                    <Button
+                      variant="outline"
+                      size="icon"
                       aria-label="Sign in or Register"
-                      onClick={() => {
-                        if (isMobile) {
-                          setIsDesktopRecommendationModalOpen(true);
-                        } else {
-                          setIsGuestMenuOpen(v => !v);
-                        }
-                      }}
+                      className={iconButtonClass}
+                      onClick={() => setIsRecommendationOpen(true)}
                     >
-                      <User size={22} />
-                    </button>
-
-                    {isGuestMenuOpen && (
-                      <div className="dropdown-menu absolute top-[120%] right-0 w-36 z-[1010] animate-[fadeInDropdown_0.15s_ease-out]">
-                        <button
-                          className="dropdown-item"
-                          onClick={() => {
-                            setAuthModalConfig({
-                              tab: 'signin',
-                              type: 'photographer',
-                            });
-                            setIsAuthModalOpen(true);
-                            setIsGuestMenuOpen(false);
-                          }}
-                        >
+                      <User className="size-5.5" />
+                    </Button>
+                  ) : (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger
+                        render={
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            aria-label="Sign in or Register"
+                            className={iconButtonClass}
+                          />
+                        }
+                      >
+                        <User className="size-5.5" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="end"
+                        className="w-36 min-w-36"
+                      >
+                        <DropdownMenuItem onClick={() => openAuth("signin")}>
                           Sign in
-                        </button>
-                        <button
-                          className="dropdown-item"
-                          onClick={() => {
-                            setAuthModalConfig({
-                              tab: 'register',
-                              type: 'photographer',
-                            });
-                            setIsAuthModalOpen(true);
-                            setIsGuestMenuOpen(false);
-                          }}
-                        >
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => openAuth("register")}>
                           Register
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                 </>
               )}
             </div>
-          ) : (
-            <div className="flex items-center gap-3 ml-auto" />
           )}
         </div>
       </header>
@@ -431,9 +339,9 @@ export const Header: React.FC<HeaderProps> = ({
         initialTab={authModalConfig.tab}
         initialAccountType={authModalConfig.type}
         onSwitchTab={() =>
-          setAuthModalConfig(prev => ({
+          setAuthModalConfig((prev) => ({
             ...prev,
-            tab: prev.tab === 'signin' ? 'register' : 'signin',
+            tab: prev.tab === "signin" ? "register" : "signin",
           }))
         }
       />
@@ -444,8 +352,8 @@ export const Header: React.FC<HeaderProps> = ({
       />
 
       <DesktopRecommendationModal
-        isOpen={isDesktopRecommendationModalOpen}
-        onClose={() => setIsDesktopRecommendationModalOpen(false)}
+        isOpen={isRecommendationOpen}
+        onClose={() => setIsRecommendationOpen(false)}
       />
 
       <ContactSupportModal
@@ -453,18 +361,6 @@ export const Header: React.FC<HeaderProps> = ({
         onClose={() => setIsContactModalOpen(false)}
         photographerOnly={isContactPhotographerOnly}
       />
-
-      {toast &&
-        createPortal(
-          <div className="fixed bottom-8 left-0 w-full pointer-events-none flex justify-center z-[10000]">
-            <PgToast
-              type={toast.type}
-              message={toast.message}
-              style={{ pointerEvents: 'auto' }}
-            />
-          </div>,
-          document.body
-        )}
     </>
-  );
-};
+  )
+}

@@ -1,326 +1,232 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { createPortal } from 'react-dom';
-import { Search, X, Image, ChevronRight } from 'lucide-react';
-import { HorseIcon } from './icons/HorseIcon';
-import { RiderIcon } from './icons/RiderIcon';
+import { useMemo, useRef, useState } from "react"
+import { Combobox as ComboboxPrimitive } from "@base-ui/react"
+import { ChevronRight, Image, Search, X } from "lucide-react"
+
+import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import {
+  Combobox,
+  ComboboxCollection,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxGroup,
+  ComboboxItem,
+  ComboboxLabel,
+  ComboboxList,
+} from "@/components/ui/combobox"
+import { HorseIcon } from "@/components/icons/HorseIcon"
+import { RiderIcon } from "@/components/icons/RiderIcon"
 
 /**
- * SearchDropdown_v2 (guest-flow)
- * Used in guest-flow profile/event search fields to provide a structured,
- * grouped dropdown experience mirroring the global header search.
- * Global header uses separate components; this is a scoped variant.
+ * Search field scoped to one page (event / rider / horse / photographer).
+ * Typing filters the page; picking a suggestion sets the filter to it.
+ * `v2` groups suggestions by type, like the header search.
  */
 export interface ScopedSearchOption {
-  label: string;
-  value: string;
-  type?: 'rider' | 'horse' | 'photo' | 'email' | 'id';
-  subtitle?: string;
-  id?: string;
+  label: string
+  value: string
+  type?: "rider" | "horse" | "photo" | "email" | "id"
+  subtitle?: string
+  id?: string
 }
 
 interface ScopedSearchBarProps {
-  placeholder: string;
-  onSelect: (value: string) => void;
-  onSearchChange?: (value: string) => void;
-  currentValue: string;
-  options: ScopedSearchOption[];
-  variant?: 'v1' | 'v2';
+  placeholder: string
+  onSelect: (value: string) => void
+  onSearchChange?: (value: string) => void
+  currentValue: string
+  options: ScopedSearchOption[]
+  variant?: "v1" | "v2"
 }
 
-export const ScopedSearchBar: React.FC<ScopedSearchBarProps> = ({
+type GroupKey = "rider" | "horse" | "photo" | "other"
+
+const GROUP_ORDER: GroupKey[] = ["rider", "horse", "photo", "other"]
+const GROUP_LABELS: Record<GroupKey, string> = {
+  rider: "Riders",
+  horse: "Horses",
+  photo: "Photos",
+  other: "Other",
+}
+
+function groupOf(option: ScopedSearchOption): GroupKey {
+  if (option.type === "rider" || option.type === "horse") return option.type
+  if (option.type === "photo") return "photo"
+  return "other"
+}
+
+function OptionIcon({ type }: { type?: ScopedSearchOption["type"] }) {
+  switch (type) {
+    case "rider":
+      return <RiderIcon size={16} />
+    case "horse":
+      return <HorseIcon size={16} />
+    case "photo":
+    case "id":
+      return <Image size={16} />
+    default:
+      return <Search size={16} />
+  }
+}
+
+const ICON_BOX: Partial<Record<string, string>> = {
+  rider: "bg-[#7c3aed]/8 text-[#7c3aed]!",
+  horse: "bg-[#E65100]/8 text-[#E65100]!",
+}
+
+const toInput = (value: string) => (value === "All" ? "" : value)
+
+export function ScopedSearchBar({
   placeholder,
   onSelect,
   onSearchChange,
   currentValue,
   options,
-  variant = 'v1',
-}) => {
-  // If currentValue is 'All', we show empty string or just the placeholder
-  const [inputValue, setInputValue] = useState(
-    currentValue === 'All' ? '' : currentValue,
-  );
-  const [isFocused, setIsFocused] = useState(false);
-  const [selectedIndex, setSelectedIndex] = useState(-1);
-  const [dropdownPosition, setDropdownPosition] = useState<{
-    top: number;
-    left: number;
-    width: number;
-  } | null>(null);
-  const wrapperRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  variant = "v1",
+}: ScopedSearchBarProps) {
+  const [inputValue, setInputValue] = useState(toInput(currentValue))
+  const [open, setOpen] = useState(false)
+  const barRef = useRef<HTMLDivElement>(null)
 
-  // Sync internal state if parent updates currentValue externally (e.g. Reset button)
-  useEffect(() => {
-    setInputValue(currentValue === 'All' ? '' : currentValue);
-  }, [currentValue]);
+  // Follow external changes (e.g. the page's reset button)
+  const [syncedValue, setSyncedValue] = useState(currentValue)
+  if (currentValue !== syncedValue) {
+    setSyncedValue(currentValue)
+    setInputValue(toInput(currentValue))
+  }
 
-  const filteredOptions = options.filter(
-    opt =>
-      opt.label.toLowerCase().includes(inputValue.toLowerCase()) &&
-      opt.value !== 'All',
-  );
+  const filtered = useMemo(
+    () =>
+      options.filter(
+        (opt) =>
+          opt.label.toLowerCase().includes(inputValue.toLowerCase()) &&
+          opt.value !== "All"
+      ),
+    [options, inputValue]
+  )
 
-  // Grouping for v2
-  const groupedResults = filteredOptions.reduce(
-    (acc, curr) => {
-      const type = curr.type || 'other';
-      if (!acc[type]) acc[type] = [];
-      acc[type].push(curr);
-      return acc;
-    },
-    {} as Record<string, ScopedSearchOption[]>,
-  );
+  const items = useMemo(() => {
+    if (variant !== "v2") return filtered
+    return GROUP_ORDER.map((key) => ({
+      value: key,
+      items: filtered.filter((opt) => groupOf(opt) === key),
+    })).filter((group) => group.items.length > 0)
+  }, [filtered, variant])
 
-  const groupOrder = ['rider', 'horse', 'photo', 'other'];
+  const handleSelect = (option: ScopedSearchOption | null) => {
+    if (!option) return
+    onSelect(option.value)
+    onSearchChange?.(option.value)
+    setInputValue(toInput(option.value))
+    setOpen(false)
+  }
 
-  const handleSelect = (val: string) => {
-    onSelect(val);
-    if (onSearchChange) onSearchChange(val); // Also trigger search update on selection
-    setInputValue(val === 'All' ? '' : val);
-    setIsFocused(false);
-    setSelectedIndex(-1);
-  };
+  const handleClear = () => {
+    onSelect("All")
+    onSearchChange?.("")
+    setInputValue("")
+  }
 
-  const handleClear = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onSelect('All');
-    if (onSearchChange) onSearchChange('');
-    setInputValue('');
-    inputRef.current?.focus();
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (!isFocused || filteredOptions.length === 0) return;
-
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setSelectedIndex(prev => (prev + 1) % filteredOptions.length);
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setSelectedIndex(
-        prev => (prev - 1 + filteredOptions.length) % filteredOptions.length,
-      );
-    } else if (e.key === 'Enter' && selectedIndex >= 0) {
-      handleSelect(filteredOptions[selectedIndex].value);
-    } else if (e.key === 'Escape') {
-      setIsFocused(false);
-    }
-  };
-
-  // Outside click handler
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node;
-      // Check if click is inside wrapper or inside portal menu
-      const portalMenu = document.querySelector('.scoped-portal-menu');
-
-      if (
-        wrapperRef.current &&
-        !wrapperRef.current.contains(target) &&
-        (!portalMenu || !portalMenu.contains(target))
-      ) {
-        setIsFocused(false);
-      }
-    };
-
-    if (isFocused) {
-      document.addEventListener('mousedown', handleClickOutside);
-
-      // Calculate portal position on mobile
-      if (window.innerWidth <= 768 && wrapperRef.current) {
-        const updatePosition = () => {
-          if (wrapperRef.current) {
-            const rect = wrapperRef.current.getBoundingClientRect();
-            setDropdownPosition({
-              top: rect.bottom + window.scrollY + 4,
-              left: rect.left + window.scrollX,
-              width: rect.width,
-            });
-          }
-        };
-
-        updatePosition();
-        window.addEventListener('scroll', updatePosition);
-        window.addEventListener('resize', updatePosition);
-
-        return () => {
-          document.removeEventListener('mousedown', handleClickOutside);
-          window.removeEventListener('scroll', updatePosition);
-          window.removeEventListener('resize', updatePosition);
-        };
-      } else {
-        setDropdownPosition(null);
-      }
-    }
-
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isFocused]);
-
-  const getIcon = (type?: string) => {
-    switch (type) {
-      case 'rider':
-        return <RiderIcon size={16} />;
-      case 'horse':
-        return <HorseIcon size={16} />;
-      case 'photo':
-      case 'id':
-        return <Image size={16} />;
-      case 'email':
-        return <Search size={16} />;
-      default:
-        return <Search size={16} />;
-    }
-  };
-
-  const getGroupLabel = (type: string) => {
-    switch (type) {
-      case 'rider':
-        return 'RIDERS';
-      case 'horse':
-        return 'HORSES';
-      case 'photo':
-        return 'PHOTOS';
-      default:
-        return 'OTHER';
-    }
-  };
-
-  const getIconBoxTypeClass = (type?: string) => {
-    switch (type) {
-      case 'rider':
-        return 'text-[#7c3aed] bg-[rgba(124,58,237,0.08)]';
-      case 'horse':
-        return 'text-[#E65100] bg-[rgba(230,81,0,0.08)]';
-      case 'photo':
-        return 'text-[var(--color-text-secondary)] bg-[var(--ui-bg-subtle)]';
-      default:
-        return 'bg-[var(--ui-bg-subtle)] text-[var(--color-text-secondary)] border-black/[0.03]';
-    }
-  };
-
-  // Render Content Logic
-  const renderDropdownContent = (isPortal = false) => (
-    <div
-      className={`${variant === 'v2' ? 'p-0 max-h-[380px]' : 'py-2 max-h-[240px]'} absolute top-[calc(100%+4px)] left-0 right-0 bg-white rounded-xl shadow-[0_16px_48px_rgba(0,0,0,0.15),0_4px_12px_rgba(0,0,0,0.05)] border border-black/10 z-[100] overflow-y-auto [scrollbar-width:thin] scoped-portal-menu`}
-      style={
-        isPortal && dropdownPosition
-          ? {
-              position: 'fixed',
-              top: dropdownPosition.top - window.scrollY,
-              left: dropdownPosition.left - window.scrollX,
-              width: dropdownPosition.width,
-              zIndex: 9999,
-              maxHeight: 'min(50vh, 320px)',
-            }
-          : undefined
-      }
-    >
-      {filteredOptions.length > 0 ? (
-        variant === 'v2' ? (
-          groupOrder.map(type => {
-            const groupItems = groupedResults[type];
-            if (!groupItems) return null;
-
-            return (
-              <div
-                key={type}
-                className="border-b border-black/[0.05] pb-1 last:border-b-0 last:pb-0"
-              >
-                <div className="px-4 pt-3 pb-1 text-[0.75rem] uppercase tracking-[0.08em] text-[var(--color-text-secondary)] font-bold">
-                  {getGroupLabel(type)}
-                </div>
-                {groupItems.map(opt => {
-                  const isFocusedRow =
-                    filteredOptions.indexOf(opt) === selectedIndex;
-                  return (
-                    <div
-                      key={opt.value}
-                      className={`flex items-center px-4 py-2 min-h-[52px] cursor-pointer transition-[background] duration-[150ms] ease-linear ${isFocusedRow ? 'bg-[rgba(27,58,236,0.04)]' : ''} hover:bg-[rgba(27,58,236,0.04)] group`}
-                      onClick={() => handleSelect(opt.value)}
-                    >
-                      <div
-                        className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 flex-shrink-0 border border-black/[0.03] ${getIconBoxTypeClass(opt.type)}`}
-                      >
-                        {getIcon(opt.type)}
-                      </div>
-                      <div className="flex flex-col justify-center flex-1 overflow-hidden">
-                        <span className="text-[0.875rem] font-medium text-[var(--color-text-primary)] whitespace-nowrap overflow-hidden text-ellipsis">
-                          {opt.label}
-                        </span>
-                        {opt.subtitle && (
-                          <span className="text-[0.75rem] text-[var(--color-text-secondary)] whitespace-nowrap overflow-hidden text-ellipsis mt-px">
-                            {opt.subtitle}
-                          </span>
-                        )}
-                      </div>
-                      <ChevronRight
-                        size={14}
-                        className="text-[var(--color-border)] ml-2 opacity-0 -translate-x-1 transition-all duration-200 ease-linear group-hover:opacity-100 group-hover:translate-x-0"
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })
-        ) : (
-          filteredOptions.map(opt => (
-            <div
-              key={opt.value}
-              className="flex items-center px-4 py-[10px] cursor-pointer transition-[background] duration-[150ms] ease-linear hover:bg-[rgba(27,58,236,0.04)]"
-              onClick={() => handleSelect(opt.value)}
-            >
-              <span className="text-[0.875rem] text-[var(--color-text-primary)]">
-                {opt.label}
-              </span>
-            </div>
-          ))
-        )
-      ) : (
-        <div className="p-4 text-center text-[var(--color-text-secondary)] text-[0.875rem]">
-          No matches
-        </div>
+  const renderItem = (opt: ScopedSearchOption) => (
+    <ComboboxItem
+      key={opt.value}
+      value={opt}
+      className={cn(
+        "group/result data-highlighted:bg-primary/4",
+        variant === "v2" ? "min-h-13 gap-3 px-4" : "px-4"
       )}
-    </div>
-  );
+    >
+      {variant === "v2" ? (
+        <>
+          <span
+            className={cn(
+              "flex size-8 shrink-0 items-center justify-center rounded-full border border-black/3",
+              ICON_BOX[opt.type ?? ""] ?? "bg-muted text-muted-foreground!"
+            )}
+          >
+            <OptionIcon type={opt.type} />
+          </span>
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate text-sm font-medium text-foreground!">
+              {opt.label}
+            </span>
+            {opt.subtitle && (
+              <span className="mt-px truncate text-xs text-muted-foreground!">
+                {opt.subtitle}
+              </span>
+            )}
+          </span>
+          <ChevronRight className="size-3.5 -translate-x-1 text-border! opacity-0 transition-all group-data-highlighted/result:translate-x-0 group-data-highlighted/result:opacity-100" />
+        </>
+      ) : (
+        opt.label
+      )}
+    </ComboboxItem>
+  )
 
   return (
-    <div className="relative flex-1 min-w-[200px] h-10 z-10" ref={wrapperRef}>
-      <div className="flex items-center bg-white border border-[var(--color-border)] rounded-[20px] px-4 h-10 transition-all duration-200 ease-linear shadow-[0_1px_2px_rgba(0,0,0,0.05)] focus-within:bg-white focus-within:border-[var(--color-brand-primary)] focus-within:shadow-[0_0_0_4px_rgba(27,58,236,0.12)]">
-        <Search
-          className="text-[var(--color-text-secondary)] flex-shrink-0 mr-[10px]"
-          size={20}
-        />
-        <input
-          ref={inputRef}
-          type="text"
-          className="flex-1 border-none bg-transparent text-[0.875rem] text-[var(--color-text-primary)] font-normal outline-none min-w-0 h-full placeholder:text-[var(--color-text-secondary)]"
-          placeholder={placeholder}
-          value={inputValue}
-          onChange={e => {
-            const val = e.target.value;
-            setInputValue(val);
-            if (onSearchChange) onSearchChange(val);
-            setSelectedIndex(-1);
-          }}
-          onFocus={() => setIsFocused(true)}
-          onKeyDown={handleKeyDown}
-        />
-        {inputValue && (
-          <button
-            className="bg-black/5 rounded-full border-none text-[var(--color-text-secondary)] cursor-pointer flex items-center justify-center w-5 h-5 ml-2 flex-shrink-0 transition-all duration-[150ms] ease-linear p-0 hover:bg-black/10 hover:text-[var(--color-text-primary)]"
-            onClick={handleClear}
-          >
-            <X size={14} />
-          </button>
-        )}
+    <Combobox
+      items={items}
+      filter={null}
+      value={null}
+      onValueChange={handleSelect}
+      itemToStringLabel={(opt: ScopedSearchOption) => opt.label}
+      inputValue={inputValue}
+      onInputValueChange={(value) => {
+        setInputValue(value)
+        onSearchChange?.(value)
+      }}
+      open={open && (filtered.length > 0 || inputValue.length > 0)}
+      onOpenChange={setOpen}
+      openOnInputClick
+    >
+      <div className="relative h-10 min-w-50 flex-1">
+        <div
+          ref={barRef}
+          className="flex h-10 items-center rounded-full border bg-card px-4 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all focus-within:border-ring focus-within:ring-4 focus-within:ring-ring/12"
+        >
+          <Search size={20} className="mr-2.5 shrink-0 text-muted-foreground" />
+          <ComboboxPrimitive.Input
+            placeholder={placeholder}
+            className="h-full min-w-0 flex-1 border-none bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
+          />
+          {inputValue && (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label="Clear search"
+              onClick={handleClear}
+              className="ml-2 size-5 rounded-full bg-black/5 hover:bg-black/10"
+            >
+              <X className="size-3.5" />
+            </Button>
+          )}
+        </div>
       </div>
 
-      {isFocused &&
-        (filteredOptions.length > 0 || inputValue.length > 0) &&
-        (dropdownPosition
-          ? createPortal(renderDropdownContent(true), document.body)
-          : renderDropdownContent(false))}
-    </div>
-  );
-};
+      <ComboboxContent
+        anchor={barRef}
+        className={variant === "v2" ? "max-h-95" : "max-h-60"}
+        sideOffset={4}
+      >
+        <ComboboxEmpty className="p-4">No matches</ComboboxEmpty>
+        <ComboboxList className="max-h-[min(380px,var(--available-height))]">
+          {variant === "v2"
+            ? (group: { value: GroupKey; items: ScopedSearchOption[] }) => (
+                <ComboboxGroup
+                  key={group.value}
+                  items={group.items}
+                  className="border-b border-black/5 pb-1 last:border-b-0 last:pb-0"
+                >
+                  <ComboboxLabel className="px-4 pt-3 pb-1 font-bold tracking-[0.08em] uppercase">
+                    {GROUP_LABELS[group.value]}
+                  </ComboboxLabel>
+                  <ComboboxCollection>{renderItem}</ComboboxCollection>
+                </ComboboxGroup>
+              )
+            : renderItem}
+        </ComboboxList>
+      </ComboboxContent>
+    </Combobox>
+  )
+}

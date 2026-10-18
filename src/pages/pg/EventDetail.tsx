@@ -1,64 +1,67 @@
-import React, {
-  useState,
-  useMemo,
-  useRef,
-  useLayoutEffect,
-  useEffect,
-} from 'react';
-import { createPortal } from 'react-dom';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useLocation, useNavigate, useParams } from "react-router"
+import {
+  AlertCircle,
+  Archive,
+  ArrowLeft,
+  Globe,
+  ImageOff,
+  Info,
+  Pencil,
+  Trash2,
+  UploadCloud,
+  X,
+} from "lucide-react"
+
+import { notify } from "@/lib/notify"
+import { assetUrl, cn } from "@/lib/utils"
 import {
   usePhotographer,
   type PgEvent,
   type Photo,
-} from '../../context/PhotographerContext';
-import { PhotoCard } from '../../components/PhotoCard';
-import { PgSelectionPanel } from './PgSelectionPanel';
-import { PgToast } from './PgToast';
-import { TOAST_TOKENS } from '../../context/ToastTokens';
-import { TitleHeader } from '../../components/TitleHeader';
-import { useWorkspace } from '../../context/WorkspaceContext';
+} from "@/context/PhotographerContext"
+import { TOAST_TOKENS } from "@/context/ToastTokens"
+import { useWorkspace } from "@/context/WorkspaceContext"
+import { fetchEventFromApi, mapApiEventToEventData } from "@/data/eventsApi"
+import { PHOTOGRAPHERS } from "@/data/mockData"
+import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
-  X,
-  Check,
-  Trash2,
-  Pencil,
-  AlertCircle,
-  Info,
-  ImageOff,
-  Globe,
-  Archive,
-  ArrowLeft,
-  UploadCloud,
-} from 'lucide-react';
-import { ScopedSearchBar } from '../../components/ScopedSearchBar';
-import {
-  ActionCluster,
-  //   MoreMenu,
-  //   ActionSeparator,
-} from '../../components/HeaderActions';
-import { InfoChip } from '../../components/InfoChip';
-import { PHOTOGRAPHERS } from '../../data/mockData';
-import { FilterChip } from '../../components/FilterChip';
-import { assetUrl } from '../../lib/utils';
-import {
-  fetchEventFromApi,
-  mapApiEventToEventData,
-} from '../../data/eventsApi';
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Separator } from "@/components/ui/separator"
+import { Spinner } from "@/components/ui/spinner"
+import { ConfirmDialog } from "@/components/ConfirmDialog"
+import { EmptyState } from "@/components/EmptyState"
+import { FilterChip } from "@/components/FilterChip"
+import { ActionCluster } from "@/components/HeaderActions"
+import { InfoChip } from "@/components/InfoChip"
+import { PhotoCard } from "@/components/PhotoCard"
+import { PhotoPreviewDialog } from "@/components/PhotoPreviewDialog"
+import { ScopedSearchBar } from "@/components/ScopedSearchBar"
+import { TitleHeader } from "@/components/TitleHeader"
+import { WorkspaceTabs } from "@/components/WorkspaceTabs"
+import { PgSelectionPanel } from "@/pages/pg/PgSelectionPanel"
 
 // Tab type
-type TabType = 'uploads' | 'published' | 'archive';
+type TabType = "uploads" | "published" | "archive"
 
 // Folder type
-type FolderType = 'random' | 'misc' | 'uncategorised' | 'duplicates';
-type PublishedFolderType = 'selling_photos' | 'unsold';
+type FolderType = "random" | "misc" | "uncategorised" | "duplicates"
+type PublishedFolderType = "selling_photos" | "unsold"
 
 const mapApiEventToPgEvent = (
   eventId: string,
   event: unknown,
   canUploadPhotos = false
 ): PgEvent => {
-  const eventData = mapApiEventToEventData(event as any);
+  const eventData = mapApiEventToEventData(event as any)
 
   return {
     id: eventData.id || eventId,
@@ -68,7 +71,7 @@ const mapApiEventToPgEvent = (
     dateRange: eventData.period,
     location: `${eventData.city}, ${eventData.country}`,
     coverImage: eventData.coverImage,
-    status: 'open',
+    status: "open",
     isRegistered: true,
     photosCount: eventData.photoCount || 0,
     publishedCount: 0,
@@ -76,252 +79,254 @@ const mapApiEventToPgEvent = (
     logo:
       eventData.logo ||
       eventData.coverImage ||
-      assetUrl('images/events/default.png'),
+      assetUrl("images/events/default.png"),
     venueName: eventData.name,
     disciplines: [eventData.discipline].filter(Boolean),
     city: eventData.city,
     assignedPhotographers: eventData.photographer
       ? [eventData.photographer]
       : [],
-    applicationsWelcomed: eventData.status !== 'disabled',
+    applicationsWelcomed: eventData.status !== "disabled",
     canUploadPhotos,
-  };
-};
+  }
+}
 
-export const EventDetail: React.FC = () => {
-  const { eventId } = useParams<{ eventId: string }>();
-  const navigate = useNavigate();
+export function EventDetail() {
+  const { eventId } = useParams<{ eventId: string }>()
+  const navigate = useNavigate()
 
-  const location = useLocation();
-  const fromTab = (location.state as any)?.fromTab;
-  const { basePath, isAdmin } = useWorkspace();
+  const location = useLocation()
+  const fromTab = (location.state as any)?.fromTab
+  const { basePath, isAdmin } = useWorkspace()
   const {
     getEvent,
     getPhotosByEvent,
     resolveDuplicate,
     deletePhotos,
     restorePhotos,
-  } = usePhotographer();
+  } = usePhotographer()
 
-  const contextEvent = eventId ? getEvent(eventId) : undefined;
-  const [apiEvent, setApiEvent] = useState<PgEvent | null>(null);
-  const [isLoadingApiEvent, setIsLoadingApiEvent] = useState(false);
-  const [apiEventError, setApiEventError] = useState<string | null>(null);
-  const event = contextEvent || apiEvent || undefined;
-  const canUploadPhotos = isAdmin || event?.canUploadPhotos !== false;
-  const allEventPhotos = eventId ? getPhotosByEvent(eventId) : [];
+  const contextEvent = eventId ? getEvent(eventId) : undefined
+  const [apiEvent, setApiEvent] = useState<PgEvent | null>(null)
+  const [isLoadingApiEvent, setIsLoadingApiEvent] = useState(false)
+  const [apiEventError, setApiEventError] = useState<string | null>(null)
+  const event = contextEvent || apiEvent || undefined
+  const canUploadPhotos = isAdmin || event?.canUploadPhotos !== false
+  const allEventPhotos = eventId ? getPhotosByEvent(eventId) : []
   const selectedClassContext = useMemo(() => {
     const state = location.state as
       | {
-          selectedClassId?: string;
-          selectedEquipeClassSectionId?: string;
-          selectedClassName?: string;
-          selectedArenaName?: string;
+          selectedClassId?: string
+          selectedEquipeClassSectionId?: string
+          selectedClassName?: string
+          selectedArenaName?: string
         }
       | null
-      | undefined;
-    const params = new URLSearchParams(location.search);
+      | undefined
+    const params = new URLSearchParams(location.search)
 
     return {
       id:
         state?.selectedClassId ||
-        params.get('classSectionId') ||
-        params.get('classId') ||
-        '',
+        params.get("classSectionId") ||
+        params.get("classId") ||
+        "",
       equipeClassSectionId:
         state?.selectedEquipeClassSectionId ||
-        params.get('equipeClassSectionId') ||
-        '',
-      name: state?.selectedClassName || params.get('className') || '',
-      arenaName: state?.selectedArenaName || params.get('arenaName') || '',
-    };
-  }, [location.search, location.state]);
+        params.get("equipeClassSectionId") ||
+        "",
+      name: state?.selectedClassName || params.get("className") || "",
+      arenaName: state?.selectedArenaName || params.get("arenaName") || "",
+    }
+  }, [location.search, location.state])
 
   const hasSelectedClassContext = Boolean(
     selectedClassContext.id || selectedClassContext.name
-  );
+  )
 
-  const handleBack = React.useCallback(() => {
+  const handleBack = useCallback(() => {
     if (hasSelectedClassContext && eventId) {
       navigate(`/event/${eventId}`, {
         state: {
-          from: '/pg/events',
-          fromTab: fromTab || 'my',
-          eventTab: 'classes',
+          from: "/pg/events",
+          fromTab: fromTab || "my",
+          eventTab: "classes",
         },
-      });
-      return;
+      })
+      return
     }
 
-    navigate(`${basePath}/events`, { state: { tab: fromTab } });
-  }, [basePath, eventId, fromTab, hasSelectedClassContext, navigate]);
+    navigate(`${basePath}/events`, { state: { tab: fromTab } })
+  }, [basePath, eventId, fromTab, hasSelectedClassContext, navigate])
 
-  const matchesSelectedClass = React.useCallback(
+  const matchesSelectedClass = useCallback(
     (photo: Photo) => {
-      if (!hasSelectedClassContext) return true;
+      if (!hasSelectedClassContext) return true
 
       return Boolean(
-        (selectedClassContext.id && photo.classId === selectedClassContext.id) ||
-          (selectedClassContext.name &&
-            photo.className === selectedClassContext.name)
-      );
+        (selectedClassContext.id &&
+          photo.classId === selectedClassContext.id) ||
+        (selectedClassContext.name &&
+          photo.className === selectedClassContext.name)
+      )
     },
-    [hasSelectedClassContext, selectedClassContext.id, selectedClassContext.name]
-  );
+    [
+      hasSelectedClassContext,
+      selectedClassContext.id,
+      selectedClassContext.name,
+    ]
+  )
 
   const allPhotos = useMemo(
     () => allEventPhotos.filter(matchesSelectedClass),
     [allEventPhotos, matchesSelectedClass]
-  );
+  )
 
   // State
-  const [activeTab, setActiveTab] = useState<TabType>('uploads');
-  const [activeFolder, setActiveFolder] = useState<FolderType>('uncategorised');
+  const [activeTab, setActiveTab] = useState<TabType>("uploads")
+  const [activeFolder, setActiveFolder] = useState<FolderType>("uncategorised")
   const [activePublishedFolder] =
-    useState<PublishedFolderType>('selling_photos');
-  const [activeChip, setActiveChip] = useState<string>('all');
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [isPanelOpen, setIsPanelOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [previewPhoto, setPreviewPhoto] = useState<any | null>(null);
-  const [isExpanded] = useState(false);
-  const [showInfoModal, setShowInfoModal] = useState(false);
+    useState<PublishedFolderType>("selling_photos")
+  const [activeChip, setActiveChip] = useState<string>("all")
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [isPanelOpen, setIsPanelOpen] = useState(false)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [previewPhoto, setPreviewPhoto] = useState<any | null>(null)
+  const [showInfoModal, setShowInfoModal] = useState(false)
 
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-
-  const processedDupIds = React.useRef<Set<string>>(new Set());
+  const processedDupIds = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     if (!eventId || contextEvent) {
-      setApiEvent(null);
-      setApiEventError(null);
-      setIsLoadingApiEvent(false);
-      return;
+      setApiEvent(null)
+      setApiEventError(null)
+      setIsLoadingApiEvent(false)
+      return
     }
 
-    let isMounted = true;
-    const requestedEventId = eventId;
+    let isMounted = true
+    const requestedEventId = eventId
 
     async function loadEvent() {
       try {
-        setIsLoadingApiEvent(true);
-        setApiEventError(null);
-        const nextEvent = await fetchEventFromApi(requestedEventId);
+        setIsLoadingApiEvent(true)
+        setApiEventError(null)
+        const nextEvent = await fetchEventFromApi(requestedEventId)
         if (isMounted) {
-          setApiEvent(mapApiEventToPgEvent(requestedEventId, nextEvent));
+          setApiEvent(mapApiEventToPgEvent(requestedEventId, nextEvent))
         }
       } catch (error) {
         if (isMounted) {
           setApiEventError(
-            error instanceof Error ? error.message : 'Failed to load event'
-          );
+            error instanceof Error ? error.message : "Failed to load event"
+          )
         }
       } finally {
-        if (isMounted) setIsLoadingApiEvent(false);
+        if (isMounted) setIsLoadingApiEvent(false)
       }
     }
 
-    void loadEvent();
+    void loadEvent()
 
     return () => {
-      isMounted = false;
-    };
-  }, [contextEvent, eventId]);
+      isMounted = false
+    }
+  }, [contextEvent, eventId])
 
   // Deep link effect: Scroll to duplicate group
-  React.useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const dupId = params.get('dup');
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const dupId = params.get("dup")
 
     if (dupId && !processedDupIds.current.has(dupId)) {
-      processedDupIds.current.add(dupId);
+      processedDupIds.current.add(dupId)
 
       // Force switch to duplicate view
-      if (activeTab !== 'uploads') setActiveTab('uploads');
-      if (activeFolder !== 'duplicates') setActiveFolder('duplicates');
+      if (activeTab !== "uploads") setActiveTab("uploads")
+      if (activeFolder !== "duplicates") setActiveFolder("duplicates")
 
       // Wait for render/transition
       setTimeout(() => {
-        const el = document.getElementById(`dup-group-${dupId}`);
+        const el = document.getElementById(`dup-group-${dupId}`)
         if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          el.classList.add('highlight-duplicate-group');
+          el.scrollIntoView({ behavior: "smooth", block: "center" })
+          el.classList.add("highlight-duplicate-group")
           setTimeout(() => {
-            el.classList.remove('highlight-duplicate-group');
+            el.classList.remove("highlight-duplicate-group")
             // Clear the param after highlight so navigation isn't locked
             // We use the current location to avoid stale closures, but params are from render
-            const currentParams = new URLSearchParams(window.location.search);
-            currentParams.delete('dup');
-            navigate({ search: currentParams.toString() }, { replace: true });
-          }, 2000);
+            const currentParams = new URLSearchParams(window.location.search)
+            currentParams.delete("dup")
+            navigate({ search: currentParams.toString() }, { replace: true })
+          }, 2000)
         }
-      }, 300);
+      }, 300)
     }
-  }, [location.search, activeFolder, activeTab, navigate]);
+  }, [location.search, activeFolder, activeTab, navigate])
 
   // Reset active chip to 'all' when switching folders/buckets
-  React.useEffect(() => {
-    setActiveChip('all');
-  }, [activeFolder]);
+  useEffect(() => {
+    setActiveChip("all")
+  }, [activeFolder])
 
   // Reset selection when switching tabs
-  React.useEffect(() => {
-    setSelectedIds(new Set());
-    setIsPanelOpen(false);
-    setActiveChip('all');
-  }, [activeTab]);
+  useEffect(() => {
+    setSelectedIds(new Set())
+    setIsPanelOpen(false)
+    setActiveChip("all")
+  }, [activeTab])
 
   // Photos by tab
   const uploadPhotos = useMemo(
     () =>
-      allPhotos.filter(p =>
+      allPhotos.filter((p) =>
         [
-          'uploading',
-          'processing',
-          'needsReview',
-          'uploadedUnpublished',
+          "uploading",
+          "processing",
+          "needsReview",
+          "uploadedUnpublished",
         ].includes(p.status)
       ),
     [allPhotos]
-  );
+  )
 
   const publishedPhotosRaw = useMemo(() => {
-    return allPhotos.filter(p => p.status === 'published');
-  }, [allPhotos]);
+    return allPhotos.filter((p) => p.status === "published")
+  }, [allPhotos])
 
   const publishedPhotosByBucket = useMemo(() => {
-    if (activePublishedFolder === 'selling_photos') {
-      return publishedPhotosRaw.filter(p => p.soldCount > 0);
+    if (activePublishedFolder === "selling_photos") {
+      return publishedPhotosRaw.filter((p) => p.soldCount > 0)
     }
-    return publishedPhotosRaw.filter(p => p.soldCount === 0);
-  }, [publishedPhotosRaw, activePublishedFolder]);
+    return publishedPhotosRaw.filter((p) => p.soldCount === 0)
+  }, [publishedPhotosRaw, activePublishedFolder])
 
   const publishedFolderCounts = useMemo(() => {
-    const selling = publishedPhotosRaw.filter(p => p.soldCount > 0);
+    const selling = publishedPhotosRaw.filter((p) => p.soldCount > 0)
     return {
       selling_photos: selling.length,
       totalSales: selling.reduce((sum, p) => sum + p.soldCount, 0),
-      unsold: publishedPhotosRaw.filter(p => p.soldCount === 0).length,
-    };
-  }, [publishedPhotosRaw]);
+      unsold: publishedPhotosRaw.filter((p) => p.soldCount === 0).length,
+    }
+  }, [publishedPhotosRaw])
 
   const publishedChips = useMemo(() => {
-    const photos = publishedPhotosByBucket;
+    const photos = publishedPhotosByBucket
 
     const allChips = [
-      { id: 'all', label: 'All', count: photos.length, filterFn: () => true },
+      { id: "all", label: "All", count: photos.length, filterFn: () => true },
       {
-        id: 'generic',
-        label: 'Generic',
-        count: photos.filter(p => p.isGeneric).length,
+        id: "generic",
+        label: "Generic",
+        count: photos.filter((p) => p.isGeneric).length,
         filterFn: (p: Photo) => p.isGeneric,
       },
       {
-        id: 'basic',
-        label: 'Basic',
-        color: 'var(--color-text-secondary)',
+        id: "basic",
+        label: "Basic",
+        color: "var(--color-text-secondary)",
         count: photos.filter(
-          p =>
+          (p) =>
             p.priceStandard === 499 &&
             p.priceHigh === 999 &&
             p.priceCommercial === 1500
@@ -332,11 +337,11 @@ export const EventDetail: React.FC = () => {
           p.priceCommercial === 1500,
       },
       {
-        id: 'standard',
-        label: 'Standard',
-        color: '#f97316',
+        id: "standard",
+        label: "Standard",
+        color: "#f97316",
         count: photos.filter(
-          p =>
+          (p) =>
             p.priceStandard === 499 &&
             p.priceHigh === 999 &&
             p.priceCommercial === 1500
@@ -347,11 +352,11 @@ export const EventDetail: React.FC = () => {
           p.priceCommercial === 1500,
       },
       {
-        id: 'premium',
-        label: 'Premium',
-        color: '#a855f7',
+        id: "premium",
+        label: "Premium",
+        color: "#a855f7",
         count: photos.filter(
-          p =>
+          (p) =>
             p.priceStandard === 499 &&
             p.priceHigh === 999 &&
             p.priceCommercial === 1500
@@ -361,62 +366,62 @@ export const EventDetail: React.FC = () => {
           p.priceHigh === 999 &&
           p.priceCommercial === 1500,
       },
-    ];
+    ]
 
-    return allChips;
-  }, [publishedPhotosByBucket]);
+    return allChips
+  }, [publishedPhotosByBucket])
 
   const filteredPublishedPhotos = useMemo(() => {
-    let photos = publishedPhotosByBucket;
+    let photos = publishedPhotosByBucket
 
     // Apply search filter if search term exists
     if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase().trim();
-      photos = photos.filter(p => {
+      const term = searchTerm.toLowerCase().trim()
+      photos = photos.filter((p) => {
         const clientEmail =
-          (p as any).clientEmail || `client_${p.id.slice(0, 4)}@example.com`;
+          (p as any).clientEmail || `client_${p.id.slice(0, 4)}@example.com`
         return (
           p.fileName?.toLowerCase().includes(term) ||
           p.photoCode?.toLowerCase().includes(term) ||
           p.id?.toLowerCase().includes(term) ||
           clientEmail.toLowerCase().includes(term)
-        );
-      });
+        )
+      })
     }
 
-    const chip = publishedChips.find(c => c.id === activeChip);
-    if (!chip || activeChip === 'all') return photos;
-    return photos.filter(chip.filterFn);
-  }, [publishedPhotosByBucket, activeChip, publishedChips, searchTerm]);
+    const chip = publishedChips.find((c) => c.id === activeChip)
+    if (!chip || activeChip === "all") return photos
+    return photos.filter(chip.filterFn)
+  }, [publishedPhotosByBucket, activeChip, publishedChips, searchTerm])
 
   const archivedPhotosRaw = useMemo(() => {
-    return allPhotos.filter(p => p.status === 'archived');
-  }, [allPhotos]);
+    return allPhotos.filter((p) => p.status === "archived")
+  }, [allPhotos])
 
   const archivedPhotosByBucket = useMemo(() => {
-    if (activePublishedFolder === 'selling_photos') {
-      return archivedPhotosRaw.filter(p => p.soldCount > 0);
+    if (activePublishedFolder === "selling_photos") {
+      return archivedPhotosRaw.filter((p) => p.soldCount > 0)
     }
-    return archivedPhotosRaw.filter(p => p.soldCount === 0);
-  }, [archivedPhotosRaw, activePublishedFolder]);
+    return archivedPhotosRaw.filter((p) => p.soldCount === 0)
+  }, [archivedPhotosRaw, activePublishedFolder])
 
   const archivedChips = useMemo(() => {
-    const photos = archivedPhotosByBucket;
+    const photos = archivedPhotosByBucket
 
     const allChips = [
-      { id: 'all', label: 'All', count: photos.length, filterFn: () => true },
+      { id: "all", label: "All", count: photos.length, filterFn: () => true },
       {
-        id: 'generic',
-        label: 'Generic',
-        count: photos.filter(p => p.isGeneric).length,
+        id: "generic",
+        label: "Generic",
+        count: photos.filter((p) => p.isGeneric).length,
         filterFn: (p: Photo) => p.isGeneric,
       },
       {
-        id: 'basic',
-        label: 'Basic',
-        color: 'var(--color-text-secondary)',
+        id: "basic",
+        label: "Basic",
+        color: "var(--color-text-secondary)",
         count: photos.filter(
-          p =>
+          (p) =>
             p.priceStandard === 499 &&
             p.priceHigh === 999 &&
             p.priceCommercial === 1500
@@ -427,11 +432,11 @@ export const EventDetail: React.FC = () => {
           p.priceCommercial === 1500,
       },
       {
-        id: 'standard',
-        label: 'Standard',
-        color: '#f97316',
+        id: "standard",
+        label: "Standard",
+        color: "#f97316",
         count: photos.filter(
-          p =>
+          (p) =>
             p.priceStandard === 499 &&
             p.priceHigh === 999 &&
             p.priceCommercial === 1500
@@ -442,11 +447,11 @@ export const EventDetail: React.FC = () => {
           p.priceCommercial === 1500,
       },
       {
-        id: 'premium',
-        label: 'Premium',
-        color: '#a855f7',
+        id: "premium",
+        label: "Premium",
+        color: "#a855f7",
         count: photos.filter(
-          p =>
+          (p) =>
             p.priceStandard === 499 &&
             p.priceHigh === 999 &&
             p.priceCommercial === 1500
@@ -456,165 +461,160 @@ export const EventDetail: React.FC = () => {
           p.priceHigh === 999 &&
           p.priceCommercial === 1500,
       },
-    ];
+    ]
 
-    return allChips;
-  }, [archivedPhotosByBucket]);
+    return allChips
+  }, [archivedPhotosByBucket])
 
   const filteredArchivedPhotos = useMemo(() => {
-    let photos = archivedPhotosByBucket;
+    let photos = archivedPhotosByBucket
 
     if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase().trim();
+      const term = searchTerm.toLowerCase().trim()
       photos = photos.filter(
-        p =>
+        (p) =>
           p.fileName?.toLowerCase().includes(term) ||
           p.photoCode?.toLowerCase().includes(term) ||
           p.id?.toLowerCase().includes(term) ||
           p.rider?.toLowerCase().includes(term) ||
           p.horse?.toLowerCase().includes(term)
-      );
+      )
     }
 
-    const chip = archivedChips.find(c => c.id === activeChip);
-    if (!chip || activeChip === 'all') return photos;
-    return photos.filter(chip.filterFn);
-  }, [archivedPhotosByBucket, activeChip, archivedChips, searchTerm]);
+    const chip = archivedChips.find((c) => c.id === activeChip)
+    if (!chip || activeChip === "all") return photos
+    return photos.filter(chip.filterFn)
+  }, [archivedPhotosByBucket, activeChip, archivedChips, searchTerm])
 
   const tabCounts = useMemo(() => {
     return {
       uploads: uploadPhotos.length,
-      published: allPhotos.filter(p => p.status === 'published').length,
-      archive: allPhotos.filter(p => p.status === 'archived').length,
-    };
-  }, [uploadPhotos, allPhotos]);
+      published: allPhotos.filter((p) => p.status === "published").length,
+      archive: allPhotos.filter((p) => p.status === "archived").length,
+    }
+  }, [uploadPhotos, allPhotos])
 
   // Compute valid duplicates (Cross-reference all uploads)
   // Only groups with 2+ instances are considered valid duplicates
   const validDuplicateIds = useMemo(() => {
-    const groups = new Map<string, Photo[]>();
-    uploadPhotos.forEach(p => {
+    const groups = new Map<string, Photo[]>()
+    uploadPhotos.forEach((p) => {
       if (p.isDuplicate && !p.duplicateResolved) {
-        const key = p.duplicateGroupId || p.url;
-        if (!groups.has(key)) groups.set(key, []);
-        groups.get(key)!.push(p);
+        const key = p.duplicateGroupId || p.url
+        if (!groups.has(key)) groups.set(key, [])
+        groups.get(key)!.push(p)
       }
-    });
+    })
 
-    const validIds = new Set<string>();
+    const validIds = new Set<string>()
     for (const photos of groups.values()) {
       if (photos.length >= 2) {
-        photos.forEach(p => validIds.add(p.id));
+        photos.forEach((p) => validIds.add(p.id))
       }
     }
-    return validIds;
-  }, [uploadPhotos]);
+    return validIds
+  }, [uploadPhotos])
 
   // Photos in the Uploads tab. The old Random/Misc/Uncategorised bucket filter
   // is intentionally removed so event pages show every available upload.
   const folderPhotos = useMemo(() => {
     let photos: Photo[] =
-      activeFolder === 'duplicates'
-        ? uploadPhotos.filter(p => validDuplicateIds.has(p.id))
-        : uploadPhotos;
+      activeFolder === "duplicates"
+        ? uploadPhotos.filter((p) => validDuplicateIds.has(p.id))
+        : uploadPhotos
 
     // Apply search filter if search term exists
     if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase().trim();
+      const term = searchTerm.toLowerCase().trim()
       photos = photos.filter(
-        p =>
+        (p) =>
           p.fileName?.toLowerCase().includes(term) ||
           p.photoCode?.toLowerCase().includes(term) ||
           p.id?.toLowerCase().includes(term)
-      );
+      )
     }
 
-    return photos;
-  }, [
-    activeFolder,
-    searchTerm,
-    uploadPhotos,
-    validDuplicateIds,
-  ]);
+    return photos
+  }, [activeFolder, searchTerm, uploadPhotos, validDuplicateIds])
 
   // Determine if we're in duplicates folder
-  const isDuplicatesFolder = activeFolder === 'duplicates';
+  const isDuplicatesFolder = activeFolder === "duplicates"
 
   // Build chips for inside folder (NOT for duplicates folder)
   const folderChips = useMemo(() => {
-    if (isDuplicatesFolder) return [];
+    if (isDuplicatesFolder) return []
 
     // Dynamically extract unique tags from currently displayed folder photos
     const uniqueClasses = Array.from(
-      new Set(folderPhotos.map(p => p.className).filter(Boolean))
-    ) as string[];
+      new Set(folderPhotos.map((p) => p.className).filter(Boolean))
+    ) as string[]
     const uniqueRiders = Array.from(
-      new Set(folderPhotos.map(p => p.rider).filter(r => r && r !== 'None'))
-    ) as string[];
+      new Set(folderPhotos.map((p) => p.rider).filter((r) => r && r !== "None"))
+    ) as string[]
     const uniqueHorses = Array.from(
-      new Set(folderPhotos.map(p => p.horse).filter(h => h && h !== 'None'))
-    ) as string[];
+      new Set(folderPhotos.map((p) => p.horse).filter((h) => h && h !== "None"))
+    ) as string[]
 
-    const allChips: any[] = [];
+    const allChips: any[] = []
 
     // Add dynamic Class chips
-    uniqueClasses.sort().forEach(cls => {
+    uniqueClasses.sort().forEach((cls) => {
       allChips.push({
         id: `class-${cls}`,
         label: cls,
-        count: folderPhotos.filter(p => p.className === cls).length,
+        count: folderPhotos.filter((p) => p.className === cls).length,
         filterFn: (p: Photo) => p.className === cls,
-      });
-    });
+      })
+    })
 
     // Add dynamic Rider chips
-    uniqueRiders.sort().forEach(rider => {
+    uniqueRiders.sort().forEach((rider) => {
       allChips.push({
         id: `rider-${rider}`,
         label: rider.toUpperCase(),
-        count: folderPhotos.filter(p => p.rider === rider).length,
+        count: folderPhotos.filter((p) => p.rider === rider).length,
         filterFn: (p: Photo) => p.rider === rider,
-      });
-    });
+      })
+    })
 
     // Add dynamic Horse chips
-    uniqueHorses.sort().forEach(horse => {
+    uniqueHorses.sort().forEach((horse) => {
       allChips.push({
         id: `horse-${horse}`,
         label: horse,
-        count: folderPhotos.filter(p => p.horse === horse).length,
+        count: folderPhotos.filter((p) => p.horse === horse).length,
         filterFn: (p: Photo) => p.horse === horse,
-      });
-    });
+      })
+    })
 
-    return allChips;
-  }, [folderPhotos, isDuplicatesFolder]);
+    return allChips
+  }, [folderPhotos, isDuplicatesFolder])
 
   // Search Options for Autocomplete
   const searchOptions = useMemo(() => {
-    if (!allPhotos.length) return [];
-    const options: any[] = [];
-    const uniqueRiders = new Set<string>();
-    const uniqueHorses = new Set<string>();
+    if (!allPhotos.length) return []
+    const options: any[] = []
+    const uniqueRiders = new Set<string>()
+    const uniqueHorses = new Set<string>()
 
-    allPhotos.forEach(p => {
-      if (p.rider && p.rider !== 'None' && !uniqueRiders.has(p.rider)) {
-        uniqueRiders.add(p.rider);
+    allPhotos.forEach((p) => {
+      if (p.rider && p.rider !== "None" && !uniqueRiders.has(p.rider)) {
+        uniqueRiders.add(p.rider)
         options.push({
           label: p.rider,
           value: p.rider,
-          type: 'rider',
+          type: "rider",
           subtitle: p.horse,
-        });
+        })
       }
-      if (p.horse && p.horse !== 'None' && !uniqueHorses.has(p.horse)) {
-        uniqueHorses.add(p.horse);
+      if (p.horse && p.horse !== "None" && !uniqueHorses.has(p.horse)) {
+        uniqueHorses.add(p.horse)
         options.push({
           label: p.horse,
           value: p.horse,
-          type: 'horse',
+          type: "horse",
           subtitle: p.rider,
-        });
+        })
       }
 
       // ADDED: Photo Search Functionality (Search by ID/Code)
@@ -622,1169 +622,848 @@ export const EventDetail: React.FC = () => {
         options.push({
           label: `#${p.photoCode}`,
           value: p.photoCode,
-          type: 'photo',
+          type: "photo",
           // Format: "IMG_2024.jpg • Rider Name"
-          subtitle: `${p.fileName}${p.rider ? ` • ${p.rider}` : ''}`,
-        });
+          subtitle: `${p.fileName}${p.rider ? ` • ${p.rider}` : ""}`,
+        })
       }
-    });
-    return options;
-  }, [allPhotos]);
+    })
+    return options
+  }, [allPhotos])
 
   // Get filtered photos based on active chip AND search term
   const filteredFolderPhotos = useMemo(() => {
     // Base: Folder photos
-    let photos = folderPhotos;
+    let photos = folderPhotos
 
     // 1. Filter by Search Term
     if (searchTerm) {
-      const lower = searchTerm.toLowerCase();
+      const lower = searchTerm.toLowerCase()
       photos = photos.filter(
-        p =>
+        (p) =>
           (p.rider && p.rider.toLowerCase().includes(lower)) ||
           (p.horse && p.horse.toLowerCase().includes(lower)) ||
           (p.fileName && p.fileName.toLowerCase().includes(lower)) ||
           (p.id && p.id.toLowerCase().includes(lower))
-      );
+      )
     }
 
     // Duplicates folder shows all duplicates (no chip filtering)
-    if (isDuplicatesFolder) return photos;
+    if (isDuplicatesFolder) return photos
 
     // 2. Filter by Chip
-    const chip = folderChips.find(c => c.id === activeChip);
-    if (!chip || activeChip === 'all') return photos;
+    const chip = folderChips.find((c) => c.id === activeChip)
+    if (!chip || activeChip === "all") return photos
 
-    return photos.filter(chip.filterFn);
-  }, [folderPhotos, activeChip, folderChips, isDuplicatesFolder, searchTerm]);
+    return photos.filter(chip.filterFn)
+  }, [folderPhotos, activeChip, folderChips, isDuplicatesFolder, searchTerm])
 
   // Get display photos based on current tab
   const displayedPhotos = useMemo(() => {
-    if (activeTab === 'uploads') return filteredFolderPhotos;
-    if (activeTab === 'published') return filteredPublishedPhotos;
-    if (activeTab === 'archive') return filteredArchivedPhotos;
-    return [];
+    if (activeTab === "uploads") return filteredFolderPhotos
+    if (activeTab === "published") return filteredPublishedPhotos
+    if (activeTab === "archive") return filteredArchivedPhotos
+    return []
   }, [
     activeTab,
     filteredFolderPhotos,
     filteredPublishedPhotos,
     filteredArchivedPhotos,
-  ]);
+  ])
 
   // Group duplicates by duplicateGroupId (or URL if missing)
   const duplicateGroups = useMemo(() => {
-    if (!isDuplicatesFolder) return new Map<string, Photo[]>();
+    if (!isDuplicatesFolder) return new Map<string, Photo[]>()
 
-    const groups = new Map<string, Photo[]>();
-    displayedPhotos.forEach(p => {
-      const key = p.duplicateGroupId || p.url;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key)!.push(p);
-    });
+    const groups = new Map<string, Photo[]>()
+    displayedPhotos.forEach((p) => {
+      const key = p.duplicateGroupId || p.url
+      if (!groups.has(key)) groups.set(key, [])
+      groups.get(key)!.push(p)
+    })
 
     // Logic already filtered by strict validDuplicateIds, but grouping here ensures structure
     // No extra filtering needed for size < 2 if validDuplicateIds already enforces it,
     // but keeping the loop or just relying on validDuplicateIds is fine.
     // We'll trust validDuplicateIds.
-    return groups;
-  }, [displayedPhotos, isDuplicatesFolder]);
+    return groups
+  }, [displayedPhotos, isDuplicatesFolder])
 
   // Compute "Also in" for duplicates - ONLY batch or Uncategorised (no class/rider/horse)
   // Reset chip selection when folder changes
-  React.useEffect(() => {
-    setActiveChip('all');
-  }, [activeFolder]);
-
-  // Event Info modal: ESC handling + scroll lock to match EditProfile modal behavior
-  React.useEffect(() => {
-    if (!showInfoModal) return;
-
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setShowInfoModal(false);
-      }
-    };
-
-    window.addEventListener('keydown', handleEsc);
-    document.body.style.overflow = 'hidden';
-
-    return () => {
-      window.removeEventListener('keydown', handleEsc);
-      document.body.style.overflow = 'unset';
-    };
-  }, [showInfoModal]);
+  useEffect(() => {
+    setActiveChip("all")
+  }, [activeFolder])
 
   // Selection handlers
   const handleToggleSelect = (photo: Photo, multiSelect: boolean) => {
-    const newSelected = new Set(multiSelect ? selectedIds : []);
+    const newSelected = new Set(multiSelect ? selectedIds : [])
 
     if (multiSelect) {
-      if (newSelected.has(photo.id)) newSelected.delete(photo.id);
-      else newSelected.add(photo.id);
+      if (newSelected.has(photo.id)) newSelected.delete(photo.id)
+      else newSelected.add(photo.id)
     } else {
       if (newSelected.has(photo.id) && newSelected.size === 1) {
-        newSelected.clear();
+        newSelected.clear()
       } else {
-        newSelected.clear();
-        newSelected.add(photo.id);
+        newSelected.clear()
+        newSelected.add(photo.id)
       }
     }
 
-    setSelectedIds(newSelected);
+    setSelectedIds(newSelected)
 
     if (newSelected.size === 0) {
       // Panel closed logic handled manually or by clear
     }
-  };
+  }
 
   const handleClearSelection = () => {
-    setSelectedIds(new Set());
-    setIsPanelOpen(false);
-  };
+    setSelectedIds(new Set())
+    setIsPanelOpen(false)
+  }
 
   // Duplicate actions
   const handleRemove = (photoId: string) => {
-    resolveDuplicate(photoId, 'remove');
-  };
+    resolveDuplicate(photoId, "remove")
+  }
 
   // Legacy handler for MasonryGrid fallback
   const handleKeep = (photoId: string) => {
-    resolveDuplicate(photoId, 'keep');
-  };
+    resolveDuplicate(photoId, "keep")
+  }
 
   // Manage handler for cards in other views
   const handleManageDuplicate = (groupId?: string) => {
-    if (!groupId) return;
-    navigate(`?dup=${groupId}`, { replace: true });
-  };
+    if (!groupId) return
+    navigate(`?dup=${groupId}`, { replace: true })
+  }
 
   // Map PG Photo to UI Photo for PhotoCard
   const mapToUiPhoto = (photo: Photo) => ({
     id: photo.id,
     src: photo.url,
-    rider: photo.rider || 'Unknown',
-    house: photo.horse || 'Unknown',
-    horse: photo.horse || 'Unknown', // Fix typo fallback
-    event: event?.title || 'Event',
+    rider: photo.rider || "Unknown",
+    house: photo.horse || "Unknown",
+    horse: photo.horse || "Unknown", // Fix typo fallback
+    event: event?.title || "Event",
     eventId: photo.eventId,
     date: photo.uploadDate || new Date().toISOString(),
-    time: photo.timestamp || '12:00',
-    city: event?.city || 'Location',
-    countryCode: 'SE',
+    time: photo.timestamp || "12:00",
+    city: event?.city || "Location",
+    countryCode: "SE",
     width: photo.width,
     height: photo.height,
-    className: photo.className || 'photo-grid-item',
-    arena: event?.venueName || 'Arena 1',
+    className: photo.className || "photo-grid-item",
+    arena: event?.venueName || "Arena 1",
     isDuplicate: validDuplicateIds.has(photo.id),
     duplicateGroupId: photo.duplicateGroupId,
     photographer: event?.assignedPhotographers?.[0]?.name,
     priceStandard: photo.priceStandard,
     priceHigh: photo.priceHigh,
-  });
+  })
 
   // Selection Helpers
   const isAllSelected =
     displayedPhotos.length > 0 &&
-    displayedPhotos.every(p => selectedIds.has(p.id));
+    displayedPhotos.every((p) => selectedIds.has(p.id))
 
   const handleSelectAll = () => {
-    const newSet = new Set(selectedIds);
-    displayedPhotos.forEach(p => newSet.add(p.id));
-    setSelectedIds(newSet);
-  };
+    const newSet = new Set(selectedIds)
+    displayedPhotos.forEach((p) => newSet.add(p.id))
+    setSelectedIds(newSet)
+  }
 
   const handleEditPhoto = (photo: Photo) => {
     // Exclusive select + Open Panel
-    setSelectedIds(new Set([photo.id]));
-    setIsPanelOpen(true);
-  };
+    setSelectedIds(new Set([photo.id]))
+    setIsPanelOpen(true)
+  }
 
-  const [toast, setToast] = useState<{
-    msg: string;
-    type: 'success' | 'info' | 'danger';
-    onUndo?: () => void;
-  } | null>(null);
+  // Toasts go through the global toast manager (old page-level PgToast)
+  const showToast = (
+    msg: string,
+    type: "success" | "info" | "danger",
+    onUndo?: () => void
+  ) => notify(msg, type === "danger" ? "error" : type, onUndo)
+
   const [confirmModal, setConfirmModal] = useState<{
-    type: 'delete';
-    isOpen: boolean;
-  }>({ type: 'delete', isOpen: false });
-  const [activePanelTab, setActivePanelTab] = useState<'tags' | 'price'>(
-    'tags'
-  );
+    type: "delete"
+    isOpen: boolean
+  }>({ type: "delete", isOpen: false })
+  const [activePanelTab, setActivePanelTab] = useState<"tags" | "price">("tags")
 
-  const undoSelectionRef = useRef<Set<string>>(new Set());
-  const undoDeletedPhotosRef = useRef<Photo[]>([]);
-  const actionBarRef = useRef<HTMLDivElement>(null);
-
-  useLayoutEffect(() => {
-    if (!actionBarRef.current) return;
-    const ro = new ResizeObserver(entries => {
-      for (const entry of entries) {
-        const height = Math.max((entry.target as HTMLElement).offsetHeight, 64);
-        document.documentElement.style.setProperty(
-          '--bucketBarH',
-          `${height}px`
-        );
-      }
-    });
-    ro.observe(actionBarRef.current);
-    return () => ro.disconnect();
-  }, []);
+  const undoSelectionRef = useRef<Set<string>>(new Set())
+  const undoDeletedPhotosRef = useRef<Photo[]>([])
 
   const handleEditPrice = (photo: Photo) => {
-    setSelectedIds(new Set([photo.id]));
-    setActivePanelTab('price');
-    setIsPanelOpen(true);
-  };
+    setSelectedIds(new Set([photo.id]))
+    setActivePanelTab("price")
+    setIsPanelOpen(true)
+  }
 
   const handleDeleteSelection = () => {
-    if (selectedIds.size === 0) return;
-    setConfirmModal({ type: 'delete', isOpen: true });
-  };
+    if (selectedIds.size === 0) return
+    setConfirmModal({ type: "delete", isOpen: true })
+  }
 
   const handleUndoDelete = () => {
     if (undoDeletedPhotosRef.current.length > 0) {
-      restorePhotos(undoDeletedPhotosRef.current);
-      undoDeletedPhotosRef.current = [];
+      restorePhotos(undoDeletedPhotosRef.current)
+      undoDeletedPhotosRef.current = []
     }
-    setSelectedIds(new Set(undoSelectionRef.current));
-    setToast(null);
-  };
+    setSelectedIds(new Set(undoSelectionRef.current))
+  }
 
   const handleConfirmAction = async () => {
-    const selectedPhotoIds = Array.from(selectedIds);
-    const selectedPhotosSnapshot = allPhotos.filter(p => selectedIds.has(p.id));
+    const selectedPhotoIds = Array.from(selectedIds)
+    const selectedPhotosSnapshot = allPhotos.filter((p) =>
+      selectedIds.has(p.id)
+    )
 
-    setConfirmModal({ ...confirmModal, isOpen: false });
-    setIsPanelOpen(false);
+    setConfirmModal({ ...confirmModal, isOpen: false })
+    setIsPanelOpen(false)
 
-    if (confirmModal.type === 'delete') {
-      undoSelectionRef.current = new Set(selectedIds);
-      undoDeletedPhotosRef.current = selectedPhotosSnapshot;
-      setSelectedIds(new Set());
+    if (confirmModal.type === "delete") {
+      undoSelectionRef.current = new Set(selectedIds)
+      undoDeletedPhotosRef.current = selectedPhotosSnapshot
+      setSelectedIds(new Set())
 
       try {
-        await deletePhotos(selectedPhotoIds);
-        setToast({
-          msg: `${selectedPhotoIds.length} photo${
-            selectedPhotoIds.length > 1 ? 's' : ''
+        await deletePhotos(selectedPhotoIds)
+        showToast(
+          `${selectedPhotoIds.length} photo${
+            selectedPhotoIds.length > 1 ? "s" : ""
           } deleted`,
-          type: TOAST_TOKENS.DELETE.type,
-          onUndo: handleUndoDelete,
-        });
-        setTimeout(() => setToast(null), 3000);
+          TOAST_TOKENS.DELETE.type,
+          handleUndoDelete
+        )
       } catch {
-        undoDeletedPhotosRef.current = [];
-        setSelectedIds(new Set(selectedPhotoIds));
-        setToast({
-          msg: 'Could not delete photo. Please try again.',
-          type: 'danger',
-        });
-        setTimeout(() => setToast(null), 3000);
+        undoDeletedPhotosRef.current = []
+        setSelectedIds(new Set(selectedPhotoIds))
+        showToast("Could not delete photo. Please try again.", "danger")
       }
     }
-  };
+  }
 
   // Override edit photo to default to tags
   const handleEditPhotoOverride = (photo: Photo) => {
-    handleEditPhoto(photo);
-    setActivePanelTab('tags');
-  };
+    handleEditPhoto(photo)
+    setActivePanelTab("tags")
+  }
 
-  // Tab styles
-
-  const renderContent = () => {
+  const eventPhotographer = useMemo(() => {
+    if (!eventId) return null
     return (
-      <>
-        {/* Grey Content Section */}
-        <div
-          className={`bg-[var(--color-bg)] relative ${
-            isExpanded
-              ? 'flex-1 overflow-y-auto pt-0 pb-[100px] min-h-0'
-              : 'pt-0'
-          }`}
-          ref={scrollContainerRef}
-        >
-          {/* Tabs Row (Inside scroll container for expanded autohide/stick behavior) */}
-          <div
-            className={`bg-white/95 backdrop-blur-[8px] border-b border-[var(--color-border)] ${
-              isExpanded
-                ? 'sticky top-0 z-20 shadow-[0_4px_12px_rgba(0,0,0,0.03)]'
-                : ''
-            }`}
-            style={undefined}
-          >
-            <div className="container flex gap-0 items-center">
-              <button
-                className={`tab-btn ${activeTab === 'uploads' ? 'active' : ''}`}
-                onClick={() => setActiveTab('uploads')}
-              >
-                Uploads
-                <span className="tab-badge">{tabCounts.uploads}</span>
-              </button>
+      PHOTOGRAPHERS.find((p) => p.primaryEventId === eventId) ||
+      PHOTOGRAPHERS[0]
+    )
+  }, [eventId])
+  // Guard after all hooks — safe to return early now
+  if (!event && isLoadingApiEvent)
+    return (
+      <EmptyState
+        icon={<Spinner className="text-primary" />}
+        title="Loading event..."
+      />
+    )
+  if (!event)
+    return (
+      <EmptyState
+        icon={<AlertCircle />}
+        title={apiEventError || "Event not found"}
+      />
+    )
 
-              {canUploadPhotos && (
-                <div className="ml-auto flex items-center gap-3">
-                  <button
-                    onClick={() => {
-                      const params = new URLSearchParams({
-                        eventId: event!.id,
-                        from: 'event',
-                      });
-                      if (selectedClassContext.id) {
-                        params.set('classSectionId', selectedClassContext.id);
-                      }
-                      if (selectedClassContext.equipeClassSectionId) {
-                        params.set(
-                          'equipeClassSectionId',
-                          selectedClassContext.equipeClassSectionId
-                        );
-                      }
-                      if (selectedClassContext.name) {
-                        params.set('className', selectedClassContext.name);
-                      }
-                      if (selectedClassContext.arenaName) {
-                        params.set('arenaName', selectedClassContext.arenaName);
-                      }
-                      navigate(`${basePath}/upload?${params.toString()}`);
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium transition-colors"
-                  >
-                    <UploadCloud size={16} />
-                    Upload
-                  </button>
-                </div>
-              )}
+  const showFilters =
+    (activeTab === "uploads" &&
+      !isDuplicatesFolder &&
+      (folderChips.length > 1 || !!searchTerm)) ||
+    (activeTab === "published" && publishedChips.length > 0) ||
+    (activeTab === "archive" && archivedChips.length > 0)
 
-              {/* Event title when expanded */}
-              {isExpanded && (
-                <div className="ml-auto flex items-center gap-2.5">
-                  <img
-                    src={event!.logo}
-                    alt=""
-                    className="w-6 h-6 rounded-[4px] object-cover"
-                  />
-                  <span
-                    title={event!.title}
-                    className="text-[0.875rem] font-semibold text-[var(--color-text-primary)] max-w-[280px] overflow-hidden text-ellipsis whitespace-nowrap"
-                  >
-                    {event!.title}
-                  </span>
-                </div>
-              )}
-            </div>
+  const activeChips =
+    activeTab === "uploads"
+      ? folderChips
+      : activeTab === "published"
+        ? publishedChips
+        : archivedChips
+
+  const handleUpload = () => {
+    const params = new URLSearchParams({ eventId: event.id, from: "event" })
+    if (selectedClassContext.id) {
+      params.set("classSectionId", selectedClassContext.id)
+    }
+    if (selectedClassContext.equipeClassSectionId) {
+      params.set(
+        "equipeClassSectionId",
+        selectedClassContext.equipeClassSectionId
+      )
+    }
+    if (selectedClassContext.name) {
+      params.set("className", selectedClassContext.name)
+    }
+    if (selectedClassContext.arenaName) {
+      params.set("arenaName", selectedClassContext.arenaName)
+    }
+    navigate(`${basePath}/upload?${params.toString()}`)
+  }
+
+  // Checkbox shown on hover (always when selected) in the card's corner
+  const renderSelectBox = (photo: Photo, isSelected: boolean) => (
+    <div
+      className={cn(
+        "absolute top-2.5 left-2.5 z-10 transition-opacity duration-200 group-hover:opacity-100",
+        isSelected ? "opacity-100" : "opacity-0"
+      )}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <Checkbox
+        checked={isSelected}
+        onCheckedChange={() => handleToggleSelect(photo, true)}
+        aria-label="Select photo"
+        className="size-4.5 rounded-sm border-white/60 bg-white/90 shadow-sm"
+      />
+    </div>
+  )
+
+  return (
+    <div>
+      <TitleHeader
+        compact
+        variant="workspace"
+        className="border-b-0"
+        title={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="size-6.5"
+              onClick={handleBack}
+              title={
+                hasSelectedClassContext ? "Back to classes" : "Back to events"
+              }
+              aria-label={
+                hasSelectedClassContext ? "Back to classes" : "Back to events"
+              }
+            >
+              <ArrowLeft className="size-4.5" />
+            </Button>
+            {event.title}
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="size-6.5"
+              onClick={() => setShowInfoModal(true)}
+              aria-label="Event details"
+            >
+              <Info className="size-4.5" />
+            </Button>
           </div>
+        }
+        topSubtitle={event.dateRange}
+        avatar={event.logo}
+        avatarShape="square"
+        rightContent={
+          <ActionCluster>
+            <div className="flex flex-col items-start rounded-xl bg-muted px-4 py-2 whitespace-nowrap text-muted-foreground">
+              <span className="text-[0.6875rem] leading-[1.2] font-semibold opacity-80">
+                Published
+              </span>
+              <span className="text-sm leading-[1.2] font-bold text-foreground">
+                {event.publishedCount ?? 0}
+              </span>
+            </div>
 
-          <div className="flex flex-col min-h-full">
-            <div className={`container pt-6`}>
-              {/* Filter Bar (On Grey Surface) */}
-              <div className="pg-split-layout flex items-start gap-8">
-                {/* LEFT SIDEBAR: Tags (Conditional) */}
-                {((activeTab === 'uploads' &&
-                  !isDuplicatesFolder &&
-                  (folderChips.length > 1 || searchTerm)) ||
-                  (activeTab === 'published' && publishedChips.length > 0) ||
-                  (activeTab === 'archive' && archivedChips.length > 0)) && (
-                  <div className="pg-filter-sidebar pg-sticky-sidebar w-[190px] shrink-0 pt-3">
-                    <div className="pg-chips-scroll-container flex flex-col gap-2 items-start w-full pr-2">
-                      {(activeTab === 'uploads'
-                        ? folderChips
-                        : activeTab === 'published'
-                        ? publishedChips
-                        : archivedChips
-                      ).map((chip: any, index) => (
-                        <FilterChip
-                          key={chip.id}
-                          label={
-                            <div className="flex items-center gap-1.5">
-                              {chip.color && (
-                                <div
-                                  className="w-2 h-2 rounded-full"
-                                  style={{ background: chip.color }}
-                                />
-                              )}
-                              {chip.label}
-                            </div>
-                          }
-                          isActive={activeChip === chip.id}
-                          onClick={() => setActiveChip(chip.id)}
-                          variant="filterCount"
-                          accent={
-                            chip.id === 'missing-tags' ? 'red' : undefined
-                          }
-                          count={chip.count}
-                          className={
-                            index === 0 && activeChip === 'all' ? '' : ''
-                          }
-                        />
-                      ))}
+            {isAdmin && eventPhotographer && (
+              <InfoChip
+                label="Photographer"
+                name={`${eventPhotographer.firstName} ${eventPhotographer.lastName}`}
+                variant="photographer"
+                avatarUrl={undefined}
+              />
+            )}
+          </ActionCluster>
+        }
+      />
+
+      {/* Tabs row */}
+      <div className="border-b bg-card/95 backdrop-blur-sm">
+        <div className="container flex items-center">
+          <WorkspaceTabs
+            // old .tab-btn: 14px 24px padding, 14px/21px, 2px underline overlapping the row border
+            triggerClassName="-mb-px group-data-[variant=line]/tabs-list:px-6 group-data-[variant=line]/tabs-list:pt-3.5 group-data-[variant=line]/tabs-list:pb-4 group-data-[variant=line]/tabs-list:leading-normal"
+            tabs={[
+              {
+                value: "uploads",
+                label: (
+                  <>
+                    Uploads
+                    <span className="inline-flex h-4.5 min-w-5 items-center justify-center rounded-full border border-transparent bg-background px-1.5 text-xs font-bold text-muted-foreground in-data-active:border-primary/20 in-data-active:bg-primary/10 in-data-active:text-primary">
+                      {tabCounts.uploads}
+                    </span>
+                  </>
+                ),
+              },
+            ]}
+            value={activeTab}
+            onChange={setActiveTab}
+          />
+
+          {/* Brand pill at the old 36px height; hidden when the booking was cancelled */}
+          {canUploadPhotos && (
+            <Button
+              size="sm"
+              className="ml-auto text-sm"
+              onClick={handleUpload}
+            >
+              <UploadCloud />
+              Upload
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <div className="container pt-6">
+        <div className="flex items-start gap-8">
+          {/* Left sidebar: tag filters */}
+          {showFilters && (
+            <div className="w-47.5 shrink-0 self-start pt-3">
+              <div className="flex w-full flex-col items-start gap-2 pr-2">
+                {activeChips.map((chip) => (
+                  <FilterChip
+                    key={chip.id}
+                    label={
+                      <span className="flex items-center gap-1.5">
+                        {chip.color && (
+                          <span
+                            className="size-2 rounded-full"
+                            style={{ background: chip.color }}
+                          />
+                        )}
+                        {chip.label}
+                      </span>
+                    }
+                    isActive={activeChip === chip.id}
+                    onClick={() => setActiveChip(chip.id)}
+                    variant="filterCount"
+                    accent={chip.id === "missing-tags" ? "red" : undefined}
+                    count={chip.count}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Right content column */}
+          <div className="min-w-0 flex-1">
+            {showFilters && (
+              <div className="mb-3 flex items-center justify-between gap-6 py-3">
+                <div className="max-w-150 flex-1">
+                  <ScopedSearchBar
+                    placeholder="Search riders, horses, photo ID..."
+                    options={searchOptions}
+                    currentValue={searchTerm}
+                    onSelect={(val) => setSearchTerm(val === "All" ? "" : val)}
+                    onSearchChange={(val) => setSearchTerm(val)}
+                    variant="v2"
+                  />
+                </div>
+
+                <div className="flex items-center">
+                  {selectedIds.size > 0 ? (
+                    <div className="flex items-center gap-2">
+                      <span className="mr-4 text-[0.8125rem] font-semibold whitespace-nowrap text-foreground">
+                        {selectedIds.size} selected
+                      </span>
+
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className={roundButton}
+                        onClick={() => setIsPanelOpen(true)}
+                        title="Edit selection"
+                        aria-label="Edit selection"
+                      >
+                        <Pencil className="size-4.5" />
+                      </Button>
+
+                      {activeTab === "uploads" || activeTab === "archive" ? (
+                        <Button
+                          variant="destructive"
+                          size="icon"
+                          className={roundDanger}
+                          onClick={handleDeleteSelection}
+                          title="Delete selection"
+                          aria-label="Delete selection"
+                        >
+                          <Trash2 className="size-4.5" />
+                        </Button>
+                      ) : null}
+
+                      <Separator
+                        orientation="vertical"
+                        className="mr-2 ml-4 h-6 data-vertical:self-center"
+                      />
+
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="px-3"
+                        onClick={handleClearSelection}
+                      >
+                        Clear
+                      </Button>
                     </div>
-                  </div>
-                )}
-
-                {/* RIGHT CONTENT COLUMN */}
-                <div className="pg-main-content-col flex-1 min-w-0">
-                  {/* TOP: Search & Actions (Conditional matches sidebar) */}
-                  {((activeTab === 'uploads' &&
-                    !isDuplicatesFolder &&
-                    (folderChips.length > 1 || searchTerm)) ||
-                    (activeTab === 'published' && publishedChips.length > 0) ||
-                    (activeTab === 'archive' && archivedChips.length > 0)) && (
-                    <div className="search-actions-row flex items-center justify-between gap-6 mb-3 pt-3 pb-3">
-                      {/* Search */}
-                      <div className="search-group flex-1 max-w-[600px]">
-                        <ScopedSearchBar
-                          placeholder="Search riders, horses, photo ID..."
-                          options={searchOptions}
-                          currentValue={searchTerm}
-                          onSelect={val =>
-                            setSearchTerm(val === 'All' ? '' : val)
-                          }
-                          onSearchChange={val => setSearchTerm(val)}
-                          variant="v2"
-                        />
+                  ) : (
+                    <>
+                      <div className="mr-4 flex h-6 items-center text-sm font-medium text-muted-foreground">
+                        Showing {displayedPhotos.length} photos
                       </div>
 
-                      {/* Actions Cluster */}
-                      <div className="pg-events-filter-right flex items-center">
-                        {selectedIds.size > 0 ? (
-                          // SELECTION MODE ACTIONS
-                          <div className="flex items-center gap-2">
-                            <span className="text-[0.8125rem] font-semibold text-[var(--color-text-primary)] whitespace-nowrap mr-4">
-                              {selectedIds.size} selected
-                            </span>
-
-                            {/* Edit Action */}
-                            <button
-                              className={`${roundBtnBase} ${roundBtnLg}`}
-                              onClick={() => setIsPanelOpen(true)}
-                              title="Edit selection"
-                            >
-                              <Pencil size={18} />
-                            </button>
-
-                            {activeTab === 'uploads' ||
-                            activeTab === 'archive' ? (
-                              <button
-                                className={`${roundBtnDelete} ${roundBtnLg}`}
-                                onClick={handleDeleteSelection}
-                                title="Delete selection"
-                              >
-                                <Trash2 size={18} />
-                              </button>
-                            ) : null}
-
-                            {/* Single consistent separator */}
-                            <div className="w-px h-6 bg-black/10 mx-2 ml-4" />
-
-                            <button
-                              className={`${chipBtnGhost} text-secondary`}
-                              onClick={handleClearSelection}
-                            >
-                              Clear
-                            </button>
-                          </div>
+                      <div className="flex shrink-0 items-center gap-2 border-l pl-4">
+                        {isAllSelected ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="px-3 text-foreground"
+                            onClick={() => setSelectedIds(new Set())}
+                          >
+                            <X className="size-3.5" />
+                            Clear
+                          </Button>
                         ) : (
-                          // DEFAULT MODE ACTIONS
-                          <>
-                            <div className="mr-4 h-6 flex items-center text-[var(--color-text-secondary)] text-[0.875rem] font-medium">
-                              Showing {displayedPhotos.length} photos
-                            </div>
-
-                            <div className="flex items-center">
-                              <div className="flex items-center gap-2 ml-auto pl-4 border-l border-black/10 shrink-0">
-                                {isAllSelected ? (
-                                  <button
-                                    className={chipBtnGhost}
-                                    onClick={() => setSelectedIds(new Set())}
-                                  >
-                                    <X size={14} />
-                                    Clear
-                                  </button>
-                                ) : (
-                                  <button
-                                    className={chipBtnGhost}
-                                    onClick={handleSelectAll}
-                                  >
-                                    Select all
-                                  </button>
-                                )}
-                              </div>
-                            </div>
-                          </>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="px-3 text-foreground"
+                            onClick={handleSelectAll}
+                          >
+                            Select all
+                          </Button>
                         )}
                       </div>
-                    </div>
+                    </>
                   )}
+                </div>
+              </div>
+            )}
 
-                  {/* Content Split: Grid/Groups + Inspector */}
-                  <div className="pg-content-split">
-                    <div className="pg-photos-grid flex-1">
-                      {activeTab === 'uploads' && isDuplicatesFolder ? (
-                        // DUPLICATES VIEW (GROUPED)
-                        <div className="pg-duplicates-list pb-[100px]">
-                          {Array.from(duplicateGroups.entries()).map(
-                            ([groupId, photos]) => {
-                              const firstPhoto = photos[0];
-                              const count = photos.length;
+            {activeTab === "uploads" && isDuplicatesFolder ? (
+              // Duplicates view (grouped)
+              <div className="pb-25">
+                {Array.from(duplicateGroups.entries()).map(
+                  ([groupId, photos]) => {
+                    const firstPhoto = photos[0]
 
-                              return (
-                                <div
-                                  key={groupId}
-                                  id={`dup-group-${groupId}`}
-                                  className="mb-8 bg-white rounded-xl p-5 shadow-[0_1px_3px_rgba(0,0,0,0.05)] border-2 border-transparent transition-all duration-500 ease-in-out"
-                                >
-                                  <div className="pg-duplicate-header flex items-center justify-between mb-4">
-                                    <div className="pg-dup-title font-semibold text-base flex items-center gap-2">
-                                      Duplicate: {firstPhoto.fileName}{' '}
-                                      <span className="text-[var(--color-text-secondary)] font-normal">
-                                        ({count} instances)
-                                      </span>
-                                    </div>
-                                  </div>
-                                  <div className="pg-duplicate-row flex gap-4 overflow-x-auto pb-2">
-                                    {photos.map(photo => {
-                                      const uiPhoto = mapToUiPhoto(photo);
-                                      const isSelected = selectedIds.has(
-                                        photo.id
-                                      );
-
-                                      return (
-                                        <div
-                                          key={photo.id}
-                                          className="w-[260px] shrink-0 relative"
-                                        >
-                                          <div
-                                            className={`group relative cursor-pointer transition-[box-shadow] duration-200 ${
-                                              isSelected
-                                                ? 'pg-card-selected shadow-[0_0_0_2px_rgba(27,58,236,0.4)] z-[5] rounded-[var(--radius-md,8px)]'
-                                                : ''
-                                            }`}
-                                            onClick={e =>
-                                              handleToggleSelect(
-                                                photo,
-                                                e.shiftKey ||
-                                                  e.metaKey ||
-                                                  e.ctrlKey
-                                              )
-                                            }
-                                          >
-                                            <PhotoCard
-                                              photo={uiPhoto}
-                                              onClick={() => {}}
-                                              variant="pgDuplicate"
-                                              pgMeta={{
-                                                fileName: photo.fileName,
-                                                photoCode: photo.photoCode,
-                                                uploadDate: photo.uploadDate,
-                                                timestamp: photo.timestamp,
-                                                storedLocation:
-                                                  photo.storedLocation,
-                                              }}
-                                              onKeep={() =>
-                                                handleKeep(photo.id)
-                                              }
-                                              onRemove={() =>
-                                                handleRemove(photo.id)
-                                              }
-                                            />
-                                            {/* Selection Overlay with Checkbox */}
-                                            <div
-                                              className={`absolute top-[10px] left-[10px] z-50 transition-opacity duration-200 group-hover:opacity-100 ${
-                                                isSelected
-                                                  ? 'opacity-100'
-                                                  : 'opacity-0'
-                                              }`}
-                                              onClick={e => {
-                                                e.stopPropagation();
-                                                handleToggleSelect(photo, true);
-                                              }}
-                                            >
-                                              <div
-                                                className={`w-[18px] h-[18px] rounded-[4px] border flex items-center justify-center transition-all duration-200 ${
-                                                  isSelected
-                                                    ? 'bg-[var(--color-brand-primary)] border-[var(--color-brand-primary)]'
-                                                    : 'bg-white/90 border-white/60'
-                                                }`}
-                                              >
-                                                {isSelected && (
-                                                  <Check
-                                                    size={14}
-                                                    strokeWidth={3}
-                                                    color="#fff"
-                                                  />
-                                                )}
-                                              </div>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              );
-                            }
-                          )}
-                          {duplicateGroups.size === 0 && (
-                            <div className="py-16 text-center text-[var(--color-text-secondary)] text-[0.875rem]">
-                              No duplicates found.
-                            </div>
-                          )}
+                    return (
+                      <div
+                        key={groupId}
+                        id={`dup-group-${groupId}`}
+                        className="mb-8 rounded-xl border-2 border-transparent bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.05)] transition-all duration-500 [&.highlight-duplicate-group]:border-primary [&.highlight-duplicate-group]:shadow-[0_0_0_4px] [&.highlight-duplicate-group]:shadow-primary/15"
+                      >
+                        <div className="mb-4 flex items-center gap-2 text-base font-semibold">
+                          Duplicate: {firstPhoto.fileName}{" "}
+                          <span className="font-normal text-muted-foreground">
+                            ({photos.length} instances)
+                          </span>
                         </div>
-                      ) : (
-                        <div className="pg-photo-grid">
-                          {displayedPhotos.map(photo => {
-                            const uiPhoto = mapToUiPhoto(photo);
-                            const isSelected = selectedIds.has(photo.id);
-
-                            // Determine card variant
-                            let cardVariant:
-                              | 'pgUpload'
-                              | 'pgDuplicate'
-                              | 'pgPublished'
-                              | 'pgArchived'
-                              | 'default' = 'default';
-                            if (activeTab === 'uploads') {
-                              cardVariant = isDuplicatesFolder
-                                ? 'pgDuplicate'
-                                : 'pgUpload';
-                            } else if (activeTab === 'published') {
-                              cardVariant = 'pgPublished';
-                            } else if (activeTab === 'archive') {
-                              cardVariant = 'pgArchived';
-                            }
-
+                        <div className="flex gap-4 overflow-x-auto pb-2">
+                          {photos.map((photo) => {
+                            const isSelected = selectedIds.has(photo.id)
                             return (
                               <div
                                 key={photo.id}
-                                id={`photo-${photo.id}`}
-                                className={`group relative cursor-pointer transition-[box-shadow] duration-200 ${
-                                  isSelected
-                                    ? 'pg-card-selected shadow-[0_0_0_2px_rgba(27,58,236,0.4)] z-[5] rounded-[var(--radius-md,8px)]'
-                                    : ''
-                                }`}
-                                onClick={e =>
-                                  handleToggleSelect(
-                                    photo,
-                                    e.shiftKey || e.metaKey || e.ctrlKey
-                                  )
-                                }
+                                className="relative w-65 shrink-0"
                               >
-                                <PhotoCard
-                                  photo={uiPhoto}
-                                  onClick={() => {}}
-                                  variant={cardVariant}
-                                  pgMeta={
-                                    activeTab === 'uploads' ||
-                                    activeTab === 'published' ||
-                                    activeTab === 'archive'
-                                      ? {
-                                          fileName: photo.fileName,
-                                          photoCode: photo.photoCode,
-                                          uploadDate: photo.uploadDate,
-                                          timestamp: photo.timestamp,
-                                          priceStandard: isDuplicatesFolder
-                                            ? undefined
-                                            : photo.priceStandard,
-                                          priceHigh: isDuplicatesFolder
-                                            ? undefined
-                                            : photo.priceHigh,
-                                          storedLocation: photo.storedLocation,
-                                          soldCount:
-                                            activeTab === 'published' ||
-                                            activeTab === 'archive'
-                                              ? photo.soldCount
-                                              : 0,
-                                          totalBucketSales:
-                                            activeTab === 'published' &&
-                                            activePublishedFolder ===
-                                              'selling_photos'
-                                              ? publishedFolderCounts.totalSales
-                                              : 0,
-                                        }
-                                      : undefined
-                                  }
-                                  onKeep={
-                                    isDuplicatesFolder
-                                      ? () => handleKeep(photo.id)
-                                      : undefined
-                                  }
-                                  onRemove={() => {
-                                    if (isDuplicatesFolder) {
-                                      handleRemove(photo.id);
-                                    } else if (activeTab !== 'published') {
-                                      setSelectedIds(new Set([photo.id]));
-                                      setConfirmModal({
-                                        type: 'delete',
-                                        isOpen: true,
-                                      });
-                                    }
-                                  }}
-                                  onManageDuplicate={() =>
-                                    handleManageDuplicate(
-                                      photo.duplicateGroupId
+                                <div
+                                  className={cn(
+                                    selectableCard,
+                                    isSelected && selectedCard
+                                  )}
+                                  onClick={(e) =>
+                                    handleToggleSelect(
+                                      photo,
+                                      e.shiftKey || e.metaKey || e.ctrlKey
                                     )
                                   }
-                                  onEdit={() => handleEditPhotoOverride(photo)}
-                                  onEditPrice={() => handleEditPrice(photo)}
-                                  onPreview={() => setPreviewPhoto(uiPhoto)}
-                                />
-
-                                {/* Selection Overlay with Checkbox */}
-                                <div
-                                  className={`absolute top-[10px] left-[10px] z-50 transition-opacity duration-200 group-hover:opacity-100 ${
-                                    isSelected ? 'opacity-100' : 'opacity-0'
-                                  }`}
-                                  onClick={e => {
-                                    e.stopPropagation();
-                                    handleToggleSelect(photo, true);
-                                  }}
                                 >
-                                  <div
-                                    className={`w-[18px] h-[18px] rounded-[4px] border flex items-center justify-center transition-all duration-200 ${
-                                      isSelected
-                                        ? 'bg-[var(--color-brand-primary)] border-[var(--color-brand-primary)]'
-                                        : 'bg-white/90 border-white/60'
-                                    }`}
-                                  >
-                                    {isSelected && (
-                                      <Check
-                                        size={14}
-                                        strokeWidth={3}
-                                        color="#fff"
-                                      />
-                                    )}
-                                  </div>
+                                  <PhotoCard
+                                    photo={mapToUiPhoto(photo)}
+                                    onClick={() => {}}
+                                    variant="pgDuplicate"
+                                    pgMeta={{
+                                      fileName: photo.fileName,
+                                      photoCode: photo.photoCode,
+                                      uploadDate: photo.uploadDate,
+                                      timestamp: photo.timestamp,
+                                      storedLocation: photo.storedLocation,
+                                    }}
+                                    onKeep={() => handleKeep(photo.id)}
+                                    onRemove={() => handleRemove(photo.id)}
+                                  />
+                                  {renderSelectBox(photo, isSelected)}
                                 </div>
                               </div>
-                            );
+                            )
                           })}
                         </div>
-                      )}
-                      {activeTab === 'uploads' &&
-                        !isDuplicatesFolder &&
-                        displayedPhotos.length === 0 && (
-                          <div className="pg-empty-state">
-                            <div className="pg-empty-icon">
-                              <ImageOff size={24} />
-                            </div>
-                            <h3>
-                              {searchTerm
-                                ? 'No results found'
-                                : 'No photos here'}
-                            </h3>
-                            <p>
-                              {searchTerm
-                                ? `No photos match "${searchTerm}"`
-                                : canUploadPhotos
-                                  ? 'This folder is empty. Upload photos to get started.'
-                                  : 'This event is read-only because the booking was cancelled.'}
-                            </p>
-                          </div>
-                        )}
-                      {activeTab === 'published' &&
-                        displayedPhotos.length === 0 && (
-                          <div className="pg-empty-state">
-                            <div className="pg-empty-icon">
-                              <Globe size={24} />
-                            </div>
-                            <h3>
-                              {searchTerm
-                                ? 'No results found'
-                                : 'Nothing published yet'}
-                            </h3>
-                            <p>
-                              {searchTerm
-                                ? `No published photos match "${searchTerm}"`
-                                : 'Publish photos from the Uploads tab to make them available for buyers.'}
-                            </p>
-                          </div>
-                        )}
-                      {activeTab === 'archive' &&
-                        displayedPhotos.length === 0 && (
-                          <div className="pg-empty-state">
-                            <div className="pg-empty-icon">
-                              <Archive size={24} />
-                            </div>
-                            <h3>
-                              {searchTerm
-                                ? 'No results found'
-                                : 'Archive is empty'}
-                            </h3>
-                            <p>
-                              {searchTerm
-                                ? `No archived photos match "${searchTerm}"`
-                                : 'Unpublished photos will appear here.'}
-                            </p>
-                          </div>
-                        )}
-                    </div>
-
-                    {/* Selection Panel - Always mounted for animation */}
-                    <PgSelectionPanel
-                      isOpen={isPanelOpen}
-                      selectedIds={selectedIds}
-                      allPhotos={allPhotos}
-                      activeTab={activePanelTab}
-                      currentTab={
-                        activeTab === 'published'
-                          ? 'published'
-                          : activeTab === 'archive'
-                          ? 'archive'
-                          : 'uploads'
-                      }
-                      onClose={() => setIsPanelOpen(false)}
-                    />
+                      </div>
+                    )
+                  }
+                )}
+                {duplicateGroups.size === 0 && (
+                  <div className="py-16 text-center text-sm text-muted-foreground">
+                    No duplicates found.
                   </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </>
-    );
-  };
-
-  const eventPhotographer = useMemo(() => {
-    if (!eventId) return null;
-    return (
-      PHOTOGRAPHERS.find(p => p.primaryEventId === eventId) || PHOTOGRAPHERS[0]
-    );
-  }, [eventId]);
-
-  // Guard after all hooks — safe to return early now
-  if (!event && isLoadingApiEvent) return <div>Loading event...</div>;
-  if (!event) return <div>{apiEventError || 'Event not found'}</div>;
-
-  const chipBtnGhost =
-    'h-8 px-3 rounded-full border-transparent bg-transparent text-[0.8125rem] font-semibold cursor-pointer transition-all duration-200 flex items-center gap-1.5 whitespace-nowrap hover:bg-[var(--ui-bg-subtle)]';
-  const roundBtnBase =
-    'w-8 h-8 rounded-full border border-black/10 bg-white flex items-center justify-center cursor-pointer text-[var(--color-text-secondary)] transition-all duration-200 flex-shrink-0 hover:bg-[var(--ui-bg-subtle)] hover:text-[var(--color-text-primary)]';
-  const roundBtnDelete =
-    'w-8 h-8 rounded-full border border-[rgba(239,68,68,0.2)] bg-[var(--color-danger-tint)] flex items-center justify-center cursor-pointer text-[var(--color-danger)] transition-all duration-200 flex-shrink-0 hover:bg-[var(--color-danger-tint)] hover:border-[var(--color-danger)]';
-  const roundBtnLg = '!w-10 !h-10';
-
-  return (
-    <div
-      className={`pb-0 transition-all duration-[400ms] ease-[cubic-bezier(0.2,0,0.2,1)] ${
-        isExpanded
-          ? 'fixed inset-0 z-[2000] bg-white flex flex-col overflow-hidden'
-          : ''
-      }`}
-    >
-      <style>{`
-                @keyframes modalPop {
-                    0% { opacity: 0; transform: scale(0.95) translateY(10px); }
-                    100% { opacity: 1; transform: scale(1) translateY(0); }
-                }
-                .highlight-duplicate-group {
-                    border-color: var(--color-brand-primary) !important;
-                    box-shadow: 0 0 0 4px rgba(27,58,236,0.15) !important;
-                    background-color: var(--color-surface) !important;
-                }
-            `}</style>
-      {/* Title Header - Compact V2 (Only non-expanded) */}
-      {!isExpanded && (
-        <TitleHeader
-          className="no-border pg-compact-header"
-          variant="workspace"
-          title={
-            <div className="flex items-center gap-2">
-              <button
-                onClick={handleBack}
-                className="p-1 flex items-center rounded-full transition-[background] duration-200 text-[var(--color-text-secondary)] hover:bg-black/5"
-                title={hasSelectedClassContext ? 'Back to classes' : 'Back to events'}
-              >
-                <ArrowLeft size={18} />
-              </button>
-              {event.title}
-              <button
-                onClick={() => setShowInfoModal(true)}
-                className="p-1 flex items-center rounded-full transition-[background] duration-200 text-[var(--color-text-secondary)] hover:bg-black/5"
-              >
-                <Info size={18} />
-              </button>
-            </div>
-          }
-          topSubtitle={event.dateRange}
-          avatar={event.logo}
-          avatarShape="square"
-          // subtitle removed to save space
-          rightContent={
-            <ActionCluster>
-              {/* Stats Chips (Persistent in header) */}
-              <div className="flex items-center gap-2">
-                <div className="inline-flex flex-col items-start justify-center gap-0 px-4 py-2 rounded-xl bg-[var(--ui-bg-subtle)] text-secondary whitespace-nowrap text-left">
-                  <span className="text-[0.6875rem] font-semibold leading-[1.2] opacity-80">
-                    Published
-                  </span>
-                  <span className="text-[0.875rem] font-bold leading-[1.2] text-primary">
-                    {event.publishedCount ?? 0}
-                  </span>
-                </div>
-                {/* <div className="inline-flex flex-col items-start justify-center gap-0 px-4 py-2 rounded-xl bg-[var(--color-success-tint)] text-[var(--color-success)] whitespace-nowrap text-left">
-                  <span className="text-[0.6875rem] font-semibold leading-[1.2] opacity-80">
-                    Sales
-                  </span>
-                  <span className="text-[0.875rem] font-bold leading-[1.2]">
-                    {event.soldCount ?? 0}/{event.photosCount ?? 40}
-                  </span>
-                </div> */}
-                {isAdmin ? (
-                  <>
-                    {/* <div className="inline-flex flex-col items-start justify-center gap-0 px-4 py-2 rounded-xl bg-[var(--color-revenue-bg)] text-[var(--color-revenue-text)] whitespace-nowrap text-left">
-                                            <span className="text-[0.6875rem] font-semibold leading-[1.2] opacity-80">PG Earnings</span>
-                                            <span className="text-[0.875rem] font-bold leading-[1.2] text-[var(--color-revenue-value)]">SEK {((event.soldCount ?? 0) * 450).toLocaleString().replace(/,/g, ' ')}</span>
-                                        </div>
-                                        <div className="inline-flex flex-col items-start justify-center gap-0 px-4 py-2 rounded-xl whitespace-nowrap text-left bg-[var(--color-gallop-bg)] text-[var(--color-gallop-text)]">
-                                            <span className="text-[0.6875rem] font-semibold leading-[1.2] opacity-80">Gallop Earnings</span>
-                                            <span className="text-[0.875rem] font-bold leading-[1.2] text-[var(--color-gallop-value)]">SEK {((event.soldCount ?? 0) * 4500).toLocaleString().replace(/,/g, ' ')}</span>
-                                        </div> */}
-                  </>
-                ) : (
-                  <></>
-                  //   <div className="inline-flex flex-col items-start justify-center gap-0 px-4 py-2 rounded-xl bg-[var(--color-revenue-bg)] text-[var(--color-revenue-text)] whitespace-nowrap text-left">
-                  //     <span className="text-[0.6875rem] font-semibold leading-[1.2] opacity-80">
-                  //       Earning
-                  //     </span>
-                  //     <span className="text-[0.875rem] font-bold leading-[1.2] text-[var(--color-revenue-value)]">
-                  //       SEK{' '}
-                  //       {((event.soldCount ?? 0) * 450)
-                  //         .toLocaleString()
-                  //         .replace(/,/g, ' ')}
-                  //     </span>
-                  //   </div>
                 )}
               </div>
+            ) : (
+              // develop: plain grid instead of masonry (Safari fix)
+              <div className="grid w-full grid-cols-[repeat(auto-fill,minmax(220px,280px))] justify-center gap-4 pb-8">
+                {displayedPhotos.map((photo) => {
+                  const uiPhoto = mapToUiPhoto(photo)
+                  const isSelected = selectedIds.has(photo.id)
 
-              {/* <ActionSeparator /> */}
+                  const cardVariant =
+                    activeTab === "uploads"
+                      ? isDuplicatesFolder
+                        ? "pgDuplicate"
+                        : "pgUpload"
+                      : activeTab === "published"
+                        ? "pgPublished"
+                        : "pgArchived"
 
-              {isAdmin && eventPhotographer && (
-                <>
-                  <InfoChip
-                    label="Photographer"
-                    name={`${eventPhotographer.firstName} ${eventPhotographer.lastName}`}
-                    variant="photographer"
-                    avatarUrl={undefined}
-                  />
-                  {/* <ActionSeparator /> */}
-                </>
+                  return (
+                    <div
+                      key={photo.id}
+                      id={`photo-${photo.id}`}
+                      className={cn(selectableCard, isSelected && selectedCard)}
+                      onClick={(e) =>
+                        handleToggleSelect(
+                          photo,
+                          e.shiftKey || e.metaKey || e.ctrlKey
+                        )
+                      }
+                    >
+                      <PhotoCard
+                        photo={uiPhoto}
+                        onClick={() => {}}
+                        variant={cardVariant}
+                        pgMeta={{
+                          fileName: photo.fileName,
+                          photoCode: photo.photoCode,
+                          uploadDate: photo.uploadDate,
+                          timestamp: photo.timestamp,
+                          priceStandard: isDuplicatesFolder
+                            ? undefined
+                            : photo.priceStandard,
+                          priceHigh: isDuplicatesFolder
+                            ? undefined
+                            : photo.priceHigh,
+                          storedLocation: photo.storedLocation,
+                          soldCount:
+                            activeTab === "published" || activeTab === "archive"
+                              ? photo.soldCount
+                              : 0,
+                          totalBucketSales:
+                            activeTab === "published" &&
+                            activePublishedFolder === "selling_photos"
+                              ? publishedFolderCounts.totalSales
+                              : 0,
+                        }}
+                        onKeep={
+                          isDuplicatesFolder
+                            ? () => handleKeep(photo.id)
+                            : undefined
+                        }
+                        onRemove={() => {
+                          if (isDuplicatesFolder) {
+                            handleRemove(photo.id)
+                          } else if (activeTab !== "published") {
+                            setSelectedIds(new Set([photo.id]))
+                            setConfirmModal({ type: "delete", isOpen: true })
+                          }
+                        }}
+                        onManageDuplicate={() =>
+                          handleManageDuplicate(photo.duplicateGroupId)
+                        }
+                        onEdit={() => handleEditPhotoOverride(photo)}
+                        onEditPrice={() => handleEditPrice(photo)}
+                        onPreview={() => setPreviewPhoto(uiPhoto)}
+                      />
+                      {renderSelectBox(photo, isSelected)}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            {activeTab === "uploads" &&
+              !isDuplicatesFolder &&
+              displayedPhotos.length === 0 && (
+                <EmptyState
+                  icon={<ImageOff />}
+                  title={searchTerm ? "No results found" : "No photos here"}
+                  description={
+                    searchTerm
+                      ? `No photos match "${searchTerm}"`
+                      : canUploadPhotos
+                        ? "This folder is empty. Upload photos to get started."
+                        : "This event is read-only because the booking was cancelled."
+                  }
+                />
               )}
-              {/* <MoreMenu
-                actions={[
-                  {
-                    label: 'Cancel registration',
-                    onClick: () => {
-                      console.log('Cancel registration clicked')
-                    },
-                    variant: 'destructive',
-                  },
-                ]}
-              /> */}
-            </ActionCluster>
-          }
-        />
-      )}
-
-      {renderContent()}
-
-      {/* Preview Modal */}
-      {previewPhoto && (
-        <div
-          className="fixed inset-0 z-[3000] bg-black/95 flex items-center justify-center animate-[fadeIn_0.2s_ease]"
-          onClick={() => setPreviewPhoto(null)}
-        >
-          <img
-            src={previewPhoto.src}
-            alt=""
-            className="max-w-[95vw] max-h-[95vh] object-contain rounded-[4px] shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
-            onClick={e => e.stopPropagation()}
-          />
-          <button
-            className="absolute top-6 right-6 bg-white/10 text-white rounded-full w-11 h-11 flex items-center justify-center backdrop-blur-[10px] transition-[background] duration-200"
-            onClick={() => setPreviewPhoto(null)}
-          >
-            <X size={24} />
-          </button>
-        </div>
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {/* Confirmation Modal */}
-      {confirmModal.isOpen && (
-        <div className="pg-modal-overlay" style={{ zIndex: 3000 }}>
-          <div className="pg-modal-card">
-            <div className="flex gap-4 items-start">
-              <div
-                className="pg-alert-icon danger"
-              >
-                <AlertCircle size={24} />
-              </div>
-              <div className="flex-1">
-                <h3 className="mt-0 text-[1.125rem] font-bold text-primary mb-2">
-                  {`Delete photo${selectedIds.size > 1 ? 's' : ''}?`}
-                </h3>
-                <p className="m-0 text-secondary text-[0.875rem] leading-[1.5]">
-                  This will remove the selected photo(s) from the event. This
-                  action cannot be undone.
-                </p>
-                <div className="modal-footer-actions">
-                  <button
-                    className="modal-btn-cancel"
-                    onClick={() =>
-                      setConfirmModal({ ...confirmModal, isOpen: false })
-                    }
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    className="modal-btn-danger"
-                    onClick={handleConfirmAction}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </div>
-            </div>
+            {activeTab === "published" && displayedPhotos.length === 0 && (
+              <EmptyState
+                icon={<Globe />}
+                title={
+                  searchTerm ? "No results found" : "Nothing published yet"
+                }
+                description={
+                  searchTerm
+                    ? `No published photos match "${searchTerm}"`
+                    : "Publish photos from the Uploads tab to make them available for buyers."
+                }
+              />
+            )}
+            {activeTab === "archive" && displayedPhotos.length === 0 && (
+              <EmptyState
+                icon={<Archive />}
+                title={searchTerm ? "No results found" : "Archive is empty"}
+                description={
+                  searchTerm
+                    ? `No archived photos match "${searchTerm}"`
+                    : "Unpublished photos will appear here."
+                }
+              />
+            )}
           </div>
         </div>
-      )}
+      </div>
 
-      {/* Event Info Modal (Read Only) - Reuses Edit Profile modal shell */}
-      {showInfoModal && (
-        <div
-          className="auth-modal-overlay !z-[2100] !items-center"
-          onClick={() => setShowInfoModal(false)}
-        >
-          <div
-            className="edit-profile-modal-container event-details-modal-container"
-            onClick={e => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="event-details-title"
-          >
-            {/* Header */}
-            <div className="modal-header-standard">
-              <h2 id="event-details-title" className="modal-title">
-                Event details
-              </h2>
-              <button
-                className="modal-close"
-                onClick={() => setShowInfoModal(false)}
-                aria-label="Close modal"
-              >
-                <X size={20} />
-              </button>
-            </div>
+      {/* Selection panel — always mounted for the slide animation */}
+      <PgSelectionPanel
+        isOpen={isPanelOpen}
+        selectedIds={selectedIds}
+        allPhotos={allPhotos}
+        activeTab={activePanelTab}
+        currentTab={activeTab}
+        onClose={() => setIsPanelOpen(false)}
+      />
 
-            {/* Body (Scrollable) */}
-            <div className="modal-body-standard">
-              {/* Read Only Fields */}
-              <div className="flex flex-col gap-5">
-                {/* Identity */}
-                <div className="flex gap-4 items-center">
-                  <div className="w-20 h-20 shrink-0 rounded-xl overflow-hidden border border-black/[0.08]">
-                    <img
-                      src={event.logo}
-                      alt=""
-                      className="w-full h-full object-contain p-2"
-                    />
-                  </div>
-                  <div>
-                    <div className="event-info-title">{event.title}</div>
-                    <div className="text-[0.875rem] text-[var(--color-text-secondary)]">
-                      {event.dateRange}
-                    </div>
-                  </div>
+      <PhotoPreviewDialog
+        src={previewPhoto?.src}
+        onClose={() => setPreviewPhoto(null)}
+      />
+
+      <ConfirmDialog
+        open={confirmModal.isOpen}
+        onCancel={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+        onConfirm={handleConfirmAction}
+        title={`Delete photo${selectedIds.size > 1 ? "s" : ""}?`}
+        description="This will remove the selected photo(s) from the event. This action cannot be undone."
+        confirmLabel="Delete"
+      />
+
+      {/* Event details (read only) */}
+      <Dialog open={showInfoModal} onOpenChange={setShowInfoModal}>
+        <DialogContent className="sm:max-w-120">
+          <DialogHeader>
+            <DialogTitle>Event details</DialogTitle>
+          </DialogHeader>
+          <DialogBody className="flex flex-col gap-5">
+            <div className="flex items-center gap-4">
+              <div className="size-20 shrink-0 overflow-hidden rounded-xl border">
+                <img
+                  src={event.logo}
+                  alt=""
+                  className="size-full object-contain p-2"
+                />
+              </div>
+              <div>
+                <div className="mb-2 text-xl leading-[1.2] font-bold text-foreground">
+                  {event.title}
                 </div>
-
-                {/* Organiser (Text Only) */}
-                <div>
-                  <label className="event-info-label">Organiser</label>
-                  <div className="event-info-value font-medium">
-                    EquiSport Events AB
-                  </div>
-                </div>
-
-                {/* Location Grid */}
-                <div className="grid grid-cols-2 gap-5">
-                  <div>
-                    <label className="event-info-label">City</label>
-                    <div className="event-info-value">{event.city}</div>
-                  </div>
-                  {event.venueName && (
-                    <div>
-                      <label className="event-info-label">Venue</label>
-                      <div className="event-info-value">{event.venueName}</div>
-                    </div>
-                  )}
-                  <div>
-                    <label className="event-info-label">County</label>
-                    <div className="event-info-value">Stockholm County</div>
-                  </div>
-                  <div>
-                    <label className="event-info-label">Country</label>
-                    <div className="event-info-value">Sweden</div>
-                  </div>
-                </div>
-
-                {/* Disciplines */}
-                <div>
-                  <label className="event-info-label">Disciplines</label>
-                  <div className="flex flex-wrap gap-2">
-                    {(event.disciplines || []).map(d => (
-                      <span key={d} className="event-info-tag">
-                        {d}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Photographer */}
-                <div>
-                  <label className="event-info-label">Photographer</label>
-                  <div className="event-info-person-chip">
-                    <div className="w-6 h-6 rounded-full bg-[var(--color-border)] flex items-center justify-center text-[0.6875rem] font-semibold text-[var(--color-text-secondary)]">
-                      {eventPhotographer
-                        ? eventPhotographer.firstName.charAt(0)
-                        : '?'}
-                    </div>
-                    <span className="event-info-person-name">
-                      {eventPhotographer
-                        ? `${eventPhotographer.firstName} ${eventPhotographer.lastName}`
-                        : 'Unassigned'}
-                    </span>
-                  </div>
+                <div className="text-sm text-muted-foreground">
+                  {event.dateRange}
                 </div>
               </div>
             </div>
 
-            {/* Footer */}
-            <div className="modal-footer-actions">
-              <button
-                className="modal-btn-save"
-                onClick={() => setShowInfoModal(false)}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            <InfoField label="Organiser">
+              <span className="font-medium">EquiSport Events AB</span>
+            </InfoField>
 
-      {/* Page Level Toast (Portal to Body) */}
-      {toast &&
-        createPortal(
-          <div className="pg-toast-portal-wrapper">
-            <PgToast
-              type={toast.type}
-              message={toast.msg}
-              onUndo={toast.onUndo}
-              className="!pointer-events-auto !relative !transform-none !bottom-auto !left-auto !right-auto"
-            />
-          </div>,
-          document.body
-        )}
+            <div className="grid grid-cols-2 gap-5">
+              <InfoField label="City">{event.city}</InfoField>
+              {event.venueName && (
+                <InfoField label="Venue">{event.venueName}</InfoField>
+              )}
+              <InfoField label="County">Stockholm County</InfoField>
+              <InfoField label="Country">Sweden</InfoField>
+            </div>
+
+            <InfoField label="Disciplines">
+              <div className="flex flex-wrap gap-2">
+                {(event.disciplines || []).map((d) => (
+                  <span
+                    key={d}
+                    className="rounded-full bg-muted px-3 py-1.5 text-sm font-medium text-foreground/80"
+                  >
+                    {d}
+                  </span>
+                ))}
+              </div>
+            </InfoField>
+
+            <InfoField label="Photographer">
+              <div className="inline-flex items-center gap-2 rounded-full bg-muted py-1 pr-3 pl-1 text-sm font-medium">
+                <span className="flex size-6 items-center justify-center rounded-full bg-border text-[0.6875rem] font-semibold text-muted-foreground">
+                  {eventPhotographer
+                    ? eventPhotographer.firstName.charAt(0)
+                    : "?"}
+                </span>
+                {eventPhotographer
+                  ? `${eventPhotographer.firstName} ${eventPhotographer.lastName}`
+                  : "Unassigned"}
+              </div>
+            </InfoField>
+          </DialogBody>
+          <DialogFooter>
+            <DialogClose render={<Button />}>Close</DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
-  );
-};
+  )
+}
+
+const selectableCard =
+  "group relative cursor-pointer rounded-lg transition-shadow duration-200"
+
+// Old .pg-card-selected: brand ring + dimmed photo
+const selectedCard =
+  "z-5 ring-2 ring-primary/40 [&_img]:brightness-82 [&_img]:grayscale-40"
+
+// Old round 40px header buttons in the selection bar
+const roundButton = "size-10 text-muted-foreground"
+
+const roundDanger = "size-10 border-destructive/20 hover:border-destructive"
+
+function InfoField({
+  label,
+  children,
+}: {
+  label: string
+  children: React.ReactNode
+}) {
+  return (
+    <div>
+      <div className="mb-1.5 text-xs font-semibold tracking-[0.02em] text-muted-foreground/70 uppercase">
+        {label}
+      </div>
+      <div className="text-base text-foreground">{children}</div>
+    </div>
+  )
+}

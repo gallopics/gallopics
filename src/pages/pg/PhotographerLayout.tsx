@@ -1,207 +1,170 @@
-import React, { useState, useCallback } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { useState } from "react"
+import { NavLink, Outlet, useLocation } from "react-router"
 import {
-  LayoutGrid,
-  // CreditCard,
-  // Settings,
-  // DollarSign,
-  // FileText,
+  Camera,
   ChevronLeft,
   ChevronRight,
-  // Palette,
-  Camera,
+  LayoutGrid,
+  Menu,
   Users,
-} from 'lucide-react';
-import { Header } from '../../components/Header';
-import { ErrorBoundary } from '../../components/ErrorBoundary';
-import { Footer } from '../../components/Footer';
-import { useWorkspace } from '../../context/WorkspaceContext';
-import { useAuth } from '../../context/AuthContext';
+} from "lucide-react"
 
-// Sidebar widths as constants so NavItem can use them without prop drilling
-const W_COLLAPSED = 72;
-const W_EXPANDED = 260;
+import { useAuth } from "@/context/AuthContext"
+import { useWorkspace } from "@/context/WorkspaceContext"
+import { Button } from "@/components/ui/button"
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarSeparator,
+  useSidebar,
+} from "@/components/ui/sidebar"
+import { CopyrightBar } from "@/components/CopyrightBar"
+import { ErrorBoundary } from "@/components/ErrorBoundary"
+import { Header } from "@/components/Header"
 
-interface NavItemProps {
-  to: string;
-  icon: React.ReactNode;
-  label: string;
-  collapsed: boolean;
-  onNavigate: () => void;
-}
+// Old sidebar widths: 72px collapsed, 260px expanded
+const sidebarSizes = {
+  "--sidebar-width": "260px",
+  "--sidebar-width-icon": "72px",
+} as React.CSSProperties
 
-// Defined OUTSIDE layout — stable identity, never remounts on state change
-const SidebarNavItem: React.FC<NavItemProps> = ({
+function NavItem({
   to,
   icon,
   label,
-  collapsed,
-  onNavigate,
-}) => (
-  <NavLink
-    to={to}
-    title={collapsed ? label : ''}
-    onClick={onNavigate}
-    className={({ isActive }) =>
-      `w-full flex items-center h-[42px] rounded-full no-underline font-medium overflow-hidden transition-colors duration-150 ${
-        isActive
-          ? 'bg-[rgba(27,58,236,0.08)] text-brand'
-          : 'text-secondary hover:bg-[var(--ui-bg-subtle)] hover:text-primary'
-      }`
-    }
-  >
-    {/* Icon: fixed 42px — center always at nav_padding(15) + 21 = 36px. Never moves. */}
-    <span className="flex-shrink-0 flex items-center justify-center w-[42px] h-[42px]">
-      {icon}
-    </span>
-    {/* Label: opacity only — zero reflow, zero position change */}
-    <span
-      className="text-[0.875rem] whitespace-nowrap pr-2 transition-opacity duration-200"
-      style={{ opacity: collapsed ? 0 : 1 }}
-    >
-      {label}
-    </span>
-  </NavLink>
-);
-
-export const PhotographerLayout: React.FC = () => {
-  const { basePath, isAdmin } = useWorkspace();
-  const [collapsed, setCollapsed] = useState(true);
-
-  const { user } = useAuth();
-  const sidebarTitle = isAdmin ? 'My Console' : 'My Studio';
-
-  const handleNavClick = useCallback(() => setCollapsed(true), []);
-  const toggle = useCallback(() => setCollapsed(v => !v), []);
+}: {
+  to: string
+  icon: React.ReactNode
+  label: string
+}) {
+  const { pathname } = useLocation()
+  const { setOpen, setOpenMobile } = useSidebar()
+  const isActive = pathname === to || pathname.startsWith(`${to}/`)
 
   return (
-    <div className="flex flex-col min-h-screen pg-layout-shell">
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        isActive={isActive}
+        tooltip={label}
+        render={<NavLink to={to} />}
+        onClick={() => {
+          // Old behaviour: collapse after choosing a page
+          setOpen(false)
+          setOpenMobile(false)
+        }}
+        className="h-10.5 gap-0 rounded-full p-0 font-medium text-muted-foreground group-data-[collapsible=icon]:size-10.5! group-data-[collapsible=icon]:p-0! hover:bg-muted hover:text-foreground data-active:bg-primary/8 data-active:text-primary [&_svg]:size-4.5"
+      >
+        <span className="flex size-10.5 shrink-0 items-center justify-center">
+          {icon}
+        </span>
+        <span className="pr-2 text-sm whitespace-nowrap">{label}</span>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  )
+}
+
+function WorkspaceSidebar() {
+  const { basePath, isAdmin } = useWorkspace()
+  const { user } = useAuth()
+  const { state, toggleSidebar } = useSidebar()
+  const collapsed = state === "collapsed"
+
+  return (
+    <Sidebar
+      collapsible="icon"
+      className="md:top-[74px] md:h-[calc(100svh-74px)]"
+    >
+      <SidebarHeader className="mt-3 mb-5 h-9 flex-row items-center justify-between p-0 pr-2 pl-4 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+        <span className="overflow-hidden text-xs font-bold tracking-[1px] whitespace-nowrap text-muted-foreground/70 uppercase group-data-[collapsible=icon]:hidden">
+          {isAdmin ? "My Console" : "My Studio"}
+        </span>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={toggleSidebar}
+          title={collapsed ? "Expand" : "Collapse"}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className="text-muted-foreground/60 hover:text-foreground max-md:hidden [&_svg]:size-3.75"
+        >
+          {collapsed ? <ChevronRight /> : <ChevronLeft />}
+        </Button>
+      </SidebarHeader>
+
+      <SidebarContent className="px-3.75">
+        <SidebarMenu className="gap-0.5">
+          <NavItem
+            to={`${basePath}/events`}
+            icon={<LayoutGrid />}
+            label="Events"
+          />
+          {!isAdmin && user?.id && (
+            <NavItem
+              to={`/photographer/${user.id}`}
+              icon={<Camera />}
+              label="My Studio"
+            />
+          )}
+          {isAdmin && (
+            <NavItem
+              to={`${basePath}/photographers`}
+              icon={<Users />}
+              label="Photographers"
+            />
+          )}
+          {/* Sales, Receipts, Billing details and Settings are hidden in the old app too */}
+        </SidebarMenu>
+        <SidebarSeparator className="mx-3 my-3 data-horizontal:w-auto" />
+      </SidebarContent>
+
+      <SidebarFooter className="px-5 pt-3 pb-6 text-xs group-data-[collapsible=icon]:hidden">
+        <CopyrightBar minimal sidebar isAdmin={isAdmin} />
+      </SidebarFooter>
+    </Sidebar>
+  )
+}
+
+/** Opens the sidebar drawer on mobile (the old sidebar had no mobile mode) */
+function MobileMenuButton() {
+  const { toggleSidebar } = useSidebar()
+
+  return (
+    <div className="border-b bg-card px-4 py-2 md:hidden">
+      <Button variant="ghost" size="sm" onClick={toggleSidebar}>
+        <Menu />
+        Menu
+      </Button>
+    </div>
+  )
+}
+
+export function PhotographerLayout() {
+  // Starts collapsed, like the old sidebar
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div className="flex min-h-screen flex-col">
       <Header />
 
-      <div className="flex flex-1">
-        {/* Sidebar */}
-        <aside
-          className="flex-shrink-0 bg-[var(--color-surface)] border-r border-[var(--color-border)] flex flex-col overflow-hidden transition-[width] duration-[240ms] ease-[cubic-bezier(0.4,0,0.2,1)] sticky top-[70px] self-start h-[calc(100vh-70px)]"
-          style={{ width: collapsed ? W_COLLAPSED : W_EXPANDED }}
-        >
-          {/* Toggle row */}
-          <div
-            className="flex items-center flex-shrink-0 mt-3 mb-5"
-            style={{
-              height: 36,
-              justifyContent: collapsed ? 'center' : 'space-between',
-              padding: collapsed ? 0 : '0 8px 0 16px',
-            }}
-          >
-            <span
-              className="text-[0.75rem] uppercase tracking-[1px] font-bold text-tertiary whitespace-nowrap overflow-hidden transition-opacity duration-200"
-              style={{
-                opacity: collapsed ? 0 : 1,
-                width: collapsed ? 0 : 'auto',
-              }}
-            >
-              {sidebarTitle}
-            </span>
-
-            <button
-              onClick={toggle}
-              title={collapsed ? 'Expand' : 'Collapse'}
-              className="flex-shrink-0 flex items-center justify-center w-8 h-8 rounded-full text-[var(--ui-icon-muted)] transition-colors duration-150 hover:bg-[var(--ui-bg-subtle)] hover:text-primary border-none bg-transparent cursor-pointer"
-            >
-              {collapsed ? (
-                <ChevronRight size={15} />
-              ) : (
-                <ChevronLeft size={15} />
-              )}
-            </button>
-          </div>
-
-          {/* Nav items */}
-          <nav className="flex flex-col gap-0.5 flex-1 overflow-y-auto overflow-x-hidden px-[15px]">
-            <SidebarNavItem
-              to={`${basePath}/events`}
-              icon={<LayoutGrid size={18} />}
-              label="Events"
-              collapsed={collapsed}
-              onNavigate={handleNavClick}
-            />
-
-            {!isAdmin && user && user.id && (
-              <SidebarNavItem
-                to={`/photographer/${user.id}`}
-                icon={<Camera size={18} />}
-                label="My Studio"
-                collapsed={collapsed}
-                onNavigate={handleNavClick}
-              />
-            )}
-
-            {isAdmin && (
-              <SidebarNavItem
-                to={`${basePath}/photographers`}
-                icon={<Users size={18} />}
-                label="Photographers"
-                collapsed={collapsed}
-                onNavigate={handleNavClick}
-              />
-            )}
-
-            {/* <SidebarNavItem
-              to={`${basePath}/sold`}
-              icon={<DollarSign size={18} />}
-              label="Sales"
-              collapsed={collapsed}
-              onNavigate={handleNavClick}
-            /> */}
-            {/* <SidebarNavItem
-              to={`${basePath}/receipts`}
-              icon={<FileText size={18} />}
-              label="Receipts"
-              collapsed={collapsed}
-              onNavigate={handleNavClick}
-            /> */}
-
-            {/* Divider */}
-            <div className="h-px bg-[var(--color-border)] mx-3 my-3" />
-
-            {/* <SidebarNavItem
-              to={`${basePath}/billing`}
-              icon={<CreditCard size={18} />}
-              label="Billing details"
-              collapsed={collapsed}
-              onNavigate={handleNavClick}
-            /> */}
-            {/* <SidebarNavItem
-              to={`${basePath}/settings`}
-              icon={<Settings size={18} />}
-              label="Settings"
-              collapsed={collapsed}
-              onNavigate={handleNavClick}
-            /> */}
-            {/* <SidebarNavItem to={`${basePath}/tokens`} icon={<Palette size={18} />} label="Tokens" collapsed={collapsed} onNavigate={handleNavClick} /> */}
-          </nav>
-
-          {/* Footer */}
-          <div
-            className="text-[0.75rem] overflow-hidden transition-[opacity,max-height] duration-200"
-            style={{
-              opacity: collapsed ? 0 : 1,
-              maxHeight: collapsed ? 0 : 140,
-              padding: collapsed ? 0 : '12px 20px 24px',
-              pointerEvents: collapsed ? 'none' : 'auto',
-            }}
-          >
-            <Footer minimal={true} sidebar={true} isAdmin={isAdmin} />
-          </div>
-        </aside>
-
-        {/* Main content */}
-        <main className="flex-1 min-w-0">
+      <SidebarProvider
+        open={open}
+        onOpenChange={setOpen}
+        style={sidebarSizes}
+        className="min-h-0 flex-1"
+      >
+        <WorkspaceSidebar />
+        <main className="min-w-0 flex-1">
+          <MobileMenuButton />
           <ErrorBoundary>
             <Outlet />
           </ErrorBoundary>
         </main>
-      </div>
+      </SidebarProvider>
     </div>
-  );
-};
+  )
+}

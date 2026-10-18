@@ -1,406 +1,346 @@
-import React, { useState, useEffect } from 'react';
-import { X, Send, Mail, MessageSquare, Loader2, Tag } from 'lucide-react';
+import { useState } from "react"
+import { Mail, MessageSquare, Send, Tag } from "lucide-react"
+
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogBody,
+  DialogCancel,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field"
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  InputGroupTextarea,
+} from "@/components/ui/input-group"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { Spinner } from "@/components/ui/spinner"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { toast } from "@/components/ui/toast"
 
 interface ContactSupportModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  photographerOnly?: boolean;
+  isOpen: boolean
+  onClose: () => void
+  photographerOnly?: boolean
 }
 
-type UserRole = 'Photo buyer' | 'Photographer' | 'Event organiser';
+type UserRole = "Photo buyer" | "Photographer" | "Event organiser"
+type Errors = { email?: string; subject?: string; message?: string }
 
-const contactFormEndpoint = import.meta.env.VITE_CONTACT_FORM_ENDPOINT;
+const roles: UserRole[] = ["Photo buyer", "Photographer", "Event organiser"]
+const countryCodes = ["+46", "+47", "+45", "+358", "+1", "+44", "+49"].map(
+  (code) => ({ label: code, value: code })
+)
 
-export const ContactSupportModal: React.FC<ContactSupportModalProps> = ({
+const contactFormEndpoint = import.meta.env.VITE_CONTACT_FORM_ENDPOINT
+
+export function ContactSupportModal({
   isOpen,
   onClose,
   photographerOnly = false,
-}) => {
+}: ContactSupportModalProps) {
+  return (
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onClose()
+      }}
+    >
+      <DialogContent className="sm:max-w-140">
+        {/* Mounted only while open, so the form is reset on every open */}
+        <ContactSupportForm
+          onClose={onClose}
+          photographerOnly={photographerOnly}
+        />
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function ContactSupportForm({
+  onClose,
+  photographerOnly,
+}: {
+  onClose: () => void
+  photographerOnly: boolean
+}) {
   const [role, setRole] = useState<UserRole>(
-    photographerOnly ? 'Photographer' : 'Photo buyer'
-  );
-  const [email, setEmail] = useState('');
-  const [countryCode, setCountryCode] = useState('+46');
-  const [phone, setPhone] = useState('');
-  const [subject, setSubject] = useState('');
-  const [message, setMessage] = useState('');
+    photographerOnly ? "Photographer" : "Photo buyer"
+  )
+  const [email, setEmail] = useState("")
+  const [countryCode, setCountryCode] = useState("+46")
+  const [phone, setPhone] = useState("")
+  const [subject, setSubject] = useState("")
+  const [message, setMessage] = useState("")
   const [status, setStatus] = useState<
-    'idle' | 'sending' | 'success' | 'error'
-  >('idle');
-  const [errors, setErrors] = useState<{
-    email?: string;
-    subject?: string;
-    message?: string;
-  }>({});
+    "idle" | "sending" | "success" | "error"
+  >("idle")
+  const [errors, setErrors] = useState<Errors>({})
 
-  // Reset form when opening
-  useEffect(() => {
-    if (isOpen) {
-      setRole(photographerOnly ? 'Photographer' : 'Photo buyer');
-      setEmail('');
-      setCountryCode('+46');
-      setPhone('');
-      setSubject('');
-      setMessage('');
-      setStatus('idle');
-      setErrors({});
-    }
-  }, [isOpen]);
-
-  // Handle ESC key
-  useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    if (isOpen) {
-      window.addEventListener('keydown', handleEsc);
-      document.body.style.overflow = 'hidden';
-    }
-    return () => {
-      window.removeEventListener('keydown', handleEsc);
-      document.body.style.overflow = 'unset';
-    };
-  }, [isOpen, onClose]);
+  const isSending = status === "sending"
 
   const validate = () => {
-    const newErrors: { email?: string; subject?: string; message?: string } =
-      {};
+    const newErrors: Errors = {}
     if (!email) {
-      newErrors.email = 'Email is required';
+      newErrors.email = "Email is required"
     } else if (!/\S+@\S+\.\S+/.test(email)) {
-      newErrors.email = 'Please enter a valid email';
+      newErrors.email = "Please enter a valid email"
     }
 
     if (!subject) {
-      newErrors.subject = 'Subject is required';
+      newErrors.subject = "Subject is required"
     } else if (subject.length < 3) {
-      newErrors.subject = 'Subject must be at least 3 characters';
+      newErrors.subject = "Subject must be at least 3 characters"
     }
 
     if (!message) {
-      newErrors.message = 'Message is required';
+      newErrors.message = "Message is required"
     }
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!validate()) return;
+    e.preventDefault()
+    if (!validate()) return
 
-    setStatus('sending');
+    setStatus("sending")
 
     const composedPhone = phone
-      ? `${countryCode}${phone.replace(/\s+/g, '')}`
-      : '';
+      ? `${countryCode}${phone.replace(/\s+/g, "")}`
+      : ""
 
     try {
       if (!contactFormEndpoint) {
-        throw new Error('Missing VITE_CONTACT_FORM_ENDPOINT');
+        throw new Error("Missing VITE_CONTACT_FORM_ENDPOINT")
       }
-
-      const payload = {
-        role,
-        email,
-        phone: composedPhone,
-        subject,
-        message,
-        source: 'gallopics-contact-form',
-      };
 
       const response = await fetch(contactFormEndpoint, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
+          "Content-Type": "application/json",
+          Accept: "application/json",
         },
-        body: JSON.stringify(payload),
-      });
+        body: JSON.stringify({
+          role,
+          email,
+          phone: composedPhone,
+          subject,
+          message,
+          source: "gallopics-contact-form",
+        }),
+      })
 
       if (!response.ok) {
-        throw new Error(
-          `Contact request failed with status ${response.status}`
-        );
+        throw new Error(`Contact request failed with status ${response.status}`)
       }
 
-      setStatus('success');
-
-      window.dispatchEvent(
-        new CustomEvent('show-toast', {
-          detail: {
-            type: 'success',
-            message: 'Message sent successfully! We will get back to you soon.',
-          },
-        })
-      );
-
-      setTimeout(() => {
-        onClose();
-      }, 500);
+      setStatus("success")
+      toast.add({
+        title: "Message sent successfully! We will get back to you soon.",
+        type: "success",
+      })
+      setTimeout(onClose, 500)
     } catch (error) {
-      console.error('Contact form submission failed', error);
-      setStatus('error');
-      window.dispatchEvent(
-        new CustomEvent('show-toast', {
-          detail: {
-            type: 'danger',
-            message: 'Failed to send message. Please try again.',
-          },
-        })
-      );
+      console.error("Contact form submission failed", error)
+      setStatus("error")
+      toast.add({
+        title: "Failed to send message. Please try again.",
+        type: "error",
+      })
     }
-  };
+  }
 
-  if (!isOpen) return null;
-
-  const roles: UserRole[] = ['Photo buyer', 'Photographer', 'Event organiser'];
+  const clearError = (key: keyof Errors) => {
+    if (errors[key]) setErrors({ ...errors, [key]: undefined })
+  }
 
   return (
-    <div className="auth-modal-overlay" onClick={onClose}>
-      <div
-        className="auth-modal-container contact-support-modal"
-        onClick={e => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-      >
-        {/* Modal Header */}
-        <div className="px-[var(--modal-padding)] py-4 flex items-center justify-between border-b border-[var(--color-border)] bg-white z-10 flex-shrink-0">
-          <h2 className="text-[1.125rem] font-semibold text-[var(--color-text-primary)] m-0">
-            Contact support
-          </h2>
-          <button
-            className="w-8 h-8 rounded-full border-none bg-transparent flex items-center justify-center text-[var(--color-text-secondary)] cursor-pointer transition-all duration-200 hover:bg-black/[0.04] hover:text-[var(--color-text-primary)]"
-            onClick={onClose}
-            aria-label="Close modal"
-          >
-            <X size={20} />
-          </button>
-        </div>
+    <>
+      <DialogHeader>
+        <DialogTitle>Contact support</DialogTitle>
+      </DialogHeader>
 
-        {/* Modal Body */}
-        <div className="p-[var(--modal-padding)] overflow-y-auto flex-1">
-          <form
-            id="contact-support-form"
-            className="auth-form"
-            onSubmit={handleSubmit}
-          >
-            {/* Segmented Control for Role — hidden in photographer-only context */}
-            {!photographerOnly && (
-              <div className="auth-input-group">
-                <label className="auth-label">I'm contacting you as</label>
-                <div className="flex bg-[var(--ui-bg-subtle)] p-[3px] rounded-[10px] mt-1">
-                  {roles.map(r => (
-                    <button
-                      key={r}
-                      type="button"
-                      className={[
-                        'flex-1 py-2 px-1 border-none text-[0.8125rem] font-semibold rounded-lg cursor-pointer transition-all duration-200 whitespace-nowrap max-md:text-[0.75rem] max-md:px-0.5',
-                        role === r
-                          ? 'bg-white text-[var(--color-brand-primary)] shadow-[0_2px_8px_rgba(0,0,0,0.08)]'
-                          : 'bg-transparent text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]',
-                      ].join(' ')}
-                      onClick={() => setRole(r)}
+      <DialogBody>
+        <form id="contact-support-form" onSubmit={handleSubmit}>
+          <fieldset disabled={isSending}>
+            <FieldGroup>
+              {!photographerOnly && (
+                <Field>
+                  <FieldLabel>I'm contacting you as</FieldLabel>
+                  <Tabs
+                    value={role}
+                    onValueChange={(value) => setRole(value as UserRole)}
+                  >
+                    <TabsList className="w-full">
+                      {roles.map((r) => (
+                        <TabsTrigger
+                          key={r}
+                          value={r}
+                          className="font-semibold max-md:px-0.5 max-md:text-xs data-active:text-primary"
+                        >
+                          {r}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
+                  </Tabs>
+                </Field>
+              )}
+
+              <Field data-invalid={!!errors.email}>
+                <FieldLabel htmlFor="support-email">Email</FieldLabel>
+                <InputGroup>
+                  <InputGroupInput
+                    id="support-email"
+                    type="email"
+                    placeholder="name@example.com"
+                    aria-invalid={!!errors.email}
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value)
+                      clearError("email")
+                    }}
+                  />
+                  <InputGroupAddon>
+                    <Mail />
+                  </InputGroupAddon>
+                </InputGroup>
+                <FieldError>{errors.email}</FieldError>
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="support-phone">
+                  Phone number (optional)
+                </FieldLabel>
+                <InputGroup>
+                  <InputGroupInput
+                    id="support-phone"
+                    type="tel"
+                    placeholder="07X XXX XX XX"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                  />
+                  <InputGroupAddon className="self-stretch border-r py-0 pr-1 pl-1">
+                    <Select
+                      items={countryCodes}
+                      value={countryCode}
+                      onValueChange={(value) => setCountryCode(String(value))}
                     >
-                      {r}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+                      <SelectTrigger
+                        aria-label="Country code"
+                        className="h-full border-0 bg-transparent font-medium text-foreground shadow-none hover:border-0 focus-visible:ring-0 data-popup-open:ring-0"
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {countryCodes.map((code) => (
+                          <SelectItem key={code.value} value={code.value}>
+                            {code.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </InputGroupAddon>
+                </InputGroup>
+              </Field>
 
-            {/* Email */}
-            <div className="auth-input-group">
-              <label className="auth-label" htmlFor="support-email">
-                Email
-              </label>
-              <div className="relative flex items-center">
-                <Mail
-                  size={16}
-                  className="absolute left-[14px] text-[var(--color-border)] pointer-events-none transition-colors duration-200"
-                />
-                <input
-                  id="support-email"
-                  type="email"
-                  className={`auth-input !pl-[42px] ${
-                    errors.email ? 'error' : ''
-                  }`}
-                  placeholder="name@example.com"
-                  value={email}
-                  onChange={e => {
-                    setEmail(e.target.value);
-                    if (errors.email)
-                      setErrors({ ...errors, email: undefined });
-                  }}
-                  disabled={status === 'sending'}
-                />
-              </div>
-              {errors.email && (
-                <span className="auth-error-msg">{errors.email}</span>
-              )}
-            </div>
+              <Field data-invalid={!!errors.subject}>
+                <FieldLabel htmlFor="support-subject">Subject</FieldLabel>
+                <InputGroup>
+                  <InputGroupInput
+                    id="support-subject"
+                    placeholder="Subject"
+                    aria-invalid={!!errors.subject}
+                    value={subject}
+                    onChange={(e) => {
+                      setSubject(e.target.value)
+                      clearError("subject")
+                    }}
+                  />
+                  <InputGroupAddon>
+                    <Tag />
+                  </InputGroupAddon>
+                </InputGroup>
+                <FieldError>{errors.subject}</FieldError>
+              </Field>
 
-            {/* Phone */}
-            <div className="flex flex-col gap-1.5 text-left">
-              <label className="auth-label" htmlFor="support-phone">
-                Phone number (optional)
-              </label>
-              <div className="flex gap-0 w-full border border-[var(--color-border)] rounded-[var(--radius-sm,6px)] bg-[var(--color-bg)] overflow-hidden transition-all duration-200 focus-within:border-[var(--color-brand-primary)] focus-within:shadow-[0_0_0_3px_var(--color-brand-tint,rgba(27,58,236,0.08))] focus-within:bg-white">
-                <select
-                  className="w-[90px] h-11 px-4 pr-3 border-none border-r border-[var(--color-border)] bg-transparent text-[var(--fs-sm,0.875rem)] font-medium text-[var(--color-text-primary)] cursor-pointer appearance-none bg-no-repeat focus:outline-none"
-                  style={{
-                    backgroundImage:
-                      "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E\")",
-                    backgroundPosition: 'right 10px center',
-                  }}
-                  value={countryCode}
-                  onChange={e => setCountryCode(e.target.value)}
-                  disabled={status === 'sending'}
-                >
-                  <option value="+46">+46</option>
-                  <option value="+47">+47</option>
-                  <option value="+45">+45</option>
-                  <option value="+358">+358</option>
-                  <option value="+1">+1</option>
-                  <option value="+44">+44</option>
-                  <option value="+49">+49</option>
-                </select>
-                <input
-                  id="support-phone"
-                  type="tel"
-                  className="flex-1 h-11 px-4 border-none bg-transparent text-[var(--fs-base,1rem)] text-[var(--color-text-primary)] focus:outline-none"
-                  placeholder="07X XXX XX XX"
-                  value={phone}
-                  onChange={e => setPhone(e.target.value)}
-                  disabled={status === 'sending'}
-                />
-              </div>
-            </div>
+              <Field data-invalid={!!errors.message}>
+                <FieldLabel htmlFor="support-message">
+                  How can we help?
+                </FieldLabel>
+                <InputGroup>
+                  <InputGroupTextarea
+                    id="support-message"
+                    placeholder="Describe your issue..."
+                    className="min-h-30 py-3"
+                    aria-invalid={!!errors.message}
+                    value={message}
+                    onChange={(e) => {
+                      setMessage(e.target.value)
+                      clearError("message")
+                    }}
+                  />
+                  <InputGroupAddon className="self-start pt-3.5">
+                    <MessageSquare />
+                  </InputGroupAddon>
+                </InputGroup>
+                <FieldError>{errors.message}</FieldError>
+              </Field>
+            </FieldGroup>
+          </fieldset>
+        </form>
+      </DialogBody>
 
-            {/* Subject */}
-            <div className="auth-input-group">
-              <label className="auth-label" htmlFor="support-subject">
-                Subject
-              </label>
-              <div className="relative flex items-center">
-                <Tag
-                  size={16}
-                  className="absolute left-[14px] text-[var(--color-border)] pointer-events-none transition-colors duration-200"
-                />
-                <input
-                  id="support-subject"
-                  type="text"
-                  className={`auth-input !pl-[42px] ${
-                    errors.subject ? 'error' : ''
-                  }`}
-                  placeholder="Subject"
-                  value={subject}
-                  onChange={e => {
-                    setSubject(e.target.value);
-                    if (errors.subject)
-                      setErrors({ ...errors, subject: undefined });
-                  }}
-                  disabled={status === 'sending'}
-                />
-              </div>
-              {errors.subject && (
-                <span className="auth-error-msg">{errors.subject}</span>
-              )}
-            </div>
-
-            {/* Message */}
-            <div className="auth-input-group">
-              <label className="auth-label" htmlFor="support-message">
-                How can we help?
-              </label>
-              <div className="relative flex items-start">
-                <MessageSquare
-                  size={16}
-                  className="absolute left-[14px] top-[14px] text-[var(--color-border)] pointer-events-none transition-colors duration-200"
-                />
-                <textarea
-                  id="support-message"
-                  className={`auth-input !pl-[42px] !h-[120px] !py-3 resize-none leading-relaxed ${
-                    errors.message ? 'error' : ''
-                  }`}
-                  placeholder="Describe your issue..."
-                  value={message}
-                  onChange={e => {
-                    setMessage(e.target.value);
-                    if (errors.message)
-                      setErrors({ ...errors, message: undefined });
-                  }}
-                  disabled={status === 'sending'}
-                />
-              </div>
-              {errors.message && (
-                <span className="auth-error-msg">{errors.message}</span>
-              )}
-            </div>
-          </form>
+      <DialogFooter className="flex-col gap-4 sm:flex-col sm:justify-start">
+        <div className="flex w-full gap-3">
+          <DialogCancel className="flex-1" disabled={isSending} />
+          <Button
+            type="submit"
+            form="contact-support-form"
+            className="flex-2"
+            disabled={isSending}
+          >
+            {isSending ? <Spinner /> : <Send />}
+            {isSending ? "Sending..." : "Send message"}
+          </Button>
         </div>
 
-        {/* Modal Footer */}
-        <div className="px-[var(--modal-padding)] pt-4 pb-5 border-t border-[var(--color-border)] bg-[var(--color-bg)] flex-shrink-0 flex flex-col gap-4">
-          <div className="w-full flex gap-3">
-            <button
-              type="button"
-              className="modal-btn-cancel flex-1"
-              onClick={onClose}
-              disabled={status === 'sending'}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              form="contact-support-form"
-              className="auth-btn-primary flex-[2] mt-0 gap-2 w-auto px-6 h-11"
-              disabled={status === 'sending'}
-            >
-              {status === 'sending' ? (
-                <>
-                  <Loader2 size={16} className="animate-spin" />
-                  <span>Sending...</span>
-                </>
-              ) : (
-                <>
-                  <Send size={16} />
-                  <span>Send message</span>
-                </>
-              )}
-            </button>
-          </div>
-
-          <div className="flex items-center justify-center gap-2 pt-2 border-t border-[var(--color-border)]">
-            <a
-              href="/faq"
-              target="_blank"
-              className="text-[0.75rem] text-[var(--color-text-secondary)] no-underline transition-colors duration-200 hover:text-[var(--color-brand-primary)]"
-            >
-              FAQs
-            </a>
-            <span className="text-[0.625rem] text-[var(--color-border)]">
-              •
+        <div className="flex items-center justify-center gap-2 border-t pt-2 text-xs">
+          {[
+            ["FAQs", "/faq"],
+            ["Terms", "/terms"],
+            ["Privacy", "/privacy"],
+          ].map(([label, href], i) => (
+            <span key={href} className="flex items-center gap-2">
+              {i > 0 && <span className="text-[0.625rem] text-border">•</span>}
+              <a
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-muted-foreground transition-colors hover:text-primary"
+              >
+                {label}
+              </a>
             </span>
-            <a
-              href="/terms"
-              target="_blank"
-              className="text-[0.75rem] text-[var(--color-text-secondary)] no-underline transition-colors duration-200 hover:text-[var(--color-brand-primary)]"
-            >
-              Terms
-            </a>
-            <span className="text-[0.625rem] text-[var(--color-border)]">
-              •
-            </span>
-            <a
-              href="/privacy"
-              target="_blank"
-              className="text-[0.75rem] text-[var(--color-text-secondary)] no-underline transition-colors duration-200 hover:text-[var(--color-brand-primary)]"
-            >
-              Privacy
-            </a>
-          </div>
+          ))}
         </div>
-      </div>
-    </div>
-  );
-};
+      </DialogFooter>
+    </>
+  )
+}

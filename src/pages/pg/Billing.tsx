@@ -1,175 +1,150 @@
-import React, { useState } from 'react';
-import { Check } from 'lucide-react';
-import { TitleHeader } from '../../components/TitleHeader';
+import { useState } from "react"
+import { Check } from "lucide-react"
 
-export const PhotographerBilling: React.FC = () => {
-  const [saved, setSaved] = useState(false);
-  const [formData, setFormData] = useState({
-    street: '',
-    city: '',
-    state: '',
-    zip: '',
-    country: 'SE', // Default to Sweden
-  });
+import { Button } from "@/components/ui/button"
+import { Field, FieldLabel } from "@/components/ui/field"
+import { Input } from "@/components/ui/input"
+import { ModernDropdown } from "@/components/ModernDropdown"
+import { TitleHeader } from "@/components/TitleHeader"
+import {
+  WorkspaceCard,
+  WorkspacePageBody,
+} from "@/components/WorkspacePageBody"
+
+const COUNTRIES = [
+  { label: "United States", value: "US" },
+  { label: "Canada", value: "CA" },
+  { label: "United Kingdom", value: "GB" },
+  { label: "Australia", value: "AU" },
+  { label: "Germany", value: "DE" },
+  { label: "France", value: "FR" },
+  { label: "Sweden", value: "SE" },
+]
+
+type BillingField = "street" | "city" | "state" | "zip" | "country"
+
+export function PhotographerBilling() {
+  const [saved, setSaved] = useState(false)
+  const [formData, setFormData] = useState<Record<BillingField, string>>({
+    street: "",
+    city: "",
+    state: "",
+    zip: "",
+    country: "SE", // Default to Sweden
+  })
 
   const handleSave = () => {
     // Mock save
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
-  };
+    setSaved(true)
+    setTimeout(() => setSaved(false), 3000)
+  }
 
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
-  ) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
+  const set = (name: BillingField, value: string) =>
+    setFormData({ ...formData, [name]: value })
 
-  const inputClass =
-    'w-full h-11 px-4 border border-[var(--color-border)] rounded-[var(--radius-sm)] text-base text-[var(--color-text-primary)] bg-white transition-all duration-200 focus:outline-none focus:border-[var(--color-brand-primary)] focus:shadow-[0_0_0_3px_var(--color-brand-tint)]';
-  const selectClass = `${inputClass} appearance-none pr-10`;
+  const textField = (
+    name: Exclude<BillingField, "country">,
+    label: string,
+    placeholder: string,
+    className?: string
+  ) => (
+    <Field className={className}>
+      {/* Old billing form: 14px dark labels, #e5e5e5 inputs */}
+      <FieldLabel
+        htmlFor={`billing-${name}`}
+        className="text-sm leading-normal text-foreground"
+      >
+        {label}
+      </FieldLabel>
+      <Input
+        id={`billing-${name}`}
+        name={name}
+        placeholder={placeholder}
+        value={formData[name]}
+        onChange={(e) => set(name, e.target.value)}
+        className="border-border"
+      />
+    </Field>
+  )
 
   return (
     <div className="w-full">
       <TitleHeader variant="workspace" title="Billing Details" />
 
-      <div className="pg-page-body">
-        <div className="bg-white rounded-xl border border-[var(--color-border)] p-6 max-w-[800px] mb-6 mx-auto">
+      <WorkspacePageBody>
+        <WorkspaceCard>
           <div className="mb-6">
-            <h2 className="text-[1.125rem] font-semibold text-[var(--color-text-primary)] mb-2">
+            <h2 className="mb-2 text-lg font-semibold text-foreground">
               Billing Address
             </h2>
-            <p className="text-[0.875rem] text-[var(--color-text-secondary)] leading-[1.5]">
+            <p className="text-sm leading-normal text-muted-foreground">
               This address is used for tax purposes and your invoices.
             </p>
           </div>
 
           <div className="grid grid-cols-2 gap-5">
-            <div className="flex flex-col gap-2 text-left col-span-2">
-              <label className="text-[0.875rem] font-medium text-[var(--color-text-primary)]">
-                Street Address
-              </label>
-              <input
-                name="street"
-                className={inputClass}
-                placeholder="e.g. 123 Main St, Apt 4B"
-                value={formData.street}
-                onChange={handleChange}
-              />
-            </div>
-
-            <div className="flex flex-col gap-2 text-left">
-              <label className="text-[0.875rem] font-medium text-[var(--color-text-primary)]">
-                City
-              </label>
-              <input
-                name="city"
-                className={inputClass}
-                placeholder="New York"
-                value={formData.city}
-                onChange={handleChange}
-              />
-            </div>
-
-            <div className="flex flex-col gap-2 text-left">
-              <label className="text-[0.875rem] font-medium text-[var(--color-text-primary)]">
-                State / Province
-              </label>
-              <input
-                name="state"
-                className={inputClass}
-                placeholder="NY"
-                value={formData.state}
-                onChange={handleChange}
-              />
-            </div>
-
-            <div className="flex flex-col gap-2 text-left">
-              <label className="text-[0.875rem] font-medium text-[var(--color-text-primary)]">
-                Zip / Postal Code
-              </label>
-              <input
-                name="zip"
-                className={inputClass}
-                placeholder="10001"
-                value={formData.zip}
-                onChange={handleChange}
-              />
-            </div>
-
-            <div className="flex flex-col gap-2 text-left">
-              <label className="text-[0.875rem] font-medium text-[var(--color-text-primary)]">
+            {textField(
+              "street",
+              "Street Address",
+              "e.g. 123 Main St, Apt 4B",
+              "col-span-2"
+            )}
+            {textField("city", "City", "New York")}
+            {textField("state", "State / Province", "NY")}
+            {textField("zip", "Zip / Postal Code", "10001")}
+            <Field>
+              <FieldLabel className="text-sm leading-normal text-foreground">
                 Country
-              </label>
-              <div className="relative">
-                <select
-                  name="country"
-                  className={selectClass}
-                  value={formData.country}
-                  onChange={handleChange}
-                >
-                  <option value="US">United States</option>
-                  <option value="CA">Canada</option>
-                  <option value="GB">United Kingdom</option>
-                  <option value="AU">Australia</option>
-                  <option value="DE">Germany</option>
-                  <option value="FR">France</option>
-                  <option value="SE">Sweden</option>
-                </select>
-                <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                  </svg>
-                </div>
-              </div>
-            </div>
+              </FieldLabel>
+              <ModernDropdown
+                value={formData.country}
+                options={COUNTRIES}
+                onChange={(value) => set("country", value)}
+              />
+            </Field>
 
             <div className="col-span-2 mt-4 flex justify-end">
-              <button className="pg-btn pg-btn-primary" onClick={handleSave}>
+              <Button size="md" onClick={handleSave}>
                 {saved ? (
                   <>
-                    <Check size={16} className="mr-2" />
+                    <Check className="size-4" />
                     Saved
                   </>
                 ) : (
-                  'Save Changes'
+                  "Save Changes"
                 )}
-              </button>
+              </Button>
             </div>
           </div>
-        </div>
+        </WorkspaceCard>
 
-        <div className="bg-white rounded-xl border border-[var(--color-border)] p-6 max-w-[800px] my-6 mx-auto">
+        <WorkspaceCard className="my-6">
           <div className="mb-6">
-            <h2 className="text-[1.125rem] font-semibold text-[var(--color-text-primary)] mb-2">
+            <h2 className="mb-2 text-lg font-semibold text-foreground">
               Payout Method
             </h2>
-            <p className="text-[0.875rem] text-[var(--color-text-secondary)] leading-[1.5]">
+            <p className="text-sm leading-normal text-muted-foreground">
               Connect your bank account or debit card to receive earnings.
             </p>
           </div>
-          <div className="p-6 bg-[var(--ui-bg-subtle)] rounded-lg text-center border border-dashed border-[var(--color-border)]">
-            <p className="font-medium text-[var(--color-text-primary)]">
+          <div className="rounded-lg border border-dashed bg-muted p-6 text-center">
+            <p className="font-medium text-foreground">
               Stripe Connect Integration
             </p>
-            <p className="text-[0.875rem] text-[var(--color-text-secondary)] mt-1">
+            <p className="mt-1 text-sm text-muted-foreground">
               This module will be implemented next.
             </p>
-            <button className="pg-btn pg-btn-secondary mt-4" disabled>
+            <Button
+              variant="outline"
+              size="md"
+              className="mt-4 text-muted-foreground"
+              disabled
+            >
               Connect Stripe
-            </button>
+            </Button>
           </div>
-        </div>
-      </div>
+        </WorkspaceCard>
+      </WorkspacePageBody>
     </div>
-  );
-};
+  )
+}
