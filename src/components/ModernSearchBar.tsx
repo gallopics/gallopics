@@ -283,6 +283,16 @@ interface ModernSearchBarProps {
   onSearchChange?: (value: string) => void
 }
 
+let measureCtx: CanvasRenderingContext2D | null = null
+
+/** Width of the header chip's query text (14px, medium, page font) */
+function measureChipText(text: string) {
+  measureCtx ??= document.createElement("canvas").getContext("2d")
+  if (!measureCtx) return 0
+  measureCtx.font = `500 14px ${getComputedStyle(document.body).fontFamily}`
+  return Math.ceil(measureCtx.measureText(text).width) + 1
+}
+
 export function ModernSearchBar({
   collapsible = false,
   theme = "dark",
@@ -333,6 +343,17 @@ export function ModernSearchBar({
 
   const isDark = theme === "dark" || collapsible
   const useOverlay = collapsible && isExpanded && isMobile
+  // Collapsed header search with an active query: show it as a chip (query + clear)
+  const showChip = collapsible && !isExpanded && query.length > 0
+  const isSmallPhone = useMediaQuery("(max-width: 479px)")
+  // The chip gets a px width (CSS can't animate width: auto), so it opens/closes like the round button
+  const chipWidth = useMemo(() => {
+    if (!showChip) return undefined
+    const text = measureChipText(query)
+    return isSmallPhone
+      ? 12 + Math.min(text, 64) + 4 + 28 + 4 // pl-3, text, ml-1, clear size-7, pr-1
+      : 14 + 20 + 8 + Math.min(text, 128) + 6 + 32 + 6 // pl-3.5, icon, ml-2, text, ml-1.5, clear size-8, pr-1.5
+  }, [showChip, query, isSmallPhone])
   const isMobileTriggerActive = isMobileTrigger && isMobile
 
   const close = useCallback(() => {
@@ -457,6 +478,28 @@ export function ModernSearchBar({
     </Button>
   )
 
+  const chip = (
+    <>
+      <span
+        title={query}
+        className="min-w-0 flex-1 truncate text-sm font-medium text-white min-[480px]:ml-2"
+      >
+        {query}
+      </span>
+      <button
+        type="button"
+        aria-label="Clear search"
+        onClick={(e) => {
+          e.stopPropagation()
+          clear()
+        }}
+        className="ml-1 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full bg-white/15 text-border transition-colors hover:bg-white/30 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:outline-none min-[480px]:ml-1.5 min-[480px]:size-8"
+      >
+        <X className="size-3.5" />
+      </button>
+    </>
+  )
+
   const results = (
     <ComboboxContent
       ref={popupRef}
@@ -498,7 +541,8 @@ export function ModernSearchBar({
                 >
                   <span
                     className={cn(
-                      "flex size-8 shrink-0 items-center justify-center rounded-full",
+                      // keep the icon colour when the row is highlighted
+                      "flex size-8 shrink-0 items-center justify-center rounded-full **:text-inherit!",
                       (isDark ? ICON_BOX_DARK : ICON_BOX_LIGHT)[item.type] ??
                         (isDark
                           ? "bg-foreground text-border!"
@@ -547,10 +591,12 @@ export function ModernSearchBar({
 
   const barClass = collapsible
     ? cn(
-        "absolute top-1/2 right-0 flex -translate-y-1/2 items-center overflow-hidden bg-[#1a1a1a] transition-[width,border-radius,background-color] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
+        "absolute top-1/2 right-0 flex -translate-y-1/2 items-center overflow-hidden bg-[#1a1a1a] transition-[width,border-radius,background-color,scale] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
         isExpanded && !useOverlay
           ? "h-10 w-120 rounded-full border border-white/15 px-4 shadow-[0_10px_30px_rgba(0,0,0,0.25)]"
-          : "size-11 cursor-pointer justify-center rounded-full shadow-[0_2px_8px_rgba(0,0,0,0.1)] hover:scale-105 hover:bg-[#333]"
+          : showChip
+            ? "h-11 cursor-pointer rounded-full pr-1 pl-3 shadow-[0_2px_8px_rgba(0,0,0,0.1)] hover:bg-[#333] min-[480px]:pr-1.5 min-[480px]:pl-3.5"
+            : "size-11 cursor-pointer justify-center rounded-full shadow-[0_2px_8px_rgba(0,0,0,0.1)] hover:scale-105 hover:bg-[#333]"
       )
     : heroMode
       ? "relative flex h-14 items-center rounded-full border border-black/10 bg-card pr-14 pl-5 shadow-[0_4px_12px_rgba(0,0,0,0.08)] transition-all focus-within:border-ring focus-within:ring-4 focus-within:ring-ring/12"
@@ -562,7 +608,7 @@ export function ModernSearchBar({
         )
 
   const wrapperClass = collapsible
-    ? "relative size-11"
+    ? "relative size-11 transition-[width] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]"
     : heroMode
       ? "relative w-full"
       : "relative w-105 transition-[width] duration-300 focus-within:w-125"
@@ -575,7 +621,9 @@ export function ModernSearchBar({
       onValueChange={handleSelect}
       itemToStringLabel={(item: SearchResult) => item.title}
       inputValue={query}
-      onInputValueChange={(value) => {
+      onInputValueChange={(value, details) => {
+        // Base UI empties the input on close (value is always null); keep the query
+        if (details.reason === "input-clear") return
         setQuery(value)
         onSearchChange?.(value)
         setOpen(value.length >= 2)
@@ -586,10 +634,15 @@ export function ModernSearchBar({
         if (!next && details.reason === "escape-key") close()
       }}
     >
-      <div className={wrapperClass} ref={wrapperRef}>
+      <div
+        className={wrapperClass}
+        ref={wrapperRef}
+        style={chipWidth ? { width: chipWidth } : undefined}
+      >
         <div
           ref={barRef}
           className={barClass}
+          style={chipWidth ? { width: chipWidth } : undefined}
           onClick={() => {
             if (collapsible && !isExpanded) setIsExpanded(true)
           }}
@@ -600,11 +653,13 @@ export function ModernSearchBar({
               "shrink-0",
               collapsible && !isExpanded
                 ? "text-white"
-                : "mr-2.5 text-muted-foreground"
+                : "mr-2.5 text-muted-foreground",
+              // small phones: no room next to cart + account, the chip is just query + clear
+              showChip && "max-[479px]:hidden"
             )}
           />
           {!useOverlay && input}
-          {!useOverlay && clearButton}
+          {!useOverlay && (showChip ? chip : clearButton)}
           {theme === "light" && !collapsible && (
             <Button
               size="icon"
@@ -628,7 +683,8 @@ export function ModernSearchBar({
         </div>
       </div>
 
-      {!useOverlay && results}
+      {/* one place in the tree (it portals to body), so switching to the mobile overlay doesn't remount it mid-close */}
+      {results}
 
       {useOverlay &&
         createPortal(
@@ -636,7 +692,9 @@ export function ModernSearchBar({
             <div
               className="pointer-events-auto fixed inset-0 animate-in bg-black/65 backdrop-blur-[2px] fade-in-0"
               onClick={() => {
+                // Tapping outside cancels the search (text and filter together)
                 close()
+                setQuery("")
                 onSearchChange?.("")
               }}
             />
@@ -658,7 +716,6 @@ export function ModernSearchBar({
                   : "Riders • Horses • Events • Photographers • Photo ID"}
               </div>
             </div>
-            {results}
           </div>,
           document.body
         )}

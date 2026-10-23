@@ -121,7 +121,10 @@ export function ModernDropdown({
       {selected ? (
         <OptionContent option={selected} pill={isPill} />
       ) : (
-        <span className="text-muted-foreground">{placeholder}</span>
+        // Pill filters: the placeholder is an "all" label ("Events", "All events"), dark like old
+        <span className={isPill ? "text-foreground" : "text-muted-foreground"}>
+          {placeholder}
+        </span>
       )}
     </>
   )

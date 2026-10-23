@@ -19,7 +19,8 @@ export function MasonryGrid({
 }: MasonryGridProps) {
   if (isLoading && renderSkeleton) {
     return (
-      <div className={gridClass}>
+      <div aria-busy="true" className={gridClass}>
+        <span className="sr-only">Loading photos…</span>
         {Array.from({ length: skeletonCount }).map((_, index) => (
           <Fragment key={`skel-${index}`}>{renderSkeleton()}</Fragment>
         ))}

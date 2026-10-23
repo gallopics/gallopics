@@ -1,10 +1,12 @@
 import { useNavigate } from "react-router"
 import { Image as ImageIcon } from "lucide-react"
 
+import { cn } from "@/lib/utils"
 import type { PgEvent } from "@/context/PhotographerContext"
 import { useWorkspace } from "@/context/WorkspaceContext"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
+import { Skeleton } from "@/components/ui/skeleton"
 import { GlassButton } from "@/components/PhotoCard"
 
 interface PgEventCardProps {
@@ -124,6 +126,49 @@ export function PgEventCard({
                 Cancel booking
               </Button>
             )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Loading placeholder shaped like a PgEventCard (booked event, with Cancel booking) */
+export function PgEventCardSkeleton({
+  hideLogo = false,
+}: {
+  hideLogo?: boolean
+}) {
+  // Bars sit inline in text lines, so each line keeps its real height
+  const bar = "inline-block h-[0.8em] rounded-sm bg-border align-middle"
+
+  return (
+    <div aria-hidden="true" className="relative mt-4 flex flex-col">
+      <div className="absolute -top-3 left-0 z-0 h-3.25 w-27.5 rounded-[96px_144px_0_0] border border-b-0 border-black/8 bg-primary/8" />
+
+      <div className="flex flex-col overflow-hidden rounded-[0_24px_24px_24px] border border-black/4 bg-card p-4 shadow-[0_4px_16px_rgba(0,0,0,0.06)]">
+        <Skeleton className="aspect-video w-full" />
+
+        <div className="flex flex-col pt-4">
+          <div className="mb-4 flex items-center gap-4">
+            {!hideLogo && <Skeleton className="size-13 shrink-0" />}
+            <div className="flex flex-1 flex-col justify-center">
+              <div className="mb-0.5 text-xs leading-normal">
+                <Skeleton className={cn(bar, "w-20")} />
+              </div>
+              <div className="my-1 text-[0.8125rem] leading-normal">
+                <Skeleton className={cn(bar, "w-[60%]")} />
+              </div>
+              <div className="mt-0.5 text-xs leading-normal">
+                <Skeleton className={cn(bar, "w-28")} />
+              </div>
+            </div>
+          </div>
+
+          <Separator className="mb-4 bg-muted" />
+
+          <div className="flex items-center justify-between gap-3">
+            <Skeleton className="h-7.5 w-30 rounded-lg" />
           </div>
         </div>
       </div>

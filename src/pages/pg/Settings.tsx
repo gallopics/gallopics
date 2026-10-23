@@ -1,7 +1,13 @@
 import { useState } from "react"
 import { Link } from "react-router"
+import { useMutation, useQuery } from "@tanstack/react-query"
 
+import { useAuth } from "@/context/AuthContext"
 import { usePhotographer } from "@/context/PhotographerContext"
+import {
+  highlightsQueryOptions,
+  saveHighlightsMutationOptions,
+} from "@/data/queries/photographer"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { ManageHighlightsModal } from "@/components/ManageHighlightsModal"
@@ -37,14 +43,18 @@ function SettingRow({
   )
 }
 
+const NO_IDS: string[] = []
+
 export function Settings() {
-  const {
-    highlights,
-    updateHighlights,
-    availableToHire,
-    toggleAvailableToHire,
-    photographerId,
-  } = usePhotographer()
+  const { isPhotographer } = useAuth()
+  const highlightsQuery = useQuery({
+    ...highlightsQueryOptions(),
+    enabled: isPhotographer,
+  })
+  const highlights = highlightsQuery.data ?? NO_IDS
+  const saveHighlights = useMutation(saveHighlightsMutationOptions())
+  const { availableToHire, toggleAvailableToHire, photographerId } =
+    usePhotographer()
   const [isHighlightsModalOpen, setIsHighlightsModalOpen] = useState(false)
 
   return (
@@ -81,6 +91,8 @@ export function Settings() {
                 variant="outline"
                 className="text-muted-foreground"
                 size="md"
+                // Saving before they load would replace them with nothing
+                disabled={highlightsQuery.isPending}
                 onClick={() => setIsHighlightsModalOpen(true)}
               >
                 Manage
@@ -105,7 +117,7 @@ export function Settings() {
           isOpen={isHighlightsModalOpen}
           onClose={() => setIsHighlightsModalOpen(false)}
           initialIds={highlights}
-          onSave={updateHighlights}
+          onSave={(ids) => saveHighlights.mutate(ids)}
         />
       </WorkspacePageBody>
     </div>

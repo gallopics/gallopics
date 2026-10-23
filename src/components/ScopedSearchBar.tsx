@@ -140,7 +140,8 @@ export function ScopedSearchBar({
         <>
           <span
             className={cn(
-              "flex size-8 shrink-0 items-center justify-center rounded-full border border-black/3",
+              // keep the icon colour when the row is highlighted
+              "flex size-8 shrink-0 items-center justify-center rounded-full border border-black/3 **:text-inherit!",
               ICON_BOX[opt.type ?? ""] ?? "bg-muted text-muted-foreground!"
             )}
           >
@@ -172,7 +173,9 @@ export function ScopedSearchBar({
       onValueChange={handleSelect}
       itemToStringLabel={(opt: ScopedSearchOption) => opt.label}
       inputValue={inputValue}
-      onInputValueChange={(value) => {
+      onInputValueChange={(value, details) => {
+        // Base UI empties the input on close (value is always null); keep it
+        if (details.reason === "input-clear") return
         setInputValue(value)
         onSearchChange?.(value)
       }}

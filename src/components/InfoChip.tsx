@@ -28,7 +28,7 @@ export function InfoChip({
       className={cn(
         "group/info-chip flex items-center gap-3 rounded-full border bg-muted py-1.5 pr-4 pl-2 text-left transition-all duration-200",
         onClick &&
-          "hover:-translate-y-px hover:border-primary/30 hover:bg-primary/8 hover:shadow-sm",
+          "hover:-translate-y-px hover:border-primary/30 hover:bg-primary/8 hover:shadow-[0_4px_8px_rgba(0,0,0,0.04)]",
         className
       )}
     >

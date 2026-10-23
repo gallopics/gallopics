@@ -1,7 +1,10 @@
 import { useMemo, useState } from "react"
 
 import { cn } from "@/lib/utils"
-import { usePhotographer } from "@/context/PhotographerContext"
+import {
+  useWorkspaceEvents,
+  useWorkspacePhotos,
+} from "@/hooks/useWorkspaceData"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -56,17 +59,21 @@ function ManageHighlightsForm({
   onSave,
   onClose,
 }: Omit<ManageHighlightsModalProps, "isOpen">) {
-  const { events, getPhotosByEvent } = usePhotographer()
+  const events = useWorkspaceEvents()
+  const allPhotos = useWorkspacePhotos()
 
   const myEvents = useMemo(() => events.filter((e) => e.isRegistered), [events])
   const [selectedIds, setSelectedIds] = useState(
     () => new Set(initialIds.slice(0, MAX_HIGHLIGHTS))
   )
-  const [activeEventId, setActiveEventId] = useState(myEvents[0]?.id || "")
+  // The first event until one is picked (events may still be loading on open)
+  const [pickedEventId, setActiveEventId] = useState("")
+  const activeEventId = pickedEventId || myEvents[0]?.id || ""
 
   const currentPhotos = useMemo(
-    () => (activeEventId ? getPhotosByEvent(activeEventId) : []),
-    [activeEventId, getPhotosByEvent]
+    () =>
+      activeEventId ? allPhotos.filter((p) => p.eventId === activeEventId) : [],
+    [activeEventId, allPhotos]
   )
 
   const eventOptions = myEvents.map((e) => ({
@@ -167,7 +174,7 @@ function ManageHighlightsForm({
                     alt=""
                     loading="lazy"
                     className={cn(
-                      "size-full object-cover transition-[transform,filter] duration-200",
+                      "size-full object-cover transition-[scale,filter] duration-200",
                       isSelected ? "brightness-90" : "group-hover:scale-105"
                     )}
                   />

@@ -10,6 +10,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb"
+import { Skeleton } from "@/components/ui/skeleton"
 
 export interface BreadcrumbItem {
   label: string
@@ -74,6 +75,19 @@ export function Breadcrumbs({ items }: BreadcrumbsProps) {
             })}
           </BreadcrumbList>
         </Breadcrumb>
+      </div>
+    </section>
+  )
+}
+
+/** Loading placeholder shaped like Breadcrumbs (a back link and a page name) */
+export function BreadcrumbsSkeleton() {
+  return (
+    <section aria-hidden="true" className="bg-card py-3">
+      {/* Inline bars in a text line: the row keeps the real line height */}
+      <div className="container text-[0.8125rem]">
+        <Skeleton className="inline-block h-[0.8em] w-14 rounded-sm bg-border align-middle" />
+        <Skeleton className="ml-4 inline-block h-[0.8em] w-28 rounded-sm bg-border align-middle" />
       </div>
     </section>
   )

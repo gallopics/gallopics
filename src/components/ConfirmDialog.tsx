@@ -20,6 +20,8 @@ interface ConfirmDialogProps {
   title: React.ReactNode
   description: React.ReactNode
   confirmLabel: React.ReactNode
+  /** Label of the dismiss button (default "Cancel") */
+  cancelLabel?: React.ReactNode
   /** `danger` = red icon + red button, `info` = brand icon + primary button */
   tone?: "danger" | "info"
   /** Disables the buttons while the action runs */
@@ -36,6 +38,7 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel,
+  cancelLabel = "Cancel",
   tone = "danger",
   busy = false,
   confirmDisabled = false,
@@ -69,7 +72,7 @@ export function ConfirmDialog({
           </div>
         </DialogBody>
         <DialogFooter>
-          <DialogCancel disabled={busy} />
+          <DialogCancel disabled={busy}>{cancelLabel}</DialogCancel>
           <Button
             className={cn(
               danger &&

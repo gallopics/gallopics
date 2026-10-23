@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils"
 import type { EventData } from "@/data/mockEvents"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
 
 interface FolderEventCardProps {
   event: EventData
@@ -179,6 +180,40 @@ export function FolderEventCard({
                   </AvatarFallback>
                 </Avatar>
               )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Loading placeholder shaped like a FolderEventCard */
+export function EventCardSkeleton() {
+  return (
+    <div
+      aria-hidden="true"
+      className="relative mt-4 flex flex-col rounded-[0_24px_24px_24px] before:absolute before:-top-3 before:left-0 before:h-[12.5px] before:w-30 before:rounded-[96px_144px_0_0] before:border before:border-b-0 before:border-primary/15 before:bg-primary/12 before:content-['']"
+    >
+      <div className="flex flex-col overflow-hidden rounded-[0_24px_24px_24px] border border-black/4 bg-card p-3 shadow-[0_4px_16px_rgba(0,0,0,0.06)]">
+        <Skeleton className="aspect-video w-full" />
+
+        <div className="flex flex-col gap-1 pt-4">
+          <div className="mb-1 flex items-center gap-3">
+            <Skeleton className="size-10.5" />
+            <div className="flex flex-1 flex-col gap-1.5">
+              <Skeleton className="h-3.5 w-[70%] rounded-sm bg-border" />
+              <Skeleton className="h-3 w-[40%] rounded-sm bg-border" />
+            </div>
+          </div>
+
+          {/* Place and photo count: inline bars keep the text line height */}
+          <div className="mt-2 flex items-center justify-between border-t pt-3 text-xs leading-normal">
+            <div className="w-[30%]">
+              <Skeleton className="inline-block h-[0.8em] w-full rounded-sm bg-border align-middle" />
+            </div>
+            <div className="w-[20%] text-right">
+              <Skeleton className="inline-block h-[0.8em] w-full rounded-sm bg-border align-middle" />
             </div>
           </div>
         </div>

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { useLocation, useNavigate, useParams } from "react-router"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import {
   CalendarDays,
   Clock,
@@ -9,22 +10,36 @@ import {
   UploadCloud,
 } from "lucide-react"
 
+import { notify } from "@/lib/notify"
 import { cn } from "@/lib/utils"
+import { useWorkspaceEvents } from "@/hooks/useWorkspaceData"
 import { useAuth } from "@/context/AuthContext"
-import { usePhotographer } from "@/context/PhotographerContext"
+import {
+  ApiError,
+  type ApiPhoto,
+  type PaginatedResponse,
+} from "@/data/apiClient"
 import {
   buildApiEventDetail,
-  fetchEventFromApi,
-  fetchEventScheduleFromApi,
-  fetchPublicEventPhotosFromApi,
+  mapApiPhotoToPhoto,
   mapApiScheduleToDailySchedule,
 } from "@/data/eventsApi"
 import { PHOTOGRAPHERS } from "@/data/mockData"
 import { eventDetails } from "@/data/mockEventDetails"
 import type { EventData } from "@/data/mockEvents"
+import {
+  eventGalleryQueryOptions,
+  eventQueryOptions,
+  eventScheduleQueryOptions,
+} from "@/data/queries/events"
+import {
+  deletePhotosMutationOptions,
+  myPhotosQueryOptions,
+} from "@/data/queries/photographer"
 import type { ClassSection, EventDetail, Photo as EventPhoto } from "@/types"
 import { Badge } from "@/components/ui/badge"
-import { Breadcrumbs } from "@/components/Breadcrumbs"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Breadcrumbs, BreadcrumbsSkeleton } from "@/components/Breadcrumbs"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
 import { DotList } from "@/components/DotList"
 import { FilterBar, ResetFiltersButton } from "@/components/FilterBar"
@@ -44,12 +59,17 @@ import { ScopedSearchBar } from "@/components/ScopedSearchBar"
 import { TitleHeader } from "@/components/TitleHeader"
 import { PgSelectionPanel } from "@/pages/pg/PgSelectionPanel"
 
+// develop: plain grid instead of masonry (Safari fix)
+const photoGridClass =
+  "grid w-full grid-cols-[repeat(auto-fill,minmax(220px,300px))] items-start justify-center gap-4 pb-8"
+
 export function EventProfile() {
   const { eventId } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
-  const { user } = useAuth()
-  const { getEvent, getPhotosByEvent, deletePhotos } = usePhotographer()
+  const { user, isPhotographer } = useAuth()
+  const deletePhoto = useMutation(deletePhotosMutationOptions())
+  const workspaceEvents = useWorkspaceEvents()
   const fromPath =
     typeof location.state === "object" &&
     location.state !== null &&
@@ -71,7 +91,9 @@ export function EventProfile() {
     location.state.eventTab === "classes"
       ? "classes"
       : "uploads"
-  const workspaceEvent = eventId ? getEvent(eventId) : undefined
+  const workspaceEvent = eventId
+    ? workspaceEvents.find((event) => event.id === eventId)
+    : undefined
   const isPhotographerMyEventView =
     (fromPath === "/pg/events" && fromTab === "my") ||
     ((user?.role === "pg" || user?.role === "admin") &&
@@ -81,17 +103,37 @@ export function EventProfile() {
   }
 
   const localEventDetail = eventDetails.find((e) => e.meetingId === eventId)
-  const [apiEventDetail, setApiEventDetail] = useState<EventDetail | null>(null)
-  const [isLoadingEvent, setIsLoadingEvent] = useState(!localEventDetail)
-  const [eventLoadError, setEventLoadError] = useState<string | null>(null)
+  const eventQuery = useQuery({
+    ...eventQueryOptions(eventId ?? ""),
+    enabled: !!eventId && !localEventDetail,
+  })
+  const apiEvent = eventQuery.data
+  // Optional: without a schedule the event gets a placeholder one
+  const scheduleQuery = useQuery({
+    ...eventScheduleQueryOptions(apiEvent?.id ?? ""),
+    enabled: !!apiEvent,
+  })
+  const apiEventDetail = useMemo<EventDetail | null>(
+    () =>
+      apiEvent
+        ? buildApiEventDetail(
+            apiEvent,
+            scheduleQuery.data &&
+              mapApiScheduleToDailySchedule(scheduleQuery.data)
+          )
+        : null,
+    [apiEvent, scheduleQuery.data]
+  )
+  const isLoadingEvent =
+    !localEventDetail &&
+    !!eventId &&
+    (eventQuery.isPending || (!!eventQuery.data && scheduleQuery.isPending))
+  const eventLoadError = eventQuery.error?.message ?? null
   const eventDetail = localEventDetail || apiEventDetail
   const eventPhotographer = useMemo(
     () => PHOTOGRAPHERS.find((p) => p.primaryEventId === eventId),
     [eventId]
   )
-
-  const [photos, setPhotos] = useState<EventPhoto[]>([])
-  const [loading, setLoading] = useState(true)
 
   const [searchQuery, setSearchQuery] = useState("")
   const [eventClass, setEventClass] = useState("All")
@@ -101,7 +143,6 @@ export function EventProfile() {
   const [photoToDelete, setPhotoToDelete] = useState<EventPhoto | null>(null)
   const [photoToEditId, setPhotoToEditId] = useState<string | null>(null)
   const [previewPhoto, setPreviewPhoto] = useState<EventPhoto | null>(null)
-  const [isDeletingPhoto, setIsDeletingPhoto] = useState(false)
   const eventReturnState = useMemo(
     () => ({
       from: fromPath,
@@ -111,96 +152,59 @@ export function EventProfile() {
     [activeEventTab, fromPath, fromTab]
   )
 
-  useEffect(() => {
-    if (localEventDetail || !eventId) {
-      setIsLoadingEvent(false)
-      return
-    }
+  // Public photos, unless the photographer manages their own event here
+  const showsPublicPhotos =
+    !!eventDetail && !isPhotographerMyEventView && !localEventDetail
+  const toPublicPhotos = useCallback(
+    (page: PaginatedResponse<ApiPhoto>) => {
+      if (!eventDetail) return []
+      const eventForPhotos: EventData = {
+        id: eventDetail.meetingId,
+        name: eventDetail.meeting.name,
+        coverImage: eventDetail.meeting.coverImage,
+        period: `${eventDetail.meeting.period.startDate} – ${eventDetail.meeting.period.endDate}`,
+        startDate: eventDetail.meeting.period.startDate,
+        endDate: eventDetail.meeting.period.endDate,
+        flag: eventDetail.meeting.country.code === "SE" ? "🇸🇪" : "",
+        city: eventDetail.meeting.city,
+        discipline: eventDetail.meeting.disciplines[0] || "Equestrian",
+        country: eventDetail.meeting.country.name,
+        photoCount: eventDetail.meeting.photoCount,
+        logo: eventDetail.meeting.logo,
+        photographer: eventDetail.meeting.photographer || null,
+        status: "active",
+      }
+      return page.items.map((photo) =>
+        mapApiPhotoToPhoto(photo, eventForPhotos)
+      )
+    },
+    [eventDetail]
+  )
+  const publicPhotosQuery = useQuery({
+    ...eventGalleryQueryOptions(eventDetail?.meetingId ?? "", 100),
+    enabled: showsPublicPhotos,
+    select: toPublicPhotos,
+  })
+  const photos = useMemo(
+    () => (showsPublicPhotos ? (publicPhotosQuery.data ?? []) : []),
+    [publicPhotosQuery.data, showsPublicPhotos]
+  )
+  const loading = showsPublicPhotos && publicPhotosQuery.isPending
 
-    const apiEventId = eventId
-    let isMounted = true
-
-    async function loadEvent() {
-      try {
-        setIsLoadingEvent(true)
-        setEventLoadError(null)
-        const apiEvent = await fetchEventFromApi(apiEventId)
-        let schedule
-
-        try {
-          const apiSchedule = await fetchEventScheduleFromApi(apiEvent.id)
-          schedule = mapApiScheduleToDailySchedule(apiSchedule)
-        } catch (scheduleError) {
-          console.warn("Failed to load event schedule", scheduleError)
-        }
-
-        if (isMounted) {
-          setApiEventDetail(buildApiEventDetail(apiEvent, schedule))
-        }
-      } catch (error) {
-        if (isMounted) {
-          setEventLoadError(
-            error instanceof Error ? error.message : "Failed to load event"
+  // The photographer's own photos, only for their own event
+  const myPhotosQuery = useQuery({
+    ...myPhotosQueryOptions(),
+    enabled: isPhotographer && isPhotographerMyEventView,
+  })
+  const myEventPhotos = useMemo(
+    () =>
+      eventId
+        ? (myPhotosQuery.data ?? []).filter(
+            (photo) => photo.eventId === eventId
           )
-        }
-      } finally {
-        if (isMounted) setIsLoadingEvent(false)
-      }
-    }
-
-    void loadEvent()
-
-    return () => {
-      isMounted = false
-    }
-  }, [eventId, localEventDetail])
-
-  useEffect(() => {
-    if (eventDetail) {
-      let isMounted = true
-
-      setLoading(true)
-      const loadPhotos = async () => {
-        if (!isPhotographerMyEventView && !localEventDetail) {
-          const eventForPhotos: EventData = {
-            id: eventDetail.meetingId,
-            name: eventDetail.meeting.name,
-            coverImage: eventDetail.meeting.coverImage,
-            period: `${eventDetail.meeting.period.startDate} – ${eventDetail.meeting.period.endDate}`,
-            startDate: eventDetail.meeting.period.startDate,
-            endDate: eventDetail.meeting.period.endDate,
-            flag: eventDetail.meeting.country.code === "SE" ? "🇸🇪" : "",
-            city: eventDetail.meeting.city,
-            discipline: eventDetail.meeting.disciplines[0] || "Equestrian",
-            country: eventDetail.meeting.country.name,
-            photoCount: eventDetail.meeting.photoCount,
-            logo: eventDetail.meeting.logo,
-            photographer: eventDetail.meeting.photographer || null,
-            status: "active",
-          }
-
-          const apiPhotos = await fetchPublicEventPhotosFromApi(eventForPhotos)
-          if (isMounted) {
-            setPhotos(apiPhotos)
-            setLoading(false)
-          }
-          return
-        }
-
-        // develop: no generated mock photos any more
-        if (isMounted) {
-          setPhotos([])
-          setLoading(false)
-        }
-      }
-
-      void loadPhotos()
-
-      return () => {
-        isMounted = false
-      }
-    }
-  }, [eventDetail, isPhotographerMyEventView, localEventDetail])
+        : [],
+    [eventId, myPhotosQuery.data]
+  )
 
   const isResetDisabled = eventClass === "All" && searchQuery === ""
 
@@ -243,7 +247,7 @@ export function EventProfile() {
   const uploadedPhotos = useMemo<EventPhoto[]>(() => {
     if (!isPhotographerMyEventView || !eventId || !eventDetail) return []
 
-    return getPhotosByEvent(eventId).map((photo) => ({
+    return myEventPhotos.map((photo) => ({
       id: photo.id,
       src: photo.url,
       rider: photo.rider || "Unassigned",
@@ -262,7 +266,7 @@ export function EventProfile() {
       photographer: eventDetail.meeting.photographer?.name || "Gallopics",
       photographerId: eventDetail.meeting.photographer?.id,
     }))
-  }, [eventDetail, eventId, getPhotosByEvent, isPhotographerMyEventView])
+  }, [eventDetail, eventId, isPhotographerMyEventView, myEventPhotos])
 
   const uploadPhotos = isPhotographerMyEventView ? uploadedPhotos : photos
 
@@ -333,16 +337,21 @@ export function EventProfile() {
     if (!photoToDelete) return
 
     try {
-      setIsDeletingPhoto(true)
-      await deletePhotos([photoToDelete.id])
-      setPhotoToDelete(null)
+      await deletePhoto.mutateAsync({ photoIds: [photoToDelete.id] })
+    } catch (error) {
+      // 409: the API refuses to delete a sold photo and says why
+      notify(
+        error instanceof ApiError && error.status === 409
+          ? error.message
+          : "Could not delete photo. Please try again.",
+        "error"
+      )
     } finally {
-      setIsDeletingPhoto(false)
+      setPhotoToDelete(null)
     }
   }
 
-  if (isLoadingEvent)
-    return <div className="container pt-[120px]">Loading event...</div>
+  if (isLoadingEvent) return <EventProfileSkeleton />
 
   if (!eventDetail)
     return (
@@ -443,7 +452,7 @@ export function EventProfile() {
           />
 
           {activeEventTab === "uploads" ? (
-            <div className="pt-6">
+            <div>
               <FilterBar
                 filters={
                   <>
@@ -476,8 +485,8 @@ export function EventProfile() {
                 }
               />
 
-              {/* develop: plain grid instead of masonry (Safari fix) */}
-              <div className="grid w-full grid-cols-[repeat(auto-fill,minmax(220px,300px))] items-start justify-center gap-4 pb-8">
+              <div aria-busy={loading || undefined} className={photoGridClass}>
+                {loading && <span className="sr-only">Loading photos…</span>}
                 {loading
                   ? Array.from({ length: 12 }).map((_, index) => (
                       <PhotoCardSkeleton key={`event-skeleton-${index}`} />
@@ -645,7 +654,7 @@ export function EventProfile() {
           selectedIds={
             photoToEditId ? new Set([photoToEditId]) : new Set<string>()
           }
-          allPhotos={getPhotosByEvent(eventId)}
+          allPhotos={myEventPhotos}
           activeTab="tags"
           currentTab="uploads"
           onClose={() => setPhotoToEditId(null)}
@@ -656,13 +665,99 @@ export function EventProfile() {
         open={!!photoToDelete}
         onCancel={() => setPhotoToDelete(null)}
         onConfirm={handleConfirmDeletePhoto}
-        busy={isDeletingPhoto}
+        busy={deletePhoto.isPending}
         title="Delete photo?"
         description="This will remove the photo from this event."
-        confirmLabel={isDeletingPhoto ? "Deleting..." : "Delete"}
+        confirmLabel={deletePhoto.isPending ? "Deleting..." : "Delete"}
       />
 
       <Footer minimal />
+    </div>
+  )
+}
+
+/** First load: the page layout with placeholders for the header, filters and photos */
+function EventProfileSkeleton() {
+  // Bars sit inline in text lines, so each line keeps its real height
+  const bar = "inline-block h-[0.8em] rounded-sm bg-border align-middle"
+
+  return (
+    <div className="flex min-h-screen flex-col">
+      <Header />
+
+      <div aria-busy="true">
+        <BreadcrumbsSkeleton />
+
+        <TitleHeader
+          title={
+            <>
+              <span className="sr-only">Loading event…</span>
+              <Skeleton
+                aria-hidden="true"
+                className={cn(bar, "w-80 max-w-full")}
+              />
+            </>
+          }
+          topSubtitle={
+            <Skeleton aria-hidden="true" className={cn(bar, "w-28")} />
+          }
+          subtitle={
+            // Like the DotList: one row, stacked on mobile
+            <div
+              aria-hidden="true"
+              className="flex flex-wrap gap-x-4 text-base leading-[1.15] max-md:flex-col max-md:gap-1.5"
+            >
+              <div>
+                <Skeleton className={cn(bar, "w-24")} />
+              </div>
+              <div>
+                <Skeleton className={cn(bar, "w-20")} />
+              </div>
+            </div>
+          }
+          stats={
+            <div aria-hidden="true" className="text-[0.8125rem]">
+              <Skeleton className={cn(bar, "w-44")} />
+            </div>
+          }
+          // The real header always has an (often empty) action row
+          rightContent={<ActionCluster>{null}</ActionCluster>}
+        />
+
+        <section className="min-h-100 pt-6 pb-16">
+          <div aria-hidden="true" className="container">
+            {/* Uploads / Classes tabs */}
+            <div className="flex gap-6 border-b text-base">
+              <div className="px-1 py-3">
+                <Skeleton className={cn(bar, "w-16")} />
+              </div>
+              <div className="px-1 py-3">
+                <Skeleton className={cn(bar, "w-16")} />
+              </div>
+            </div>
+
+            <FilterBar
+              filters={
+                <>
+                  <Skeleton className="h-10 w-32 rounded-full bg-border" />
+                  <Skeleton className="size-10 rounded-full bg-border max-md:mr-4" />
+                </>
+              }
+              search={
+                <Skeleton className="h-10 w-full rounded-full bg-border" />
+              }
+            />
+
+            <div className={photoGridClass}>
+              {Array.from({ length: 12 }).map((_, index) => (
+                <PhotoCardSkeleton key={index} />
+              ))}
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <Footer />
     </div>
   )
 }

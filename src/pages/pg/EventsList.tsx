@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useLocation, useNavigate } from "react-router"
 import { useAuth as useClerkAuth } from "@clerk/clerk-react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   AlertCircle,
   Archive,
@@ -15,12 +16,18 @@ import {
 
 import { getEventSortTime, isPreviousEventDate } from "@/lib/eventDates"
 import { assetUrl, cn } from "@/lib/utils"
+import { useWorkspacePhotos } from "@/hooks/useWorkspaceData"
 import { useAuth } from "@/context/AuthContext"
-import { usePhotographer, type PgEvent } from "@/context/PhotographerContext"
+import type { PgEvent } from "@/context/PhotographerContext"
 import { useWorkspace } from "@/context/WorkspaceContext"
 import { api, ApiError, type ApiEvent } from "@/data/apiClient"
-import { fetchEventsFromApi, mapApiEventToEventData } from "@/data/eventsApi"
+import { mapApiEventToEventData } from "@/data/eventsApi"
 import type { EventData } from "@/data/mockEvents"
+import { eventsListQueryOptions } from "@/data/queries/events"
+import {
+  bookingsQueryOptions,
+  photographerKeys,
+} from "@/data/queries/photographer"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -31,7 +38,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Separator } from "@/components/ui/separator"
-import { Spinner } from "@/components/ui/spinner"
+import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "@/components/ui/toast"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
 import { EmptyState } from "@/components/EmptyState"
@@ -42,7 +49,10 @@ import { TitleHeader } from "@/components/TitleHeader"
 import { WorkspaceTabs } from "@/components/WorkspaceTabs"
 import { AddEventModal } from "@/pages/pg/components/AddEventModal"
 import { CoverImagePickerModal } from "@/pages/pg/components/CoverImagePickerModal"
-import { PgEventCard } from "@/pages/pg/components/PgEventCard"
+import {
+  PgEventCard,
+  PgEventCardSkeleton,
+} from "@/pages/pg/components/PgEventCard"
 
 type EventsView = "my" | "upcoming" | "previous" | "live" | "past" | "archived"
 
@@ -63,6 +73,38 @@ function ApplicationsTag({ open }: { open: boolean }) {
       />
       {open ? "Open" : "Closed"}
     </Badge>
+  )
+}
+
+/** Loading placeholder shaped like an event row of the Current / Previous tabs */
+function EventRowSkeleton() {
+  // Bars sit inline in text lines, so each line keeps its real height
+  const bar = "inline-block h-[0.8em] rounded-sm bg-border align-middle"
+
+  return (
+    <div
+      aria-hidden="true"
+      className="mb-3 grid grid-cols-[1fr_auto] items-center gap-8 rounded-xl border bg-card px-5 py-4"
+    >
+      <div>
+        <div className="text-xs leading-normal">
+          <Skeleton className={cn(bar, "w-28")} />
+        </div>
+        {/* Event names usually take two lines on phones */}
+        <div className="my-1 text-sm leading-[1.4]">
+          <div>
+            <Skeleton className={cn(bar, "w-56 max-w-full")} />
+          </div>
+          <div className="md:hidden">
+            <Skeleton className={cn(bar, "w-24")} />
+          </div>
+        </div>
+        <div className="text-sm leading-normal">
+          <Skeleton className={cn(bar, "w-72 max-w-full")} />
+        </div>
+      </div>
+      <Skeleton className="h-9 w-16 rounded-full" />
+    </div>
   )
 }
 
@@ -100,9 +142,10 @@ const mapBackendEventToPgEvent = (
 
 export function EventsList() {
   const { isAdmin } = useWorkspace()
-  const { isLoaded: isAuthProfileLoaded, user } = useAuth()
-  const { events, allPhotos } = usePhotographer()
-  const { getToken, isLoaded: isClerkLoaded, isSignedIn } = useClerkAuth()
+  const { isLoaded: isAuthProfileLoaded, user, isPhotographer } = useAuth()
+  const workspacePhotos = useWorkspacePhotos()
+  const { isLoaded: isClerkLoaded, isSignedIn } = useClerkAuth()
+  const queryClient = useQueryClient()
   const navigate = useNavigate()
   const location = useLocation()
   const initialTab = (location.state as any)?.tab
@@ -117,43 +160,48 @@ export function EventsList() {
   )
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [eventToEdit, setEventToEdit] = useState<any>(null)
-  const [apiUpcomingEvents, setApiUpcomingEvents] = useState<PgEvent[]>([])
-  const [apiPhotoEvents, setApiPhotoEvents] = useState<PgEvent[]>([])
-  const [bookedEvents, setBookedEvents] = useState<PgEvent[]>([])
-  const [cancelledBookingEventIds, setCancelledBookingEventIds] = useState<
-    Set<string>
-  >(new Set())
-  const [bookingEventId, setBookingEventId] = useState<string | null>(null)
-  const [isLoadingUpcomingEvents, setIsLoadingUpcomingEvents] = useState(false)
-  const [upcomingEventsError, setUpcomingEventsError] = useState<string | null>(
-    null
-  )
+  // Bookings cancelled here stay listed, read-only, until the page is left
+  const [cancelledEvents, setCancelledEvents] = useState<PgEvent[]>([])
+  const [actionError, setActionError] = useState<string | null>(null)
 
   const [confirmModal, setConfirmModal] = useState<{
     isOpen: boolean
     type: "archive" | "delete"
     event: any
   } | null>(null)
+  const [cancelBookingTarget, setCancelBookingTarget] =
+    useState<PgEvent | null>(null)
 
-  const getSessionToken = useCallback(async () => {
-    for (let attempt = 0; attempt < 6; attempt += 1) {
-      const token = await getToken({ skipCache: attempt > 0 })
-      if (token) {
-        return token
-      }
+  const loadsPhotographerEvents =
+    !isAdmin && isClerkLoaded && !!isSignedIn && isAuthProfileLoaded
+  const eventsQuery = useQuery({
+    ...eventsListQueryOptions(!(view === "upcoming" || view === "previous")),
+    enabled: loadsPhotographerEvents,
+  })
+  const bookingsQuery = useQuery({
+    ...bookingsQueryOptions(),
+    enabled: loadsPhotographerEvents && isPhotographer,
+  })
+  const isLoadingUpcomingEvents =
+    loadsPhotographerEvents &&
+    (eventsQuery.isPending || (isPhotographer && bookingsQuery.isPending))
+  // Load errors only when there is nothing to show (a failed refetch keeps the list)
+  const upcomingEventsError =
+    actionError ??
+    (eventsQuery.data ? null : (eventsQuery.error?.message ?? null))
 
-      await new Promise((resolve) => window.setTimeout(resolve, 250))
+  useEffect(() => {
+    if (bookingsQuery.error) {
+      console.warn("Failed to load event bookings", bookingsQuery.error)
     }
-
-    return null
-  }, [getToken])
+  }, [bookingsQuery.error])
 
   const syncLocalPhotographerProfile = useCallback(async () => {
     if (!user || user.role === "admin") {
       return
     }
 
-    await api.upsertMyPhotographer(getSessionToken, {
+    await api.upsertMyPhotographer({
       slug: user.id,
       display_name: user.displayName || "Photographer",
       city: user.city || null,
@@ -163,7 +211,6 @@ export function EventsList() {
       is_available_to_hire: true,
     })
   }, [
-    getSessionToken,
     user?.avatarUrl,
     user?.city,
     user?.country,
@@ -173,123 +220,107 @@ export function EventsList() {
     user?.role,
   ])
 
-  useEffect(() => {
-    if (isAdmin) return
-    if (!isClerkLoaded || !isSignedIn || !isAuthProfileLoaded) return
-
-    let isMounted = true
-
-    async function loadEvents() {
+  const bookEvent = useMutation({
+    mutationFn: async (eventId: string) => {
       try {
-        setIsLoadingUpcomingEvents(true)
-        setUpcomingEventsError(null)
-        const apiEvents = await fetchEventsFromApi(
-          view === "upcoming" || view === "previous"
-            ? undefined
-            : { hasPhotos: true }
-        )
-        let bookings: ApiEvent[] = []
-
-        try {
-          bookings = await api.listMyEventBookings(getSessionToken)
-        } catch (bookingsError) {
-          if (
-            bookingsError instanceof ApiError &&
-            bookingsError.status === 403
-          ) {
-            await syncLocalPhotographerProfile()
-            bookings = await api.listMyEventBookings(getSessionToken)
-          } else {
-            console.warn("Failed to load event bookings", bookingsError)
-          }
+        return await api.bookEvent(eventId)
+      } catch (bookingError) {
+        if (
+          !(bookingError instanceof ApiError) ||
+          bookingError.status !== 403
+        ) {
+          throw bookingError
         }
 
-        if (isMounted) {
-          const booked = bookings.map((event) =>
-            mapBackendEventToPgEvent(event, true)
-          )
-          const bookedIds = new Set(booked.map((event) => event.id))
-          setBookedEvents(booked)
-          setApiPhotoEvents(
-            apiEvents.map(mapApiEventToPgEvent).map((event) => ({
-              ...event,
-              isRegistered: bookedIds.has(event.id),
-              status: "open",
-              canUploadPhotos: bookedIds.has(event.id),
-            }))
-          )
-          setApiUpcomingEvents(
-            apiEvents
-              .map(mapApiEventToPgEvent)
-              .map((event) =>
-                bookedIds.has(event.id)
-                  ? { ...event, isRegistered: true, status: "open" }
-                  : event
-              )
-          )
-        }
-      } catch (error) {
-        if (isMounted) {
-          setUpcomingEventsError(
-            error instanceof Error ? error.message : "Failed to load events"
-          )
-          setApiUpcomingEvents([])
-          setApiPhotoEvents([])
-          setBookedEvents([])
-        }
-      } finally {
-        if (isMounted) setIsLoadingUpcomingEvents(false)
+        await syncLocalPhotographerProfile()
+        return api.bookEvent(eventId)
       }
-    }
+    },
+    onSuccess: (booked) => {
+      setCancelledEvents((prev) => prev.filter((item) => item.id !== booked.id))
+      queryClient.setQueryData<ApiEvent[]>(
+        photographerKeys.bookings(),
+        (prev) => [
+          booked,
+          ...(prev ?? []).filter((item) => item.id !== booked.id),
+        ]
+      )
+    },
+  })
 
-    void loadEvents()
+  const cancelBooking = useMutation({
+    mutationFn: (event: PgEvent) => api.cancelEventBooking(event.id),
+    onSuccess: (_result, event) => {
+      setCancelledEvents((prev) => [
+        { ...event, isRegistered: false, canUploadPhotos: false },
+        ...prev.filter((item) => item.id !== event.id),
+      ])
+      queryClient.setQueryData<ApiEvent[]>(
+        photographerKeys.bookings(),
+        (prev) => prev?.filter((item) => item.id !== event.id)
+      )
+    },
+  })
 
-    return () => {
-      isMounted = false
-    }
-  }, [
-    getSessionToken,
-    isAdmin,
-    isAuthProfileLoaded,
-    isClerkLoaded,
-    isSignedIn,
-    syncLocalPhotographerProfile,
-    view,
-  ])
+  const bookingEventId = bookEvent.isPending
+    ? bookEvent.variables
+    : cancelBooking.isPending
+      ? cancelBooking.variables.id
+      : null
 
   // Filter Logic
+  const bookedEvents = useMemo(
+    () =>
+      (bookingsQuery.data ?? []).map((event) =>
+        mapBackendEventToPgEvent(event, true)
+      ),
+    [bookingsQuery.data]
+  )
   const bookedEventIds = useMemo(
     () => new Set(bookedEvents.map((event) => event.id)),
     [bookedEvents]
   )
+  const apiEvents = useMemo(
+    () => (eventsQuery.data ?? []).map(mapApiEventToPgEvent),
+    [eventsQuery.data]
+  )
+  const apiPhotoEvents = useMemo(
+    () =>
+      apiEvents.map((event) => ({
+        ...event,
+        isRegistered: bookedEventIds.has(event.id),
+        status: "open" as const,
+        canUploadPhotos: bookedEventIds.has(event.id),
+      })),
+    [apiEvents, bookedEventIds]
+  )
+  const apiUpcomingEvents = useMemo(
+    () =>
+      apiEvents.map((event) =>
+        bookedEventIds.has(event.id)
+          ? { ...event, isRegistered: true, status: "open" as const }
+          : event
+      ),
+    [apiEvents, bookedEventIds]
+  )
   const workspaceEvents = useMemo(() => {
-    if (isAdmin) return events
-    const localEventsWithoutBookedApiDupes = events.filter(
+    if (isAdmin) return []
+    const readOnlyCancelledEvents = cancelledEvents.filter(
       (event) => !bookedEventIds.has(event.id)
     )
-    const localEventIds = new Set(events.map((event) => event.id))
+    const listedIds = new Set([
+      ...bookedEventIds,
+      ...readOnlyCancelledEvents.map((event) => event.id),
+    ])
     const photoEventsWithoutDupes = apiPhotoEvents.filter(
-      (event) => !bookedEventIds.has(event.id) && !localEventIds.has(event.id)
-    )
-    const readOnlyCancelledEvents = localEventsWithoutBookedApiDupes.map(
-      (event) =>
-        cancelledBookingEventIds.has(event.id)
-          ? { ...event, isRegistered: false, canUploadPhotos: false }
-          : event
+      (event) => !listedIds.has(event.id)
     )
     return [
       ...bookedEvents,
       ...readOnlyCancelledEvents,
       ...photoEventsWithoutDupes,
     ]
-  }, [
-    apiPhotoEvents,
-    bookedEventIds,
-    bookedEvents,
-    cancelledBookingEventIds,
-    events,
-    isAdmin,
-  ])
+  }, [apiPhotoEvents, bookedEventIds, bookedEvents, cancelledEvents, isAdmin])
 
   const eventSource =
     !isAdmin && (view === "upcoming" || view === "previous")
@@ -316,7 +347,7 @@ export function EventsList() {
   const latestPhotoUrlByEventId = useMemo(() => {
     const latestByEvent = new Map<string, { url: string; uploadedAt: number }>()
 
-    allPhotos.forEach((photo) => {
+    workspacePhotos.forEach((photo) => {
       if (!photo.eventId || !photo.url) return
 
       const uploadTime = photo.uploadDate
@@ -334,7 +365,7 @@ export function EventsList() {
     })
 
     return latestByEvent
-  }, [allPhotos])
+  }, [workspacePhotos])
   const myEventsWithDisplayCovers = useMemo(
     () =>
       myEvents.map((event) => ({
@@ -365,69 +396,31 @@ export function EventsList() {
   const handleBookEvent = async (event: PgEvent, e?: React.MouseEvent) => {
     e?.stopPropagation()
     try {
-      setBookingEventId(event.id)
-      let booked: ApiEvent
-      try {
-        booked = await api.bookEvent(getSessionToken, event.id)
-      } catch (bookingError) {
-        if (
-          !(bookingError instanceof ApiError) ||
-          bookingError.status !== 403
-        ) {
-          throw bookingError
-        }
-
-        await syncLocalPhotographerProfile()
-        booked = await api.bookEvent(getSessionToken, event.id)
-      }
-      const bookedPgEvent = mapBackendEventToPgEvent(booked, true)
-      setCancelledBookingEventIds((prev) => {
-        const next = new Set(prev)
-        next.delete(event.id)
-        return next
-      })
-      setBookedEvents((prev) => [
-        bookedPgEvent,
-        ...prev.filter((item) => item.id !== event.id),
-      ])
-      setApiUpcomingEvents((prev) =>
-        prev.map((item) =>
-          item.id === event.id
-            ? { ...item, isRegistered: true, status: "open" }
-            : item
-        )
-      )
+      await bookEvent.mutateAsync(event.id)
       toast.add({ title: "Event booked.", type: "success" })
     } catch (error) {
-      setUpcomingEventsError(
+      setActionError(
         error instanceof Error ? error.message : "Failed to book event"
       )
-    } finally {
-      setBookingEventId(null)
     }
   }
 
-  const handleCancelBooking = async (event: PgEvent, e?: React.MouseEvent) => {
+  // "Cancel booking" asks first (one click used to cancel right away)
+  const requestCancelBooking = (event: PgEvent, e?: React.MouseEvent) => {
     e?.stopPropagation()
+    setCancelBookingTarget(event)
+  }
+
+  const handleCancelBooking = async (event: PgEvent) => {
     try {
-      setBookingEventId(event.id)
-      await api.cancelEventBooking(getSessionToken, event.id)
-      setCancelledBookingEventIds((prev) => new Set(prev).add(event.id))
-      setBookedEvents((prev) => prev.filter((item) => item.id !== event.id))
-      setApiUpcomingEvents((prev) =>
-        prev.map((item) =>
-          item.id === event.id
-            ? { ...item, isRegistered: false, status: "upcoming" }
-            : item
-        )
-      )
+      await cancelBooking.mutateAsync(event)
       toast.add({ title: "Booking cancelled.", type: "success" })
+      setCancelBookingTarget(null)
     } catch (error) {
-      setUpcomingEventsError(
+      setCancelBookingTarget(null)
+      setActionError(
         error instanceof Error ? error.message : "Failed to cancel booking"
       )
-    } finally {
-      setBookingEventId(null)
     }
   }
 
@@ -483,14 +476,15 @@ export function EventsList() {
   const isPhotographerUpcomingView = !isAdmin && view === "upcoming"
   const isPhotographerApiEventView =
     isPhotographerUpcomingView || (!isAdmin && view === "previous")
+  // Waits for both lists (events + bookings): showing one first made cards jump
+  // when the other arrived. isPending, so refetches keep the cards.
   const isPhotographerMyEventsLoading =
     !isAdmin &&
     view === "my" &&
     (!isClerkLoaded ||
       !isSignedIn ||
       !isAuthProfileLoaded ||
-      isLoadingUpcomingEvents) &&
-    myEvents.length === 0
+      isLoadingUpcomingEvents)
 
   const tabs: { value: EventsView; label: string }[] = isAdmin
     ? [
@@ -651,7 +645,7 @@ export function EventsList() {
             chipButton,
             "hover:border-destructive/25 hover:bg-destructive/8 hover:text-destructive"
           )}
-          onClick={(e) => handleCancelBooking(event, e)}
+          onClick={(e) => requestCancelBooking(event, e)}
         >
           {bookingEventId === event.id ? "Cancelling..." : "Cancel booking"}
         </Button>
@@ -693,7 +687,10 @@ export function EventsList() {
           <WorkspaceTabs
             tabs={tabs}
             value={view}
-            onChange={(next) => setView(next)}
+            onChange={(next) => {
+              setView(next)
+              setActionError(null)
+            }}
           />
         </div>
       </header>
@@ -744,13 +741,19 @@ export function EventsList() {
       </div>
 
       {isAdmin || isPhotographerApiEventView ? (
-        <div className="container">
+        <div
+          aria-busy={
+            (isPhotographerApiEventView && isLoadingUpcomingEvents) || undefined
+          }
+          className="container"
+        >
           {isPhotographerApiEventView && isLoadingUpcomingEvents ? (
-            <EmptyState
-              icon={<CalendarPlus />}
-              title="Loading events..."
-              description="Fetching the latest event list."
-            />
+            <>
+              <span className="sr-only">Loading events…</span>
+              {Array.from({ length: 6 }).map((_, index) => (
+                <EventRowSkeleton key={index} />
+              ))}
+            </>
           ) : isPhotographerApiEventView && upcomingEventsError ? (
             <EmptyState
               icon={<AlertCircle />}
@@ -825,13 +828,17 @@ export function EventsList() {
           )}
         </div>
       ) : (
-        <div className="container grid grid-cols-3 gap-6 pt-4 max-lg:grid-cols-2 max-lg:gap-5 max-sm:grid-cols-1 max-sm:gap-4">
+        <div
+          aria-busy={isPhotographerMyEventsLoading || undefined}
+          className="container grid grid-cols-3 gap-6 pt-4 max-lg:grid-cols-2 max-lg:gap-5 max-sm:grid-cols-1 max-sm:gap-4"
+        >
           {isPhotographerMyEventsLoading ? (
-            <EmptyState
-              icon={<Spinner className="text-primary" />}
-              title="Loading your events..."
-              description="Fetching the events you've joined or been assigned to."
-            />
+            <>
+              <span className="sr-only">Loading your events…</span>
+              {Array.from({ length: 6 }).map((_, index) => (
+                <PgEventCardSkeleton key={index} hideLogo />
+              ))}
+            </>
           ) : myEvents.length === 0 ? (
             <EmptyState
               icon={<CalendarPlus />}
@@ -847,7 +854,7 @@ export function EventsList() {
                 onCancelBooking={
                   event.canUploadPhotos !== false &&
                   bookedEventIds.has(event.id)
-                    ? handleCancelBooking
+                    ? requestCancelBooking
                     : undefined
                 }
                 eventProfilePath={
@@ -887,6 +894,27 @@ export function EventsList() {
           setEventToEdit(null)
         }}
         eventToEdit={eventToEdit}
+      />
+
+      <ConfirmDialog
+        open={!!cancelBookingTarget}
+        onCancel={() => setCancelBookingTarget(null)}
+        onConfirm={() => {
+          if (cancelBookingTarget) void handleCancelBooking(cancelBookingTarget)
+        }}
+        busy={
+          !!cancelBookingTarget && bookingEventId === cancelBookingTarget.id
+        }
+        title="Cancel booking?"
+        description={
+          <>
+            You will no longer be booked for{" "}
+            <strong>{cancelBookingTarget?.title}</strong>. You can book it again
+            later if bookings are still open.
+          </>
+        }
+        confirmLabel="Cancel booking"
+        cancelLabel="Keep booking"
       />
 
       <ConfirmDialog

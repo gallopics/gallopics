@@ -6,24 +6,28 @@ import {
   useSearchParams,
 } from "react-router"
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
+import { useQuery } from "@tanstack/react-query"
 import { Check, ChevronLeft, ShoppingBag, X, Zap } from "lucide-react"
 
 import { getPriceByTierId, QUALITY_TIERS } from "@/constants/qualityTiers"
 import { cn } from "@/lib/utils"
 import { useCart } from "@/context/CartContext"
 import {
-  api,
   resolveApiAssetUrl,
   type ApiPhoto,
-  type ApiPhotographer,
-  type CheckoutLineItem,
+  type CheckoutItem,
 } from "@/data/apiClient"
 import { COMPETITIONS, HORSES, PHOTOGRAPHERS, RIDERS } from "@/data/mockData"
+import {
+  photoQueryOptions,
+  publicPhotographerQueryOptions,
+} from "@/data/queries/photos"
 import type { Photo } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
-import { Breadcrumbs } from "@/components/Breadcrumbs"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Breadcrumbs, BreadcrumbsSkeleton } from "@/components/Breadcrumbs"
 import type { BreadcrumbItem } from "@/components/Breadcrumbs"
 import { CheckoutPanel } from "@/components/CheckoutPanel"
 import { ContactSupportModal } from "@/components/ContactSupportModal"
@@ -51,6 +55,35 @@ function DetailRow({
 
 const getPrice = (quality: string) => getPriceByTierId(quality)
 
+/** A public photo as the photo page shows it */
+const toPagePhoto = (photo: ApiPhoto): Photo => ({
+  id: photo.id,
+  src:
+    resolveApiAssetUrl(`/api/v1/photographer/photos/${photo.id}/preview`) || "",
+  rider: photo.tags.find((tag) => tag.type === "rider")?.value || "Unassigned",
+  horse:
+    photo.tags.find((tag) => tag.type === "horse")?.value ||
+    photo.class_name ||
+    "Uploaded photo",
+  event: photo.event_class_name || photo.class_name || "Event",
+  eventId: photo.event_id,
+  date: new Date(photo.created_at).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }),
+  width: 600,
+  height: 800,
+  className: photo.class_name || "Uploaded",
+  time: new Date(photo.created_at).toLocaleTimeString().slice(0, 5),
+  city: "Sweden",
+  arena: photo.class_name || "Uploaded",
+  countryCode: "se",
+  photographer: photo.photographer_display_name || "Gallopics",
+  photographerId: photo.photographer_id,
+  price: photo.price,
+})
+
 const isUuid = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value
@@ -64,14 +97,8 @@ export function ImageProfile() {
   const [selectedQuality, setSelectedQuality] = useState("web")
   const { cart, addToCart, removeFromCartByPhotoId } = useCart()
   const [showCheckout, setShowCheckout] = useState(false)
-  const [isSuccess, setIsSuccess] = useState(false)
-  const [capturedOrderId, setCapturedOrderId] = useState<string | null>(null)
-  const [downloadError, setDownloadError] = useState<string | null>(null)
-  const [isDownloading, setIsDownloading] = useState(false)
   const [isFullScreen, setIsFullScreen] = useState(false)
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false)
-  const [apiPhotographer, setApiPhotographer] =
-    useState<ApiPhotographer | null>(null)
 
   const from = searchParams.get("from")
   const eventIdParam = searchParams.get("eventId")
@@ -93,61 +120,16 @@ export function ImageProfile() {
       location.state !== null &&
       "isOwnerProfile" in location.state &&
       location.state.isOwnerProfile === true)
-  const [apiPhoto, setApiPhoto] = useState<Photo | null>(null)
+  const photoQuery = useQuery({
+    ...photoQueryOptions(id ?? ""),
+    enabled: !!id,
+    select: toPagePhoto,
+  })
+  const apiPhoto = photoQuery.data ?? null
+  // First load only; a photo passed from the previous page shows at once
+  const isLoadingPhoto = !!id && !routePhoto && photoQuery.isPending
 
-  useEffect(() => {
-    if (!id) {
-      setApiPhoto(null)
-      return
-    }
-
-    let isMounted = true
-    api
-      .getPhoto(id)
-      .then((photo: ApiPhoto) => {
-        if (!isMounted) return
-        setApiPhoto({
-          id: photo.id,
-          src:
-            resolveApiAssetUrl(
-              `/api/v1/photographer/photos/${photo.id}/preview`
-            ) || "",
-          rider:
-            photo.tags.find((tag) => tag.type === "rider")?.value ||
-            "Unassigned",
-          horse:
-            photo.tags.find((tag) => tag.type === "horse")?.value ||
-            photo.class_name ||
-            "Uploaded photo",
-          event: photo.event_class_name || photo.class_name || "Event",
-          eventId: photo.event_id,
-          date: new Date(photo.created_at).toLocaleDateString(undefined, {
-            day: "numeric",
-            month: "short",
-            year: "numeric",
-          }),
-          width: 600,
-          height: 800,
-          className: photo.class_name || "Uploaded",
-          time: new Date(photo.created_at).toLocaleTimeString().slice(0, 5),
-          city: "Sweden",
-          arena: photo.class_name || "Uploaded",
-          countryCode: "se",
-          photographer: photo.photographer_display_name || "Gallopics",
-          photographerId: photo.photographer_id,
-          price: photo.price,
-        })
-      })
-      .catch(() => {
-        if (isMounted) setApiPhoto(null)
-      })
-
-    return () => {
-      isMounted = false
-    }
-  }, [id])
-
-  // develop: an empty placeholder instead of a mock photo while loading / when not found
+  // develop: an empty placeholder instead of a mock photo when not found
   const photo = useMemo<Photo>(
     () =>
       apiPhoto ||
@@ -172,6 +154,10 @@ export function ImageProfile() {
       },
     [apiPhoto, eventIdParam, id, routePhoto]
   )
+  const { data: apiPhotographer = null } = useQuery({
+    ...publicPhotographerQueryOptions(photo.photographerId ?? ""),
+    enabled: !!photo.photographerId && isUuid(photo.photographerId),
+  })
   const event = useMemo(
     () => COMPETITIONS.find((c) => c.id === photo.eventId),
     [photo.eventId]
@@ -207,36 +193,18 @@ export function ImageProfile() {
     }
   }, [apiPhotographer, photo.photographer, photo.photographerId, photographer])
 
-  useEffect(() => {
-    if (!photo.photographerId || !isUuid(photo.photographerId)) {
-      setApiPhotographer(null)
-      return
-    }
-
-    let isMounted = true
-
-    api
-      .getPublicPhotographer(photo.photographerId)
-      .then((profile) => {
-        if (isMounted) setApiPhotographer(profile)
-      })
-      .catch(() => {
-        if (isMounted) setApiPhotographer(null)
-      })
-
-    return () => {
-      isMounted = false
-    }
-  }, [photo.photographerId])
-
-  const [detectedPortrait, setDetectedPortrait] = useState<boolean>(
-    photo.height > photo.width
-  )
-
-  // Sync orientation when photo changes
-  useEffect(() => {
-    setDetectedPortrait(photo.height > photo.width)
-  }, [photo.id, photo.height, photo.width])
+  // The loaded image's real orientation; until then the photo's stated size
+  const orientationKey = `${photo.id}:${photo.width}x${photo.height}`
+  const [loadedOrientation, setLoadedOrientation] = useState<{
+    key: string
+    portrait: boolean
+  } | null>(null)
+  const detectedPortrait =
+    loadedOrientation?.key === orientationKey
+      ? loadedOrientation.portrait
+      : photo.height > photo.width
+  const setDetectedPortrait = (portrait: boolean) =>
+    setLoadedOrientation({ key: orientationKey, portrait })
 
   // Check if current selection is in cart
   const isInCart = useMemo(() => {
@@ -245,42 +213,10 @@ export function ImageProfile() {
     )
   }, [cart, photo.id, selectedQuality])
 
-  const checkoutLineItems = useMemo<CheckoutLineItem[]>(() => {
-    const selected = QUALITY_TIERS.find((t) => t.id === selectedQuality)
-    const amount = Math.round(getPrice(selectedQuality) * 100)
-    return [
-      {
-        name: `${photo.rider} / ${photo.horse} - ${selected?.label || "Photo"}`,
-        quantity: 1,
-        unit_price: amount,
-        total_amount: amount,
-        reference: photo.id,
-        type: "digital",
-        tax_rate: 0,
-        total_tax_amount: 0,
-        photo_id: photo.id,
-        quality: selectedQuality,
-      },
-    ]
-  }, [photo.horse, photo.id, photo.rider, selectedQuality])
-
-  const handleDownloadOriginal = async () => {
-    if (!capturedOrderId) return
-    setDownloadError(null)
-    setIsDownloading(true)
-    try {
-      const download = await api.createPhotoDownload(photo.id, capturedOrderId)
-      window.location.assign(download.url)
-    } catch (error) {
-      setDownloadError(
-        error instanceof Error
-          ? error.message
-          : "Could not create download link."
-      )
-    } finally {
-      setIsDownloading(false)
-    }
-  }
+  const checkoutItems = useMemo<CheckoutItem[]>(
+    () => [{ photo_id: photo.id, quality: selectedQuality }],
+    [photo.id, selectedQuality]
+  )
 
   // Track recently viewed (real photos only)
   useEffect(() => {
@@ -319,16 +255,13 @@ export function ImageProfile() {
         label: "Photo detail",
         onClick: () => setShowCheckout(false),
       })
-      items.push({
-        label: isSuccess ? "Confirmation" : "Checkout",
-        active: true,
-      })
+      items.push({ label: "Checkout", active: true })
     } else {
       items.push({ label: "Photo detail", active: true })
     }
 
     return items
-  }, [from, eventIdParam, photo, navigate, showCheckout, isSuccess])
+  }, [from, eventIdParam, photo, navigate, showCheckout])
 
   // Quality Selector Options
   const qualityOptions = useMemo(() => {
@@ -348,6 +281,9 @@ export function ImageProfile() {
       description: tier.description,
     }))
   }, [detectedPortrait])
+
+  if (isLoadingPhoto)
+    return <ImageProfileSkeleton showPurchase={!isOwnerProfilePhoto} />
 
   return (
     <div className="flex min-h-screen flex-col overflow-x-hidden max-md:relative max-md:w-full max-md:max-w-[100vw]">
@@ -505,14 +441,14 @@ export function ImageProfile() {
                       </div>
 
                       <p className="mt-4 text-xs leading-[1.4] text-muted-foreground">
-                        Klarna sends the invoice confirmation after payment.
-                        Download links are available immediately and valid for
-                        24 hours. Images are delivered as JPEG.
+                        Your receipt is sent by email after payment. Download
+                        links are available immediately and valid for 24 hours.
+                        Images are delivered as JPEG.
                       </p>
 
                       <Button
                         variant="link"
-                        className="mt-4 h-auto w-full border-0 p-0 text-[0.8125rem] leading-normal font-normal text-muted-foreground hover:text-foreground"
+                        className="mt-4 h-auto w-full border-0 p-0 text-[0.8125rem] leading-normal font-normal text-muted-foreground hover:text-primary"
                         onClick={() => setIsSupportModalOpen(true)}
                       >
                         Questions? Contact support
@@ -529,57 +465,11 @@ export function ImageProfile() {
                         <ChevronLeft />
                         Back to selection
                       </Button>
-                      {isSuccess ? (
-                        <div className="py-6 text-center">
-                          <div className="mx-auto mb-4 flex size-20 items-center justify-center rounded-full bg-success/10 text-success">
-                            <Check className="size-12" />
-                          </div>
-                          <h2 className="mt-4 text-xl font-semibold">
-                            Payment successful!
-                          </h2>
-                          <p className="mt-2 text-sm text-muted-foreground">
-                            Klarna will send your invoice confirmation. You can
-                            download your photo directly below.
-                          </p>
-                          {capturedOrderId && (
-                            <p className="mt-3 text-xs break-all text-muted-foreground">
-                              Order ID: {capturedOrderId}
-                            </p>
-                          )}
-                          <Button
-                            className="mt-3 w-full"
-                            onClick={handleDownloadOriginal}
-                            disabled={!capturedOrderId || isDownloading}
-                          >
-                            <Zap className="size-4.5" />
-                            {isDownloading
-                              ? "Preparing download..."
-                              : "Download Original"}
-                          </Button>
-                          {downloadError && (
-                            <p className="mt-3 text-[0.8125rem] text-destructive">
-                              {downloadError}
-                            </p>
-                          )}
-                          <Button
-                            variant="outline"
-                            className="mt-3 w-full"
-                            onClick={() => navigate("/")}
-                          >
-                            Continue browsing
-                          </Button>
-                        </div>
-                      ) : (
-                        <CheckoutPanel
-                          total={getPrice(selectedQuality)}
-                          lineItems={checkoutLineItems}
-                          onPaymentSuccess={(order) => {
-                            setCapturedOrderId(order.id)
-                            setIsSuccess(true)
-                          }}
-                          onPay={() => setIsSuccess(true)}
-                        />
-                      )}
+                      <CheckoutPanel
+                        total={getPrice(selectedQuality)}
+                        items={checkoutItems}
+                        cancelPath={location.pathname + location.search}
+                      />
                     </div>
                   )}
                 </Card>
@@ -654,6 +544,111 @@ export function ImageProfile() {
         isOpen={isSupportModalOpen}
         onClose={() => setIsSupportModalOpen(false)}
       />
+    </div>
+  )
+}
+
+// Bars sit inline in text lines, so each line keeps its real height
+const bar = "inline-block h-[0.8em] rounded-sm bg-border align-middle"
+
+/** First load: the photo, purchase and details cards as placeholders */
+function ImageProfileSkeleton({ showPurchase }: { showPurchase: boolean }) {
+  return (
+    <div className="flex min-h-screen flex-col overflow-x-hidden max-md:relative max-md:w-full max-md:max-w-[100vw]">
+      <Header />
+
+      <div aria-busy="true">
+        <span className="sr-only">Loading photo…</span>
+        <BreadcrumbsSkeleton />
+
+        <main
+          aria-hidden="true"
+          className="pt-6 pb-15 max-md:pt-3 max-md:pb-10"
+        >
+          <div className="container">
+            <div className="flex items-start gap-6 max-lg:flex-col">
+              <div className="min-w-0 flex-1">
+                <Card className="gap-0 rounded-3xl py-0 shadow-[0_1px_2px_rgba(0,0,0,0.02)] max-md:rounded-xl">
+                  <Skeleton className="aspect-3/2 min-h-100 w-full rounded-none max-md:min-h-0" />
+                  {/* Rider, horse and photographer chips */}
+                  <div className="flex flex-wrap gap-2 border-t border-black/5 px-6 py-4 max-md:px-4">
+                    <Skeleton className="h-12 w-36 rounded-full" />
+                    <Skeleton className="h-12 w-36 rounded-full" />
+                    <Skeleton className="h-12 w-40 rounded-full" />
+                  </div>
+                </Card>
+              </div>
+
+              <div className="flex w-90 shrink-0 flex-col gap-4 max-lg:w-full">
+                {showPurchase && (
+                  <Card className="gap-0 p-6 shadow-[0_1px_2px_rgba(0,0,0,0.02)] max-md:p-5">
+                    <div className="mb-2 text-xs leading-normal">
+                      <Skeleton className={cn(bar, "w-24")} />
+                    </div>
+                    <div className="mb-6 text-[2rem] leading-normal">
+                      <Skeleton className={cn(bar, "w-36")} />
+                    </div>
+                    <div className="mb-2 text-[0.8125rem]">
+                      <Skeleton className={cn(bar, "w-24")} />
+                    </div>
+                    {/* Quality dropdown (two-line option) and its hidden input */}
+                    <Skeleton className="h-16.5 rounded-md" />
+                    <div className="mt-6 flex flex-col gap-3">
+                      <Skeleton className="h-13 rounded-full" />
+                      <Skeleton className="h-13.5 rounded-full" />
+                    </div>
+                    <div className="mt-5 flex justify-center gap-6 border-t border-muted pt-5 text-xs leading-normal">
+                      <div className="w-24">
+                        <Skeleton className={cn(bar, "w-full")} />
+                      </div>
+                      <div className="w-24">
+                        <Skeleton className={cn(bar, "w-full")} />
+                      </div>
+                    </div>
+                    <div className="mt-4 text-xs leading-[1.4]">
+                      <div>
+                        <Skeleton className={cn(bar, "w-full")} />
+                      </div>
+                      <div>
+                        <Skeleton className={cn(bar, "w-full")} />
+                      </div>
+                      <div>
+                        <Skeleton className={cn(bar, "w-1/2")} />
+                      </div>
+                    </div>
+                    <div className="mt-4 text-center text-[0.8125rem] leading-normal">
+                      <Skeleton className={cn(bar, "w-40")} />
+                    </div>
+                  </Card>
+                )}
+
+                <Card className="gap-0 p-6 shadow-[0_1px_2px_rgba(0,0,0,0.02)] max-md:p-5">
+                  <div className="mb-4 text-base">
+                    <Skeleton className={cn(bar, "w-16")} />
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    {Array.from({ length: 7 }).map((_, index) => (
+                      <div
+                        key={index}
+                        className="flex justify-between gap-4 text-sm leading-normal"
+                      >
+                        <div className="w-16">
+                          <Skeleton className={cn(bar, "w-full")} />
+                        </div>
+                        <div className="w-28 text-right">
+                          <Skeleton className={cn(bar, "w-full")} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+
+      <Footer minimal />
     </div>
   )
 }

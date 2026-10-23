@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useLocation, useNavigate, useParams } from "react-router"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   AlertCircle,
   Archive,
@@ -13,17 +14,21 @@ import {
   X,
 } from "lucide-react"
 
-import { notify } from "@/lib/notify"
 import { assetUrl, cn } from "@/lib/utils"
-import {
-  usePhotographer,
-  type PgEvent,
-  type Photo,
-} from "@/context/PhotographerContext"
-import { TOAST_TOKENS } from "@/context/ToastTokens"
+import { useDeletePhotosWithUndo } from "@/hooks/useDeletePhotosWithUndo"
+import { useWorkspacePhotos } from "@/hooks/useWorkspaceData"
+import { useAuth } from "@/context/AuthContext"
+import type { PgEvent, Photo } from "@/context/PhotographerContext"
 import { useWorkspace } from "@/context/WorkspaceContext"
-import { fetchEventFromApi, mapApiEventToEventData } from "@/data/eventsApi"
+import { mapApiEventToEventData } from "@/data/eventsApi"
 import { PHOTOGRAPHERS } from "@/data/mockData"
+import { eventQueryOptions } from "@/data/queries/events"
+import {
+  bookingsQueryOptions,
+  myPhotosQueryOptions,
+  resolveCachedDuplicate,
+  toWorkspaceEvents,
+} from "@/data/queries/photographer"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -36,13 +41,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Separator } from "@/components/ui/separator"
-import { Spinner } from "@/components/ui/spinner"
+import { Skeleton } from "@/components/ui/skeleton"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
 import { EmptyState } from "@/components/EmptyState"
 import { FilterChip } from "@/components/FilterChip"
 import { ActionCluster } from "@/components/HeaderActions"
 import { InfoChip } from "@/components/InfoChip"
-import { PhotoCard } from "@/components/PhotoCard"
+import { PhotoCard, PhotoCardSkeleton } from "@/components/PhotoCard"
 import { PhotoPreviewDialog } from "@/components/PhotoPreviewDialog"
 import { ScopedSearchBar } from "@/components/ScopedSearchBar"
 import { TitleHeader } from "@/components/TitleHeader"
@@ -98,21 +103,50 @@ export function EventDetail() {
   const location = useLocation()
   const fromTab = (location.state as any)?.fromTab
   const { basePath, isAdmin } = useWorkspace()
-  const {
-    getEvent,
-    getPhotosByEvent,
-    resolveDuplicate,
-    deletePhotos,
-    restorePhotos,
-  } = usePhotographer()
+  const { isPhotographer } = useAuth()
+  const queryClient = useQueryClient()
+  const deletePhotosWithUndo = useDeletePhotosWithUndo()
+  const bookingsQuery = useQuery({
+    ...bookingsQueryOptions(),
+    enabled: isPhotographer,
+    select: toWorkspaceEvents,
+  })
+  const workspacePhotos = useWorkspacePhotos()
+  // First load of the photos only (refetches keep showing them)
+  const { isPending: isPhotosPending } = useQuery({
+    ...myPhotosQueryOptions(),
+    enabled: isPhotographer,
+  })
+  const isLoadingPhotos = isPhotographer && isPhotosPending
 
-  const contextEvent = eventId ? getEvent(eventId) : undefined
-  const [apiEvent, setApiEvent] = useState<PgEvent | null>(null)
-  const [isLoadingApiEvent, setIsLoadingApiEvent] = useState(false)
-  const [apiEventError, setApiEventError] = useState<string | null>(null)
+  const contextEvent = eventId
+    ? bookingsQuery.data?.find((e) => e.id === eventId)
+    : undefined
+  const bookingsSettled = !isPhotographer || !bookingsQuery.isPending
+  // Events the photographer has not booked (or admins open) come from the API
+  const apiEventQuery = useQuery({
+    ...eventQueryOptions(eventId ?? ""),
+    enabled: !!eventId && !contextEvent && bookingsSettled,
+  })
+  const apiEvent = useMemo(
+    () =>
+      eventId && apiEventQuery.data
+        ? mapApiEventToPgEvent(eventId, apiEventQuery.data)
+        : null,
+    [apiEventQuery.data, eventId]
+  )
+  const isLoadingApiEvent =
+    !contextEvent && (!bookingsSettled || apiEventQuery.isLoading)
+  const apiEventError = apiEventQuery.error?.message ?? null
   const event = contextEvent || apiEvent || undefined
   const canUploadPhotos = isAdmin || event?.canUploadPhotos !== false
-  const allEventPhotos = eventId ? getPhotosByEvent(eventId) : []
+  const allEventPhotos = useMemo(
+    () =>
+      eventId
+        ? workspacePhotos.filter((photo) => photo.eventId === eventId)
+        : [],
+    [eventId, workspacePhotos]
+  )
   const selectedClassContext = useMemo(() => {
     const state = location.state as
       | {
@@ -195,43 +229,6 @@ export function EventDetail() {
   const [showInfoModal, setShowInfoModal] = useState(false)
 
   const processedDupIds = useRef<Set<string>>(new Set())
-
-  useEffect(() => {
-    if (!eventId || contextEvent) {
-      setApiEvent(null)
-      setApiEventError(null)
-      setIsLoadingApiEvent(false)
-      return
-    }
-
-    let isMounted = true
-    const requestedEventId = eventId
-
-    async function loadEvent() {
-      try {
-        setIsLoadingApiEvent(true)
-        setApiEventError(null)
-        const nextEvent = await fetchEventFromApi(requestedEventId)
-        if (isMounted) {
-          setApiEvent(mapApiEventToPgEvent(requestedEventId, nextEvent))
-        }
-      } catch (error) {
-        if (isMounted) {
-          setApiEventError(
-            error instanceof Error ? error.message : "Failed to load event"
-          )
-        }
-      } finally {
-        if (isMounted) setIsLoadingApiEvent(false)
-      }
-    }
-
-    void loadEvent()
-
-    return () => {
-      isMounted = false
-    }
-  }, [contextEvent, eventId])
 
   // Deep link effect: Scroll to duplicate group
   useEffect(() => {
@@ -725,12 +722,12 @@ export function EventDetail() {
 
   // Duplicate actions
   const handleRemove = (photoId: string) => {
-    resolveDuplicate(photoId, "remove")
+    resolveCachedDuplicate(queryClient, photoId, "remove")
   }
 
   // Legacy handler for MasonryGrid fallback
   const handleKeep = (photoId: string) => {
-    resolveDuplicate(photoId, "keep")
+    resolveCachedDuplicate(queryClient, photoId, "keep")
   }
 
   // Manage handler for cards in other views
@@ -780,21 +777,11 @@ export function EventDetail() {
     setIsPanelOpen(true)
   }
 
-  // Toasts go through the global toast manager (old page-level PgToast)
-  const showToast = (
-    msg: string,
-    type: "success" | "info" | "danger",
-    onUndo?: () => void
-  ) => notify(msg, type === "danger" ? "error" : type, onUndo)
-
   const [confirmModal, setConfirmModal] = useState<{
     type: "delete"
     isOpen: boolean
   }>({ type: "delete", isOpen: false })
   const [activePanelTab, setActivePanelTab] = useState<"tags" | "price">("tags")
-
-  const undoSelectionRef = useRef<Set<string>>(new Set())
-  const undoDeletedPhotosRef = useRef<Photo[]>([])
 
   const handleEditPrice = (photo: Photo) => {
     setSelectedIds(new Set([photo.id]))
@@ -807,42 +794,21 @@ export function EventDetail() {
     setConfirmModal({ type: "delete", isOpen: true })
   }
 
-  const handleUndoDelete = () => {
-    if (undoDeletedPhotosRef.current.length > 0) {
-      restorePhotos(undoDeletedPhotosRef.current)
-      undoDeletedPhotosRef.current = []
-    }
-    setSelectedIds(new Set(undoSelectionRef.current))
-  }
-
-  const handleConfirmAction = async () => {
-    const selectedPhotoIds = Array.from(selectedIds)
-    const selectedPhotosSnapshot = allPhotos.filter((p) =>
-      selectedIds.has(p.id)
-    )
+  const handleConfirmAction = () => {
+    const selectedPhotos = allPhotos.filter((p) => selectedIds.has(p.id))
+    const previousSelection = new Set(selectedIds)
 
     setConfirmModal({ ...confirmModal, isOpen: false })
     setIsPanelOpen(false)
 
     if (confirmModal.type === "delete") {
-      undoSelectionRef.current = new Set(selectedIds)
-      undoDeletedPhotosRef.current = selectedPhotosSnapshot
       setSelectedIds(new Set())
-
-      try {
-        await deletePhotos(selectedPhotoIds)
-        showToast(
-          `${selectedPhotoIds.length} photo${
-            selectedPhotoIds.length > 1 ? "s" : ""
-          } deleted`,
-          TOAST_TOKENS.DELETE.type,
-          handleUndoDelete
-        )
-      } catch {
-        undoDeletedPhotosRef.current = []
-        setSelectedIds(new Set(selectedPhotoIds))
-        showToast("Could not delete photo. Please try again.", "danger")
-      }
+      // Undo puts them back and reselects them; the API delete waits for the toast
+      deletePhotosWithUndo(
+        selectedPhotos,
+        `${selectedIds.size} photo${selectedIds.size > 1 ? "s" : ""} deleted`,
+        () => setSelectedIds(previousSelection)
+      )
     }
   }
 
@@ -861,12 +827,8 @@ export function EventDetail() {
   }, [eventId])
   // Guard after all hooks — safe to return early now
   if (!event && isLoadingApiEvent)
-    return (
-      <EmptyState
-        icon={<Spinner className="text-primary" />}
-        title="Loading event..."
-      />
-    )
+    // Booked events have no logo; once the bookings are in, this is an API event (with one)
+    return <EventDetailSkeleton withLogo={bookingsSettled} />
   if (!event)
     return (
       <EmptyState
@@ -992,7 +954,7 @@ export function EventDetail() {
         <div className="container flex items-center">
           <WorkspaceTabs
             // old .tab-btn: 14px 24px padding, 14px/21px, 2px underline overlapping the row border
-            triggerClassName="-mb-px group-data-[variant=line]/tabs-list:px-6 group-data-[variant=line]/tabs-list:pt-3.5 group-data-[variant=line]/tabs-list:pb-4 group-data-[variant=line]/tabs-list:leading-normal"
+            triggerClassName="-mb-px group-data-[variant=line]/tabs-list:h-auto group-data-[variant=line]/tabs-list:px-6 group-data-[variant=line]/tabs-list:pt-3.5 group-data-[variant=line]/tabs-list:pb-4 group-data-[variant=line]/tabs-list:leading-normal"
             tabs={[
               {
                 value: "uploads",
@@ -1028,20 +990,27 @@ export function EventDetail() {
         <div className="flex items-start gap-8">
           {/* Left sidebar: tag filters */}
           {showFilters && (
-            <div className="w-47.5 shrink-0 self-start pt-3">
-              <div className="flex w-full flex-col items-start gap-2 pr-2">
+            <div className="w-55 shrink-0 self-start pt-3">
+              <div className="flex w-full flex-col items-stretch gap-2 pr-2">
                 {activeChips.map((chip) => (
                   <FilterChip
                     key={chip.id}
+                    // Full-width rows, count on the right; long names wrap to two lines
+                    className="h-auto min-h-9 w-full justify-between rounded-xl py-1.5 text-left whitespace-normal"
                     label={
-                      <span className="flex items-center gap-1.5">
+                      <span
+                        className="flex min-w-0 items-center gap-1.5"
+                        title={String(chip.label)}
+                      >
                         {chip.color && (
                           <span
-                            className="size-2 rounded-full"
+                            className="size-2 shrink-0 rounded-full"
                             style={{ background: chip.color }}
                           />
                         )}
-                        {chip.label}
+                        <span className="line-clamp-2 leading-[1.3]">
+                          {chip.label}
+                        </span>
                       </span>
                     }
                     isActive={activeChip === chip.id}
@@ -1220,7 +1189,18 @@ export function EventDetail() {
               </div>
             ) : (
               // develop: plain grid instead of masonry (Safari fix)
-              <div className="grid w-full grid-cols-[repeat(auto-fill,minmax(220px,280px))] justify-center gap-4 pb-8">
+              <div
+                aria-busy={isLoadingPhotos || undefined}
+                className={photoGridClass}
+              >
+                {isLoadingPhotos && (
+                  <>
+                    <span className="sr-only">Loading photos…</span>
+                    {Array.from({ length: 8 }).map((_, index) => (
+                      <PhotoCardSkeleton key={index} pg />
+                    ))}
+                  </>
+                )}
                 {displayedPhotos.map((photo) => {
                   const uiPhoto = mapToUiPhoto(photo)
                   const isSelected = selectedIds.has(photo.id)
@@ -1301,6 +1281,7 @@ export function EventDetail() {
 
             {activeTab === "uploads" &&
               !isDuplicatesFolder &&
+              !isLoadingPhotos &&
               displayedPhotos.length === 0 && (
                 <EmptyState
                   icon={<ImageOff />}
@@ -1362,7 +1343,7 @@ export function EventDetail() {
         onCancel={() => setConfirmModal({ ...confirmModal, isOpen: false })}
         onConfirm={handleConfirmAction}
         title={`Delete photo${selectedIds.size > 1 ? "s" : ""}?`}
-        description="This will remove the selected photo(s) from the event. This action cannot be undone."
+        description="This will remove the selected photo(s) from the event. You can undo it for a few seconds afterwards."
         confirmLabel="Delete"
       />
 
@@ -1435,6 +1416,68 @@ export function EventDetail() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+// develop: plain grid instead of masonry (Safari fix)
+const photoGridClass =
+  "grid w-full grid-cols-[repeat(auto-fill,minmax(220px,280px))] justify-center gap-4 pb-8"
+
+/** First load: compact header, tabs row and photo cards as placeholders */
+function EventDetailSkeleton({ withLogo }: { withLogo: boolean }) {
+  // Bars sit inline in text lines, so each line keeps its real height
+  const bar = "inline-block h-[0.8em] rounded-sm bg-border align-middle"
+
+  return (
+    <div aria-busy="true">
+      <TitleHeader
+        compact
+        variant="workspace"
+        className="border-b-0"
+        title={
+          <div aria-hidden="true" className="flex items-center gap-2">
+            {/* Back and info buttons */}
+            <Skeleton className="size-6.5 rounded-full" />
+            <Skeleton className="h-[0.8em] w-48 rounded-sm bg-border" />
+            <Skeleton className="size-6.5 rounded-full" />
+          </div>
+        }
+        topSubtitle={
+          <>
+            <span className="sr-only">Loading event…</span>
+            <Skeleton aria-hidden="true" className={cn(bar, "w-24")} />
+          </>
+        }
+        avatar={
+          withLogo ? (
+            <Skeleton aria-hidden="true" className="size-full rounded-md" />
+          ) : undefined
+        }
+        avatarShape="square"
+        rightContent={
+          <ActionCluster>
+            {/* "Published" count */}
+            <Skeleton aria-hidden="true" className="h-11.5 w-21" />
+          </ActionCluster>
+        }
+      />
+
+      <div aria-hidden="true" className="border-b bg-card/95">
+        <div className="container flex items-center">
+          <div className="-mb-px px-6 pt-3.5 pb-4 text-sm leading-normal">
+            <Skeleton className={cn(bar, "w-20")} />
+          </div>
+        </div>
+      </div>
+
+      <div aria-hidden="true" className="container pt-6">
+        <div className={photoGridClass}>
+          {Array.from({ length: 8 }).map((_, index) => (
+            <PhotoCardSkeleton key={index} pg />
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

@@ -122,6 +122,9 @@ export function TitleHeader({
                           "rounded-md! *:rounded-md! after:rounded-md"
                       )}
                     />
+                  ) : isSquare ? (
+                    // e.g. a loading placeholder: fills the square frame
+                    avatar
                   ) : (
                     <div className="flex size-20 items-center justify-center overflow-hidden rounded-full bg-muted">
                       {avatar}

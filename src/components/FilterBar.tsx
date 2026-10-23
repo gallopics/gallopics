@@ -28,8 +28,8 @@ export function FilterBar({
   searchWidth = "fill",
 }: FilterBarProps) {
   return (
-    // develop: shared-filters.css .filters-wrapper got margin-top 24px (workspace pages)
-    <div className={cn("mb-6", searchWidth === "fixed" && "mt-6")}>
+    // old .filters-wrapper: margin 24px top + bottom (shared-filters.css is imported globally, so public pages too)
+    <div className="my-6">
       <div
         className={cn(
           "flex w-full items-center justify-between max-md:flex-col max-md:items-start",

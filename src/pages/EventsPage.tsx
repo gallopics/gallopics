@@ -1,16 +1,25 @@
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router"
+import {
+  useQueries,
+  useQuery,
+  type UseQueryResult,
+} from "@tanstack/react-query"
 
 import { useAuth } from "@/context/AuthContext"
-import { api, type ApiPhoto } from "@/data/apiClient"
-import {
-  fetchEventsFromApi,
-  fetchEventsWithPhotosFromApi,
-  fetchLatestPublicEventPhotoUrl,
-} from "@/data/eventsApi"
+import type { ApiPhoto, PaginatedResponse } from "@/data/apiClient"
+import { pickLatestPhotoUrl } from "@/data/eventsApi"
 import type { EventData } from "@/data/mockEvents"
+import {
+  eventGalleryQueryOptions,
+  eventPhotoSearchQueryOptions,
+  eventsListQueryOptions,
+} from "@/data/queries/events"
 import { EmptyState } from "@/components/EmptyState"
-import { FolderEventCard } from "@/components/FolderEventCard"
+import {
+  EventCardSkeleton,
+  FolderEventCard,
+} from "@/components/FolderEventCard"
 import { Footer } from "@/components/Footer"
 import { Header } from "@/components/Header"
 import { HomeHero } from "@/components/HomeHero"
@@ -20,10 +29,23 @@ interface PhotoSearchResult {
   query: string
   matchedIds: Record<string, true>
   matchLabels: Record<string, string>
+  /** Per event: the query and the found photos' tag text, for the search bar */
+  searchIndex: Record<string, string>
 }
 
+const NO_EVENTS: EventData[] = []
 const NO_MATCHES: Record<string, true> = {}
 const NO_LABELS: Record<string, string> = {}
+const NO_SEARCH: PhotoSearchResult = {
+  query: "",
+  matchedIds: {},
+  matchLabels: {},
+  searchIndex: {},
+}
+
+/** The events grid; the loading skeleton uses the same one */
+const eventGridClass =
+  "grid w-full grid-cols-4 gap-6 max-[1200px]:grid-cols-3 max-[1200px]:gap-5 max-[900px]:grid-cols-2 max-[900px]:gap-4 max-[600px]:grid-cols-1"
 
 const TAG_LABELS: Record<string, string> = {
   rider: "Rider",
@@ -64,84 +86,62 @@ function getBestMatchLabel(photos: ApiPhoto[], lowerQuery: string) {
   return bestCandidate ? `${bestCandidate.label}: ${bestCandidate.value}` : ""
 }
 
-/** Photos of one event that match the query (tags, or photographer name) */
-async function searchEventPhotos(eventId: string, query: string) {
-  try {
-    const [searchedPhotos, galleryPage] = await Promise.all([
-      api.searchGallery(eventId, query),
-      api.getEventGallery(eventId, 1, 25),
-    ])
-    const photographerMatches = galleryPage.items.filter((photo) =>
-      (photo.photographer_display_name || "")
-        .toLowerCase()
-        .includes(query.toLowerCase())
-    )
-    const photosById = new Map(
-      [...searchedPhotos, ...photographerMatches].map((photo) => [
-        photo.id,
-        photo,
-      ])
-    )
-    return [eventId, Array.from(photosById.values())] as const
-  } catch (error) {
-    console.warn(`Failed to search photo metadata for event ${eventId}`, error)
-    return [eventId, [] as ApiPhoto[]] as const
+/** The matches of one finished search, from each event's found photos */
+function toPhotoSearchResult(
+  query: string,
+  results: Array<readonly [string, ApiPhoto[]]>
+): PhotoSearchResult {
+  const lowerQuery = query.toLowerCase()
+  const result: PhotoSearchResult = {
+    query,
+    matchedIds: {},
+    matchLabels: {},
+    searchIndex: {},
   }
+
+  results.forEach(([eventId, photos]) => {
+    if (photos.length === 0) return
+    result.matchedIds[eventId] = true
+    const matchLabel = getBestMatchLabel(photos, lowerQuery)
+    if (matchLabel) result.matchLabels[eventId] = matchLabel
+    const photoText = photos
+      .flatMap((photo) => [
+        photo.photographer_display_name,
+        photo.class_name,
+        photo.event_class_name,
+        ...(photo.tags ?? []).map((tag) => tag.value),
+      ])
+      .filter(Boolean)
+      .join(" ")
+    result.searchIndex[eventId] = [query, photoText].filter(Boolean).join(" ")
+  })
+
+  return result
 }
+
+const selectLatestPhotoUrl = (page: PaginatedResponse<ApiPhoto>) =>
+  pickLatestPhotoUrl(page.items)
+
+const combineCoverUrls = (results: UseQueryResult<string | null>[]) =>
+  results.map((result) => result.data ?? null)
 
 export function EventsPage() {
   const navigate = useNavigate()
   const { isLoaded, isAuthenticated, user } = useAuth()
 
-  const [events, setEvents] = useState<EventData[]>([])
-  const [latestPhotoCoverUrls, setLatestPhotoCoverUrls] = useState<
-    Record<string, string | null>
-  >({})
-  const [isLoadingEvents, setIsLoadingEvents] = useState(true)
-  const [eventsError, setEventsError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
-  const [eventSearchIndex, setEventSearchIndex] = useState<
-    Record<string, string>
-  >({})
-  /** Result of the last finished photo search, with the query it was for */
-  const [photoSearch, setPhotoSearch] = useState<PhotoSearchResult>({
-    query: "",
-    matchedIds: {},
-    matchLabels: {},
-  })
   const shouldShowPhotoBackedEvents = !isAuthenticated || user?.role === "pg"
 
-  useEffect(() => {
-    if (!isLoaded) return
-
-    let isMounted = true
-
-    async function loadEvents() {
-      try {
-        setIsLoadingEvents(true)
-        setEventsError(null)
-        const nextEvents = shouldShowPhotoBackedEvents
-          ? await fetchEventsWithPhotosFromApi()
-          : await fetchEventsFromApi()
-
-        if (isMounted) setEvents(nextEvents)
-      } catch (error) {
-        if (isMounted) {
-          setEventsError(
-            error instanceof Error ? error.message : "Failed to load events"
-          )
-        }
-      } finally {
-        if (isMounted) setIsLoadingEvents(false)
-      }
-    }
-
-    void loadEvents()
-
-    return () => {
-      isMounted = false
-    }
-  }, [isLoaded, shouldShowPhotoBackedEvents])
+  const eventsQuery = useQuery({
+    ...eventsListQueryOptions(shouldShowPhotoBackedEvents),
+    enabled: isLoaded,
+  })
+  const events = eventsQuery.data ?? NO_EVENTS
+  const isLoadingEvents = eventsQuery.isPending
+  // Only when there is nothing to show (a failed refetch keeps the list)
+  const eventsError = eventsQuery.data
+    ? null
+    : (eventsQuery.error?.message ?? null)
 
   const trimmedQuery = searchQuery.trim()
   const searchableEvents = useMemo(
@@ -150,72 +150,54 @@ export function EventsPage() {
   )
   const needsPhotoSearch =
     trimmedQuery.length >= 2 && searchableEvents.length > 0
-  // Keep the previous matches until the new search finishes
+
+  // The photo search runs once typing pauses
+  const [debouncedQuery, setDebouncedQuery] = useState("")
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(trimmedQuery), 250)
+    return () => window.clearTimeout(timer)
+  }, [trimmedQuery])
+  const photoSearchQuery =
+    needsPhotoSearch && debouncedQuery.length >= 2 ? debouncedQuery : ""
+
+  // Search the photos' tags (rider, horse, class, photographer) of each event
+  const combineSearch = useCallback(
+    (results: UseQueryResult<ApiPhoto[]>[]) =>
+      results.length > 0 && results.every((result) => result.isSuccess)
+        ? toPhotoSearchResult(
+            photoSearchQuery,
+            results.map(
+              (result, index) =>
+                [searchableEvents[index].id, result.data] as const
+            )
+          )
+        : null,
+    [photoSearchQuery, searchableEvents]
+  )
+  const finishedSearch = useQueries({
+    queries: photoSearchQuery
+      ? searchableEvents.map((event) =>
+          eventPhotoSearchQueryOptions(event.id, photoSearchQuery)
+        )
+      : [],
+    combine: combineSearch,
+  })
+
+  /** Result of the last finished photo search; kept while the next one runs */
+  const [photoSearch, setPhotoSearch] = useState(NO_SEARCH)
+  if (finishedSearch && finishedSearch !== photoSearch) {
+    setPhotoSearch(finishedSearch)
+  }
+
   const photoMatchedEventIds = needsPhotoSearch
     ? photoSearch.matchedIds
     : NO_MATCHES
   const eventMatchLabels = needsPhotoSearch
     ? photoSearch.matchLabels
     : NO_LABELS
+  const eventSearchIndex = photoSearch.searchIndex
   const isSearchingPhotoMetadata =
     needsPhotoSearch && photoSearch.query !== trimmedQuery
-
-  // Search the photos' tags (rider, horse, class, photographer) of each event
-  useEffect(() => {
-    if (!needsPhotoSearch) return
-
-    const query = trimmedQuery
-    let isMounted = true
-
-    const searchTimer = window.setTimeout(async () => {
-      const results = await Promise.all(
-        searchableEvents.map((event) => searchEventPhotos(event.id, query))
-      )
-
-      if (!isMounted) return
-
-      const lowerQuery = query.toLowerCase()
-      const nextMatchedIds: Record<string, true> = {}
-      const nextMatchLabels: Record<string, string> = {}
-
-      results.forEach(([eventId, photos]) => {
-        if (photos.length === 0) return
-        nextMatchedIds[eventId] = true
-        const matchLabel = getBestMatchLabel(photos, lowerQuery)
-        if (matchLabel) nextMatchLabels[eventId] = matchLabel
-      })
-
-      setEventSearchIndex((prev) => {
-        const next = { ...prev }
-        results.forEach(([eventId, photos]) => {
-          if (photos.length === 0) return
-          const photoText = photos
-            .flatMap((photo) => [
-              photo.photographer_display_name,
-              photo.class_name,
-              photo.event_class_name,
-              ...(photo.tags ?? []).map((tag) => tag.value),
-            ])
-            .filter(Boolean)
-            .join(" ")
-          next[eventId] = [next[eventId], query, photoText]
-            .filter(Boolean)
-            .join(" ")
-        })
-        return next
-      })
-      setPhotoSearch({
-        query,
-        matchedIds: nextMatchedIds,
-        matchLabels: nextMatchLabels,
-      })
-    }, 250)
-
-    return () => {
-      isMounted = false
-      window.clearTimeout(searchTimer)
-    }
-  }, [needsPhotoSearch, searchableEvents, trimmedQuery])
 
   const filteredEvents = useMemo(() => {
     const query = trimmedQuery.toLowerCase()
@@ -242,61 +224,34 @@ export function EventsPage() {
   }, [events, eventSearchIndex, photoMatchedEventIds, trimmedQuery])
 
   // Events without a cover image fall back to their latest public photo
-  useEffect(() => {
-    const eventsMissingCovers = filteredEvents.filter(
-      (event) =>
-        !event.coverImage &&
-        event.photoCount !== 0 &&
-        !Object.prototype.hasOwnProperty.call(latestPhotoCoverUrls, event.id)
-    )
-
-    if (eventsMissingCovers.length === 0) return
-
-    let isMounted = true
-
-    async function loadLatestPhotoCovers() {
-      const coverEntries = await Promise.all(
-        eventsMissingCovers.map(async (event) => {
-          try {
-            const url = await fetchLatestPublicEventPhotoUrl(event.id)
-            return [event.id, url] as const
-          } catch (error) {
-            console.warn(
-              `Failed to load fallback cover for event ${event.id}`,
-              error
-            )
-            return [event.id, null] as const
-          }
-        })
-      )
-
-      if (!isMounted) return
-
-      setLatestPhotoCoverUrls((prev) => {
-        const next = { ...prev }
-        coverEntries.forEach(([eventId, url]) => {
-          next[eventId] = url
-        })
-        return next
-      })
-    }
-
-    void loadLatestPhotoCovers()
-
-    return () => {
-      isMounted = false
-    }
-  }, [filteredEvents, latestPhotoCoverUrls])
-
-  const displayEvents = useMemo(
+  const eventsMissingCovers = useMemo(
     () =>
-      filteredEvents.map((event) => {
-        const latestPhotoCoverUrl = latestPhotoCoverUrls[event.id]
-        if (event.coverImage || !latestPhotoCoverUrl) return event
-        return { ...event, coverImage: latestPhotoCoverUrl }
-      }),
-    [filteredEvents, latestPhotoCoverUrls]
+      filteredEvents.filter(
+        (event) => !event.coverImage && event.photoCount !== 0
+      ),
+    [filteredEvents]
   )
+  const latestPhotoCoverUrls = useQueries({
+    queries: eventsMissingCovers.map((event) => ({
+      ...eventGalleryQueryOptions(event.id, 20),
+      select: selectLatestPhotoUrl,
+    })),
+    combine: combineCoverUrls,
+  })
+
+  const displayEvents = useMemo(() => {
+    const coverByEventId = new Map(
+      eventsMissingCovers.map((event, index) => [
+        event.id,
+        latestPhotoCoverUrls[index],
+      ])
+    )
+    return filteredEvents.map((event) => {
+      const latestPhotoCoverUrl = coverByEventId.get(event.id)
+      if (event.coverImage || !latestPhotoCoverUrl) return event
+      return { ...event, coverImage: latestPhotoCoverUrl }
+    })
+  }, [eventsMissingCovers, filteredEvents, latestPhotoCoverUrls])
 
   const search: EventSearchProps = {
     searchEvents: displayEvents,
@@ -322,14 +277,19 @@ export function EventsPage() {
           </h2>
 
           {isLoadingEvents ? (
-            <EmptyState title="Loading events..." />
+            <div aria-busy="true" className={eventGridClass}>
+              <span className="sr-only">Loading events…</span>
+              {Array.from({ length: 8 }).map((_, index) => (
+                <EventCardSkeleton key={index} />
+              ))}
+            </div>
           ) : eventsError ? (
             <EmptyState
               title="Events could not be loaded"
               description={eventsError}
             />
           ) : displayEvents.length > 0 ? (
-            <div className="grid w-full grid-cols-4 gap-6 max-[1200px]:grid-cols-3 max-[1200px]:gap-5 max-[900px]:grid-cols-2 max-[900px]:gap-4 max-[600px]:grid-cols-1">
+            <div className={eventGridClass}>
               {displayEvents.map((event) => (
                 <FolderEventCard
                   key={event.id}

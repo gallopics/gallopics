@@ -4,6 +4,7 @@ import { CheckCircle, Trash2, UploadCloud, X } from "lucide-react"
 
 import { notify } from "@/lib/notify"
 import { cn } from "@/lib/utils"
+import { useWorkspaceEvents } from "@/hooks/useWorkspaceData"
 import { usePhotographer } from "@/context/PhotographerContext"
 import { useWorkspace } from "@/context/WorkspaceContext"
 import { Button } from "@/components/ui/button"
@@ -15,8 +16,8 @@ const UUID_PATTERN =
 export function UploadPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
+  const events = useWorkspaceEvents()
   const {
-    events,
     startUpload,
     uploadSessions,
     clearUploadSession,
@@ -34,25 +35,19 @@ export function UploadPage() {
     searchParams.get("classSectionId") || searchParams.get("class_section_id")
   const urlClassName = searchParams.get("className")
   const urlArenaName = searchParams.get("arenaName")
-  const [selectedEventId, setSelectedEventId] = useState<string>(
-    urlEventId || ""
-  )
+  // Without an event in the URL: the most recent booked one (then kept in the URL)
+  const defaultEventId = useMemo(() => {
+    const sorted = [...events].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    )
+    return sorted[0]?.id || ""
+  }, [events])
+  const selectedEventId = urlEventId || defaultEventId
   const [isDragActive, setIsDragActive] = useState(false)
   const [confirmClearOpen, setConfirmClearOpen] = useState(false)
   const [isClearing, setIsClearing] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const previewUrlsRef = useRef<Record<string, string>>({})
-
-  // Initial Event Selection Logic
-  useEffect(() => {
-    if (!selectedEventId && events.length > 0) {
-      const sorted = [...events].sort(
-        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-      )
-      const defaultEvent = sorted[0]
-      if (defaultEvent) setSelectedEventId(defaultEvent.id)
-    }
-  }, [events, selectedEventId])
 
   // Sync Context whenever selectedEventId changes
   useEffect(() => {

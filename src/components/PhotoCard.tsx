@@ -126,7 +126,7 @@ export function PhotoCard({
         if (e.key === "Enter" && e.target === e.currentTarget) onClick(photo)
       }}
       className={cn(
-        "group/photo relative mb-4 block w-full [transform:translate3d(0,0,0)] cursor-pointer break-inside-avoid overflow-hidden rounded-lg border border-black/4 bg-card shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition-[transform,box-shadow] duration-200 ease-[cubic-bezier(0.2,0,0.2,1)] outline-none hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)] focus-visible:ring-4 focus-visible:ring-ring/12",
+        "group/photo relative mb-4 block w-full [transform:translate3d(0,0,0)] cursor-pointer break-inside-avoid overflow-hidden rounded-lg border border-black/4 bg-card mask-[radial-gradient(white,black)] shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition-[translate,box-shadow] duration-200 ease-[cubic-bezier(0.2,0,0.2,1)] outline-none hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)] focus-visible:ring-4 focus-visible:ring-ring/12",
         isPG && "hover:-translate-y-0.5"
       )}
     >
@@ -145,7 +145,8 @@ export function PhotoCard({
           alt={`${photo.rider} on ${photo.horse}`}
           onLoad={() => setIsLoaded(true)}
           className={cn(
-            "transition-[opacity,transform] duration-500 group-hover/photo:scale-[1.04]",
+            // Tailwind v4 `scale-*` sets `scale`, not `transform`
+            "transition-[opacity,scale] duration-500 ease-[cubic-bezier(0.2,0,0.2,1)] will-change-[scale] group-hover/photo:scale-[1.04]",
             isLoaded ? "opacity-100" : "opacity-0"
           )}
         />
@@ -168,7 +169,7 @@ export function PhotoCard({
             <div className="pointer-events-none absolute inset-0 z-10 bg-[linear-gradient(to_bottom,rgba(0,0,0,0.02)_0%,rgba(0,0,0,0.1)_100%)] opacity-0 transition-opacity duration-300 group-hover/photo:opacity-100" />
 
             {/* Event info sliding up from the bottom (desktop) */}
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-25 translate-y-2.5 bg-[linear-gradient(to_top,rgba(0,0,0,0.8)_0%,rgba(0,0,0,0.4)_60%,transparent_100%)] px-2 pt-4 pb-2 opacity-0 transition-[transform,opacity] duration-300 group-hover/photo:translate-y-0 group-hover/photo:opacity-100 max-md:hidden">
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 z-25 translate-y-2.5 bg-[linear-gradient(to_top,rgba(0,0,0,0.8)_0%,rgba(0,0,0,0.4)_60%,transparent_100%)] px-2 pt-4 pb-2 opacity-0 transition-[translate,opacity] duration-300 ease-[cubic-bezier(0.2,0,0.2,1)] group-hover/photo:translate-y-0 group-hover/photo:opacity-100 max-md:hidden">
               <div className="mb-1 text-[0.8125rem] leading-[1.2] font-semibold text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.3)]">
                 {photo.event}
               </div>
@@ -184,7 +185,7 @@ export function PhotoCard({
             </div>
 
             {/* Share + cart (top-right); on mobile only cart, always visible */}
-            <div className="absolute top-3 right-3 z-30 flex -translate-y-1 flex-col gap-2 opacity-0 transition-[transform,opacity] duration-200 group-focus-within/photo:translate-y-0 group-focus-within/photo:opacity-100 group-hover/photo:translate-y-0 group-hover/photo:opacity-100 max-md:top-2 max-md:right-2 max-md:translate-y-0 max-md:opacity-100">
+            <div className="absolute top-3 right-3 z-30 flex -translate-y-1 flex-col gap-2 opacity-0 transition-[translate,opacity] duration-200 group-focus-within/photo:translate-y-0 group-focus-within/photo:opacity-100 group-hover/photo:translate-y-0 group-hover/photo:opacity-100 max-md:top-2 max-md:right-2 max-md:translate-y-0 max-md:opacity-100">
               {showShareActions && (
                 <GlassButton
                   title="Share"
@@ -374,15 +375,39 @@ function PhotoCardFooter({
   )
 }
 
-/** Loading placeholder shaped like a PhotoCard (for MasonryGrid) */
-export function PhotoCardSkeleton() {
+/** Loading placeholder shaped like a PhotoCard (for MasonryGrid and grids) */
+export function PhotoCardSkeleton({
+  pg = false,
+  landscape = false,
+}: {
+  /** Studio card: one-line footer (file name / rider) */
+  pg?: boolean
+  /** 3:2 photo instead of 3:4 */
+  landscape?: boolean
+}) {
   return (
-    <div className="mb-4 break-inside-avoid overflow-hidden rounded-lg border border-black/4 bg-card">
-      <Skeleton className="aspect-3/4 rounded-none" />
-      <div className="px-4 pt-2 pb-4">
-        <Skeleton className="mb-1.5 h-4 w-[70%] rounded-sm bg-border" />
-        <Skeleton className="h-3 w-[40%] rounded-sm bg-border" />
-      </div>
+    <div
+      aria-hidden="true"
+      className="mb-4 break-inside-avoid overflow-hidden rounded-lg border border-black/4 bg-card"
+    >
+      <Skeleton
+        className={cn("rounded-none", landscape ? "aspect-3/2" : "aspect-3/4")}
+      />
+      {/* Same text lines as the footer, so the card keeps its height */}
+      {pg ? (
+        <div className="p-3 text-[0.8125rem] leading-[1.35]">
+          <Skeleton className="inline-block h-[1em] w-[60%] rounded-sm bg-border align-middle" />
+        </div>
+      ) : (
+        <div className="flex flex-col gap-0.5 px-4 pt-2 pb-4">
+          <div className="text-[0.8125rem] leading-[1.2]">
+            <Skeleton className="inline-block h-[1em] w-[70%] rounded-sm bg-border align-middle" />
+          </div>
+          <div className="text-xs leading-normal">
+            <Skeleton className="inline-block h-[1em] w-[40%] rounded-sm bg-border align-middle" />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

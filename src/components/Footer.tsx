@@ -62,7 +62,7 @@ export function Footer({
               <Button
                 size="sm"
                 // Old footer button: 20px/8px padding, 14px text (13px on mobile)
-                className="h-auto border-0 bg-white px-5 py-2 text-sm leading-normal text-black hover:-translate-y-0.5 hover:bg-border max-md:px-4 max-md:py-1.5 max-md:text-[0.8125rem]"
+                className="h-auto border-0 bg-white px-5 py-2 text-sm leading-normal text-black duration-200 hover:-translate-y-0.5 hover:bg-border max-md:px-4 max-md:py-1.5 max-md:text-[0.8125rem]"
                 onClick={() =>
                   window.dispatchEvent(new Event("open-contact-support"))
                 }

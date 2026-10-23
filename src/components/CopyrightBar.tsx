@@ -47,7 +47,7 @@ function FooterLink({
 }
 
 const socialLinkClass =
-  "flex size-9 items-center justify-center rounded-full bg-white/10 text-white transition-all hover:scale-110 hover:bg-white/20 max-md:size-11"
+  "flex size-9 items-center justify-center rounded-full bg-white/10 text-white transition-all duration-200 hover:scale-110 hover:bg-white/20 max-md:size-11"
 
 export function CopyrightBar({
   minimal = false,

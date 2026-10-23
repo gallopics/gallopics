@@ -2,7 +2,7 @@ import { useMemo, useState } from "react"
 import { Check, Upload } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { usePhotographer } from "@/context/PhotographerContext"
+import { useWorkspacePhotos } from "@/hooks/useWorkspaceData"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -47,15 +47,17 @@ function CoverPicker({
   onSelect,
   onClose,
 }: Omit<CoverImagePickerModalProps, "isOpen">) {
-  const { getPhotosByEvent } = usePhotographer()
+  const allPhotos = useWorkspacePhotos()
   const [selectedUrl, setSelectedUrl] = useState<string | null>(null)
 
   const photos = useMemo(
     () =>
       eventId
-        ? getPhotosByEvent(eventId).filter((p) => p.status === "published")
+        ? allPhotos.filter(
+            (p) => p.eventId === eventId && p.status === "published"
+          )
         : [],
-    [eventId, getPhotosByEvent]
+    [eventId, allPhotos]
   )
 
   const handleSave = () => {

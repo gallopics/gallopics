@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import {
   ChevronLeft,
   ChevronRight,
@@ -16,10 +17,12 @@ import {
 
 import { notify, type NotifyType } from "@/lib/notify"
 import { cn } from "@/lib/utils"
-import { usePhotographer, type Photo } from "@/context/PhotographerContext"
-import { TOAST_TOKENS } from "@/context/ToastTokens"
-import { fetchClassSectionStarts } from "@/data/eventsApi"
+import { useDeletePhotosWithUndo } from "@/hooks/useDeletePhotosWithUndo"
+import type { Photo } from "@/context/PhotographerContext"
+import type { ApiClassSectionStart } from "@/data/eventsApi"
 import { HORSES, RIDERS } from "@/data/mockData"
+import { classStartsQueryOptions } from "@/data/queries/events"
+import { savePhotoDetailsMutationOptions } from "@/data/queries/photographer"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -55,6 +58,17 @@ interface PgSelectionPanelProps {
   onShowToast?: (msg: string, type: PanelToastType, onUndo?: () => void) => void
 }
 
+const NO_STARTS: Array<{
+  riderName?: string | null
+  horseName?: string | null
+}> = []
+
+const toClassStarts = (starts: ApiClassSectionStart[]) =>
+  starts.map((start) => ({
+    riderName: start.rider_name,
+    horseName: start.horse_name,
+  }))
+
 const BATCHES = ["Random", "Misc", "Uncategorised"]
 
 const BUNDLES = {
@@ -72,7 +86,10 @@ export function PgSelectionPanel({
   currentTab,
   onShowToast,
 }: PgSelectionPanelProps) {
-  const { updatePhotoMetadata, deletePhotos, restorePhotos } = usePhotographer()
+  const deletePhotosWithUndo = useDeletePhotosWithUndo()
+  const savePhotoDetails = useMutation(savePhotoDetailsMutationOptions())
+  const updatePhotoMetadata = (photoIds: string[], details: Partial<Photo>) =>
+    savePhotoDetails.mutateAsync({ photoIds, details })
 
   // Derived Selection
   const selectedPhotos = useMemo(() => {
@@ -126,9 +143,6 @@ export function PgSelectionPanel({
   const [targetBatch, setTargetBatch] = useState<string>("")
   const [isCreatingBatch, setIsCreatingBatch] = useState(false)
   const [newBatchName, setNewBatchName] = useState("")
-  const [classStarts, setClassStarts] = useState<
-    Array<{ riderName?: string | null; horseName?: string | null }>
-  >([])
 
   // Confirmation Modals State
   const [confirmModal, setConfirmModal] = useState<{
@@ -145,30 +159,16 @@ export function PgSelectionPanel({
     return ids.size === 1 ? Array.from(ids)[0] : ""
   }, [selectedPhotos])
 
-  useEffect(() => {
-    let cancelled = false
-    setClassStarts([])
-
-    if (!isOpen || !selectedClassId) return
-
-    fetchClassSectionStarts(selectedClassId)
-      .then((starts) => {
-        if (cancelled) return
-        setClassStarts(
-          starts.map((start) => ({
-            riderName: start.rider_name,
-            horseName: start.horse_name,
-          }))
-        )
-      })
-      .catch(() => {
-        if (!cancelled) setClassStarts([])
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [isOpen, selectedClassId])
+  // Riders and horses starting in the selected photos' class
+  const classStartsQuery = useQuery({
+    ...classStartsQueryOptions(selectedClassId),
+    enabled: isOpen && !!selectedClassId,
+    select: toClassStarts,
+  })
+  const classStarts =
+    isOpen && selectedClassId && classStartsQuery.data
+      ? classStartsQuery.data
+      : NO_STARTS
 
   const riderOptions = useMemo(() => {
     const names = new Set<string>()
@@ -620,17 +620,15 @@ export function PgSelectionPanel({
   }
 
   const confirmDelete = () => {
-    const ids = selectedPhotos.map((p) => p.id)
-    const undoSnapshot = [...selectedPhotos]
+    const photos = [...selectedPhotos]
 
-    deletePhotos(ids)
     setConfirmModal({ type: "delete", isOpen: false })
     propsOnClose()
 
-    triggerToast("Photo deleted", TOAST_TOKENS.DELETE.type, "global", () => {
-      restorePhotos(undoSnapshot)
+    // The API delete waits for the toast, so Undo really keeps them
+    deletePhotosWithUndo(photos, "Photo deleted", () =>
       triggerToast("Delete undone", "moved", "global")
-    })
+    )
   }
 
   const handleMoveInit = () => {
@@ -753,7 +751,12 @@ export function PgSelectionPanel({
                 <div className="flex items-center gap-1.5 text-[0.8125rem] text-muted-foreground">
                   <Clock className="size-3.5" />
                   <span>
-                    {firstPhoto.uploadDate} • {firstPhoto.timestamp}
+                    {firstPhoto.uploadDate &&
+                      `${new Date(firstPhoto.uploadDate).toLocaleDateString(
+                        "en-GB",
+                        { day: "numeric", month: "short", year: "numeric" }
+                      )} • `}
+                    {firstPhoto.timestamp}
                   </span>
                 </div>
               </div>
