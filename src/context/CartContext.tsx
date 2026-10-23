@@ -22,7 +22,15 @@ const CartContext = createContext<CartContextType | undefined>(undefined)
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const [cart, setCart] = useState<CartItem[]>([])
+  // Restore the saved cart (it must survive the round trip to Stripe's payment page)
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("gallopics_cart") || "[]")
+      return Array.isArray(saved) ? saved : []
+    } catch {
+      return []
+    }
+  })
 
   useEffect(() => {
     localStorage.setItem("gallopics_cart", JSON.stringify(cart))

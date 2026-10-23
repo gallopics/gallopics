@@ -1,9 +1,11 @@
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 import { ClerkProvider } from "@clerk/clerk-react"
+import { QueryClientProvider } from "@tanstack/react-query"
 
 import "./index.css"
 
+import { queryClient } from "@/data/queryClient"
 import { Toaster } from "@/components/ui/toast"
 
 import App from "./App.tsx"
@@ -26,9 +28,11 @@ unregisterServiceWorkers().then(() => {
     <StrictMode>
       {clerkPublishableKey ? (
         <ClerkProvider publishableKey={clerkPublishableKey}>
-          <Toaster>
-            <App />
-          </Toaster>
+          <QueryClientProvider client={queryClient}>
+            <Toaster>
+              <App />
+            </Toaster>
+          </QueryClientProvider>
         </ClerkProvider>
       ) : (
         <div className="p-6">Missing `VITE_CLERK_PUBLISHABLE_KEY`.</div>

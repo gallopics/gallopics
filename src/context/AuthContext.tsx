@@ -1,20 +1,26 @@
 import React, {
   createContext,
-  useCallback,
   useContext,
   useEffect,
   useMemo,
-  useState,
+  useRef,
 } from "react"
 import { useClerk, useAuth as useClerkAuth, useUser } from "@clerk/clerk-react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 
 import {
   api,
-  ApiError,
   resolveApiAssetUrl,
   type ApiPhotographer,
   type ApiUser,
+  type UpsertPhotographerProfile,
 } from "../data/apiClient"
+import {
+  accountKeys,
+  meQueryOptions,
+  photographerProfileQueryOptions,
+} from "../data/queries/account"
+import { photographerKeys } from "../data/queries/photographer"
 
 export interface UserProfile {
   id?: string
@@ -25,13 +31,18 @@ export interface UserProfile {
   phone?: string | null
   hasCompletedOnboarding?: boolean
   role?: "pg" | "admin"
-  approvalStatus?: "pending" | "approved"
+  /** From our API; "suspended" = rejected by an admin (no studio access, like pending) */
+  approvalStatus?: "pending" | "approved" | "suspended"
 }
 
 interface AuthContextType {
   isLoaded: boolean
   isAuthenticated: boolean
   user: UserProfile | null
+  /** API role "photographer": may load the studio's own data (bookings, photos...) */
+  isPhotographer: boolean
+  /** Signed in, not an admin, and our API says there is no photographer profile yet */
+  needsOnboarding: boolean
   logout: () => Promise<void>
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>
   uploadAvatar: (file: File) => Promise<string>
@@ -167,119 +178,100 @@ const resolveDisplayName = (values: Array<string | null | undefined>) =>
     .find((value) => typeof value === "string" && value.trim().length > 0)
     ?.trim() ?? "Photographer"
 
-const mapRole = (
-  apiUser: ApiUser | null,
-  metadata: AuthMetadata,
-  clerkIdentifiers: Array<string | null | undefined>
-): UserProfile["role"] => {
-  if (apiUser?.role === "admin" || metadata.role === "admin") {
-    return "admin"
-  }
-
-  if (
-    clerkIdentifiers.some((identifier) => {
-      if (!identifier) {
-        return false
-      }
-
-      const localPart = identifier.includes("@")
-        ? identifier.split("@")[0]
-        : identifier
-      return localPart.trim().toLowerCase() === "admin"
-    })
-  ) {
-    return "admin"
-  }
-
-  return "pg"
-}
+// Role and approval come only from our API (our database, set by admins). Clerk metadata
+// is not trusted for access: users can edit their own unsafeMetadata.
+const mapRole = (apiUser: ApiUser | null): UserProfile["role"] =>
+  apiUser?.role === "admin" ? "admin" : "pg"
 
 const mapApprovalStatus = (
-  photographer: ApiPhotographer | null,
-  metadata: AuthMetadata
-): UserProfile["approvalStatus"] => {
-  if (
-    photographer?.status === "approved" ||
-    metadata.approvalStatus === "approved"
-  ) {
-    return "approved"
-  }
-
-  return metadata.approvalStatus ?? "pending"
-}
-
-const wait = (ms: number) =>
-  new Promise((resolve) => {
-    window.setTimeout(resolve, ms)
-  })
+  photographer: ApiPhotographer | null
+): UserProfile["approvalStatus"] =>
+  photographer?.status === "approved" || photographer?.status === "suspended"
+    ? photographer.status
+    : "pending"
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const clerk = useClerk()
-  const { isLoaded: isClerkLoaded, isSignedIn, getToken } = useClerkAuth()
+  const {
+    isLoaded: isClerkLoaded,
+    isSignedIn,
+    userId: clerkUserId,
+  } = useClerkAuth()
   const { user: clerkUser } = useUser()
-  const [apiUser, setApiUser] = useState<ApiUser | null>(null)
-  const [apiPhotographer, setApiPhotographer] =
-    useState<ApiPhotographer | null>(null)
-  const [isProfileLoaded, setIsProfileLoaded] = useState(false)
+  const queryClient = useQueryClient()
 
   const metadata = useMemo(
     () => readMetadata(clerkUser?.publicMetadata, clerkUser?.unsafeMetadata),
     [clerkUser?.publicMetadata, clerkUser?.unsafeMetadata]
   )
 
-  const getApiToken = useCallback(async () => {
-    for (let attempt = 0; attempt < 6; attempt += 1) {
-      const token = await getToken({ skipCache: attempt > 0 })
-      if (token) {
-        return token
-      }
-      await wait(250)
-    }
-
-    return null
-  }, [getToken])
-
-  const loadApiProfile = useCallback(async () => {
-    if (!clerkUser) {
-      setApiUser(null)
-      setApiPhotographer(null)
-      setIsProfileLoaded(true)
-      return
-    }
-
-    setIsProfileLoaded(false)
-    try {
-      const nextApiUser = await api.getMe(getApiToken)
-      setApiUser(nextApiUser)
-
-      try {
-        const nextPhotographer = await api.getMyPhotographer(getApiToken)
-        setApiPhotographer(nextPhotographer)
-      } catch (error) {
-        if (error instanceof ApiError && error.status === 404) {
-          setApiPhotographer(null)
-        } else {
-          throw error
-        }
-      }
-    } catch (error) {
-      console.error("Failed to load Gallopics API profile", error)
-      setApiUser(null)
-      setApiPhotographer(null)
-    } finally {
-      setIsProfileLoaded(true)
-    }
-  }, [clerkUser, getApiToken])
+  const meQuery = useQuery({
+    ...meQueryOptions(),
+    enabled: isClerkLoaded && !!isSignedIn && !!clerkUser,
+  })
+  // Only this Clerk user's answer: right after an account switch the cache can
+  // still hold the previous user's until the reset below has run
+  const apiUser: ApiUser | null =
+    clerkUser && meQuery.data?.clerk_user_id === clerkUser.id
+      ? meQuery.data
+      : null
+  // After /me: the first request creates the user row, so they must not race
+  const photographerQuery = useQuery({
+    ...photographerProfileQueryOptions(),
+    enabled: !!apiUser,
+  })
+  const apiPhotographer: ApiPhotographer | null =
+    (apiUser && photographerQuery.data) || null
+  const isProfileLoaded =
+    !clerkUser ||
+    // By data, not status: a failed background refetch keeps the last answer
+    (apiUser ? !photographerQuery.isPending : meQuery.isError)
 
   useEffect(() => {
-    if (!isClerkLoaded) {
-      return
+    if (meQuery.error || photographerQuery.error) {
+      console.error(
+        "Failed to load Gallopics API profile",
+        meQuery.error || photographerQuery.error
+      )
     }
+  }, [meQuery.error, photographerQuery.error])
 
-    void loadApiProfile()
-  }, [isClerkLoaded, loadApiProfile])
+  // Sign-out or account switch: drop all cached data (the next user must not
+  // see the last one's); what is on screen is refetched
+  const lastClerkUserId = useRef(clerkUserId)
+  useEffect(() => {
+    if (lastClerkUserId.current && lastClerkUserId.current !== clerkUserId) {
+      void queryClient.resetQueries()
+    }
+    lastClerkUserId.current = clerkUserId
+  }, [clerkUserId, queryClient])
+
+  const saveProfile = useMutation({
+    mutationFn: (body: UpsertPhotographerProfile) =>
+      api.upsertMyPhotographer(body),
+    onSuccess: (profile) => {
+      queryClient.setQueryData<ApiPhotographer | null>(
+        photographerKeys.profile(),
+        profile
+      )
+      // Creating a profile makes the user a photographer
+      queryClient.setQueryData<ApiUser>(accountKeys.me, (current) =>
+        current ? { ...current, role: "photographer" as const } : current
+      )
+    },
+  })
+
+  const saveAvatar = useMutation({
+    mutationFn: (file: File) => api.uploadMyAvatar(file),
+    onSuccess: (profile) => {
+      queryClient.setQueryData<ApiPhotographer | null>(
+        photographerKeys.profile(),
+        profile
+      )
+    },
+  })
 
   const user: UserProfile | null = useMemo(() => {
     if (!clerkUser) {
@@ -312,11 +304,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       phone: apiPhotographer?.phone ?? null,
       hasCompletedOnboarding:
         metadata.hasCompletedOnboarding ?? Boolean(apiPhotographer),
-      role: mapRole(apiUser, metadata, [
-        clerkUser.username,
-        clerkUser.primaryEmailAddress?.emailAddress,
-      ]),
-      approvalStatus: mapApprovalStatus(apiPhotographer, metadata),
+      role: mapRole(apiUser),
+      approvalStatus: mapApprovalStatus(apiPhotographer),
     }
   }, [apiPhotographer, apiUser, clerkUser, metadata])
 
@@ -328,7 +317,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     const nextDisplayName =
       updates.displayName ?? user?.displayName ?? "Photographer"
     const { firstName, lastName } = splitDisplayName(nextDisplayName)
-    const nextProfile = await api.upsertMyPhotographer(getApiToken, {
+    await saveProfile.mutateAsync({
       slug: updates.id ?? user?.id,
       display_name: nextDisplayName,
       city: updates.city ?? user?.city ?? null,
@@ -341,11 +330,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         updates.phone === undefined ? (user?.phone ?? null) : updates.phone,
       is_available_to_hire: true,
     })
-
-    setApiPhotographer(nextProfile)
-    setApiUser((current) =>
-      current ? { ...current, role: "photographer" } : current
-    )
 
     await clerkUser.update({
       firstName: firstName || null,
@@ -370,8 +354,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   }
 
   const uploadAvatar = async (file: File) => {
-    const nextProfile = await api.uploadMyAvatar(getApiToken, file)
-    setApiPhotographer(nextProfile)
+    const nextProfile = await saveAvatar.mutateAsync(file)
     return nextProfile.avatar_url ?? ""
   }
 
@@ -385,6 +368,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         isLoaded: isClerkLoaded && isProfileLoaded,
         isAuthenticated: isClerkLoaded && !!isSignedIn,
         user,
+        isPhotographer: !!clerkUser && apiUser?.role === "photographer",
+        // null = the API answered "no profile" (a failed request is not that)
+        needsOnboarding:
+          !!apiUser &&
+          apiUser.role !== "admin" &&
+          photographerQuery.data === null,
         logout,
         updateProfile,
         uploadAvatar,

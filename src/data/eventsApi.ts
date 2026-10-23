@@ -6,7 +6,7 @@ import type {
   Meeting,
   Photo,
 } from "../types"
-import { getApiBaseUrl, resolveApiAssetUrl } from "./apiClient"
+import { ApiError, getApiBaseUrl, resolveApiAssetUrl } from "./apiClient"
 import type { ApiPhoto } from "./apiClient"
 import type { EventData } from "./mockEvents"
 
@@ -26,7 +26,12 @@ async function fetchWithTimeout(url: URL, options: RequestInit = {}) {
     })
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
-      throw new Error("The events API took too long to respond. Please retry.")
+      throw new Error(
+        "The events API took too long to respond. Please retry.",
+        {
+          cause: error,
+        }
+      )
     }
     throw error
   } finally {
@@ -146,7 +151,8 @@ function normalizeCountry(country: string) {
   return countryMap[country] || country
 }
 
-function formatEventPeriod(startDate: string, endDate?: string | null) {
+/** e.g. "26 Nov – 30 Nov 2026" */
+export function formatEventPeriod(startDate: string, endDate?: string | null) {
   const start = new Date(`${startDate}T00:00:00`)
   const end = endDate ? new Date(`${endDate}T00:00:00`) : null
 
@@ -208,7 +214,7 @@ export async function fetchEventsFromApi(options?: {
   const pageSize = 100
   const items: ApiEvent[] = []
   let page = 1
-  let total = 0
+  let total: number
 
   do {
     const url = new URL("/api/v1/events", getApiBaseUrl())
@@ -221,7 +227,10 @@ export async function fetchEventsFromApi(options?: {
     const response = await fetchWithTimeout(url)
 
     if (!response.ok) {
-      throw new Error(`Failed to load events: ${response.status}`)
+      throw new ApiError(
+        response.status,
+        `Failed to load events: ${response.status}`
+      )
     }
 
     const data = (await response.json()) as PaginatedApiResponse<ApiEvent>
@@ -231,10 +240,6 @@ export async function fetchEventsFromApi(options?: {
   } while (items.length < total)
 
   return items.map(mapApiEventToEventData)
-}
-
-export async function fetchEventsWithPhotosFromApi(): Promise<EventData[]> {
-  return fetchEventsFromApi({ hasPhotos: true })
 }
 
 function getPhotoTag(photo: ApiPhoto, type: string) {
@@ -251,7 +256,10 @@ function getPhotoImageUrl(photo: ApiPhotoWithUrls) {
   )
 }
 
-function mapApiPhotoToPhoto(photo: ApiPhotoWithUrls, event: EventData): Photo {
+export function mapApiPhotoToPhoto(
+  photo: ApiPhotoWithUrls,
+  event: EventData
+): Photo {
   const createdAt = photo.created_at ? new Date(photo.created_at) : new Date()
   const className =
     photo.event_class_name || photo.class_name || photo.class_id || "Uploaded"
@@ -278,46 +286,9 @@ function mapApiPhotoToPhoto(photo: ApiPhotoWithUrls, event: EventData): Photo {
   }
 }
 
-export async function fetchPublicEventPhotosFromApi(
-  event: EventData,
-  pageSize = 100
-): Promise<Photo[]> {
-  const url = new URL(
-    `/api/v1/events/${encodeURIComponent(event.id)}/gallery`,
-    getApiBaseUrl()
-  )
-  url.searchParams.set("page", "1")
-  url.searchParams.set("page_size", String(pageSize))
-
-  const response = await fetch(url)
-
-  if (!response.ok) {
-    throw new Error(`Failed to load event photos: ${response.status}`)
-  }
-
-  const data = (await response.json()) as PaginatedApiResponse<ApiPhotoWithUrls>
-  return data.items.map((photo) => mapApiPhotoToPhoto(photo, event))
-}
-
-export async function fetchLatestPublicEventPhotoUrl(
-  eventId: string,
-  pageSize = 20
-): Promise<string | null> {
-  const url = new URL(
-    `/api/v1/events/${encodeURIComponent(eventId)}/gallery`,
-    getApiBaseUrl()
-  )
-  url.searchParams.set("page", "1")
-  url.searchParams.set("page_size", String(pageSize))
-
-  const response = await fetch(url)
-
-  if (!response.ok) {
-    throw new Error(`Failed to load event photos: ${response.status}`)
-  }
-
-  const data = (await response.json()) as PaginatedApiResponse<ApiPhotoWithUrls>
-  const latestPhoto = [...data.items].sort((a, b) => {
+/** The image of the most recently uploaded photo (an event's fallback cover) */
+export function pickLatestPhotoUrl(photos: ApiPhotoWithUrls[]): string | null {
+  const latestPhoto = [...photos].sort((a, b) => {
     const dateA = a.created_at ? new Date(a.created_at).getTime() : 0
     const dateB = b.created_at ? new Date(b.created_at).getTime() : 0
     const timeA = Number.isFinite(dateA) ? dateA : 0
@@ -334,7 +305,10 @@ export async function fetchEventFromApi(eventId: string): Promise<ApiEvent> {
   const response = await fetch(url)
 
   if (!response.ok) {
-    throw new Error(`Failed to load event: ${response.status}`)
+    throw new ApiError(
+      response.status,
+      `Failed to load event: ${response.status}`
+    )
   }
 
   return (await response.json()) as ApiEvent
@@ -448,7 +422,10 @@ export async function fetchEventScheduleFromApi(
   const response = await fetch(url)
 
   if (!response.ok) {
-    throw new Error(`Failed to load event schedule: ${response.status}`)
+    throw new ApiError(
+      response.status,
+      `Failed to load event schedule: ${response.status}`
+    )
   }
 
   return (await response.json()) as ApiEventSchedule
@@ -464,7 +441,10 @@ export async function fetchClassSectionStarts(
   const response = await fetchWithTimeout(url)
 
   if (!response.ok) {
-    throw new Error(`Failed to load class starts: ${response.status}`)
+    throw new ApiError(
+      response.status,
+      `Failed to load class starts: ${response.status}`
+    )
   }
 
   return (await response.json()) as ApiClassSectionStart[]
