@@ -1,6 +1,5 @@
 import React from "react"
 import { Navigate, useLocation } from "react-router"
-import { useUser } from "@clerk/clerk-react"
 
 import { useAuth } from "../context/AuthContext"
 
@@ -9,20 +8,11 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { isLoaded, isAuthenticated, user } = useAuth()
-  const { user: clerkUser } = useUser()
+  const { isLoaded, isAuthenticated, user, needsOnboarding } = useAuth()
   const location = useLocation()
 
-  const publicApprovalStatus =
-    typeof clerkUser?.publicMetadata?.approvalStatus === "string"
-      ? clerkUser.publicMetadata.approvalStatus
-      : undefined
-  const unsafeApprovalStatus =
-    typeof clerkUser?.unsafeMetadata?.approvalStatus === "string"
-      ? clerkUser.unsafeMetadata.approvalStatus
-      : undefined
-  const effectiveApprovalStatus =
-    user?.approvalStatus ?? publicApprovalStatus ?? unsafeApprovalStatus
+  // Approval comes from our API (set by admins), never from Clerk metadata
+  const effectiveApprovalStatus = user?.approvalStatus
 
   if (!isLoaded) {
     return null
@@ -41,6 +31,11 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   if (isAdminPath && user?.role !== "admin") {
     // Photographers shouldn't be on /admin paths
     return <Navigate to="/pg/events" replace />
+  }
+
+  // Signed up but never saved a photographer profile: finish onboarding first
+  if (isPgPath && needsOnboarding && !isOnboardingPath) {
+    return <Navigate to="/pg/onboarding/profile" replace />
   }
 
   if (

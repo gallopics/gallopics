@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from "react"
 import { useNavigate, useParams, useSearchParams } from "react-router"
 import {
+  useMutation,
+  useQueries,
+  useQuery,
+  type UseQueryResult,
+} from "@tanstack/react-query"
+import {
   CalendarDays,
   ChevronLeft,
   Images,
@@ -9,22 +15,27 @@ import {
   Search,
 } from "lucide-react"
 
+import { cn } from "@/lib/utils"
+import { useWorkspaceEvents } from "@/hooks/useWorkspaceData"
 import { useAuth } from "@/context/AuthContext"
 import { usePhotographer } from "@/context/PhotographerContext"
-import {
-  api,
-  ApiError,
-  resolveApiAssetUrl,
-  type ApiPhoto,
-  type ApiPhotographer,
-} from "@/data/apiClient"
+import { resolveApiAssetUrl, type ApiPhoto } from "@/data/apiClient"
 import { getActivePhotographerProfile, PHOTOGRAPHERS } from "@/data/mockData"
 import { mockEvents } from "@/data/mockEvents"
+import {
+  highlightsQueryOptions,
+  myPhotosQueryOptions,
+  saveHighlightsMutationOptions,
+} from "@/data/queries/photographer"
+import {
+  photoQueryOptions,
+  publicPhotographerQueryOptions,
+} from "@/data/queries/photos"
 import type { Photo } from "@/types"
 import { Button } from "@/components/ui/button"
-import { Spinner } from "@/components/ui/spinner"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Breadcrumbs } from "@/components/Breadcrumbs"
+import { Breadcrumbs, BreadcrumbsSkeleton } from "@/components/Breadcrumbs"
 import type { BreadcrumbItem } from "@/components/Breadcrumbs"
 import { DotList } from "@/components/DotList"
 import { EmptyState } from "@/components/EmptyState"
@@ -41,6 +52,20 @@ import { ManageHighlightsModal } from "@/components/ManageHighlightsModal"
 import { MasonryGrid } from "@/components/MasonryGrid"
 import { PhotoCard } from "@/components/PhotoCard"
 import { TitleHeader } from "@/components/TitleHeader"
+
+const NO_IDS: string[] = []
+const NO_PHOTOS: ApiPhoto[] = []
+
+/** The highlight photos that loaded, once all have answered */
+const combineHighlightPhotos = (results: UseQueryResult<ApiPhoto>[]) => {
+  const isPending = results.some((result) => result.isPending)
+  return {
+    isPending,
+    photos: isPending
+      ? NO_PHOTOS
+      : results.flatMap((result) => (result.data ? [result.data] : [])),
+  }
+}
 
 /** Event / class tile in the photographer's gallery */
 function GalleryCard({
@@ -62,7 +87,7 @@ function GalleryCard({
     <button
       type="button"
       onClick={onClick}
-      className="flex min-h-75 cursor-pointer flex-col overflow-hidden rounded-lg border bg-card text-left shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-[transform,border-color,box-shadow] duration-200 hover:-translate-y-0.5 hover:border-primary/28 hover:shadow-[0_12px_28px_rgba(15,23,42,0.1)]"
+      className="flex min-h-75 cursor-pointer flex-col overflow-hidden rounded-lg border bg-card text-left shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-[translate,border-color,box-shadow] duration-180 ease-[ease] hover:-translate-y-0.5 hover:border-primary/28 hover:shadow-[0_12px_28px_rgba(15,23,42,0.1)]"
     >
       <img
         src={cover}
@@ -88,7 +113,7 @@ function GalleryCard({
 export function PhotographerProfile() {
   const { id = "hanna-bjork" } = useParams()
   const navigate = useNavigate()
-  const { user: authUser } = useAuth()
+  const { user: authUser, isLoaded: isAuthLoaded, isPhotographer } = useAuth()
 
   // Params
   const [searchParams] = useSearchParams()
@@ -97,10 +122,6 @@ export function PhotographerProfile() {
   const sourceEvent = eventId ? mockEvents.find((e) => e.id === eventId) : null
 
   const [photos, setPhotos] = useState<Photo[]>([])
-  const [apiPhotographer, setApiPhotographer] =
-    useState<ApiPhotographer | null>(null)
-  const [isLoadingApiPhotographer, setIsLoadingApiPhotographer] = useState(true)
-  const [apiHighlightPhotos, setApiHighlightPhotos] = useState<Photo[]>([])
   const [activeTab, setActiveTab] = useState<"highlights" | "photos">(
     "highlights"
   )
@@ -108,53 +129,38 @@ export function PhotographerProfile() {
   const [galleryClassKey, setGalleryClassKey] = useState("")
 
   // Breadcrumbs
-  const {
-    photographerId: loggedInId,
-    updateHighlights,
-    highlights: contextHighlights,
-    allPhotos: contextPhotos,
-    events: contextEvents,
-    availableToHire,
-  } = usePhotographer()
+  const { photographerId: loggedInId, availableToHire } = usePhotographer()
+  const saveHighlights = useMutation(saveHighlightsMutationOptions())
   const isOwner = id === loggedInId
   const [isHighlightsModalOpen, setIsHighlightsModalOpen] = useState(false)
 
-  useEffect(() => {
-    let isMounted = true
-    setIsLoadingApiPhotographer(true)
+  const contextEvents = useWorkspaceEvents()
+  // The owner sees (and edits) their own highlights and photos
+  const ownHighlightsQuery = useQuery({
+    ...highlightsQueryOptions(),
+    enabled: isPhotographer && isOwner,
+  })
+  const contextHighlights = ownHighlightsQuery.data ?? NO_IDS
+  const ownPhotosQuery = useQuery({
+    ...myPhotosQueryOptions(),
+    enabled: isPhotographer && isOwner,
+  })
+  const contextPhotos = useMemo(
+    () => ownPhotosQuery.data ?? [],
+    [ownPhotosQuery.data]
+  )
 
-    api
-      .getPublicPhotographer(id)
-      .then((profile) => {
-        if (isMounted) {
-          setApiPhotographer(profile)
-        }
-      })
-      .catch((error) => {
-        if (!(error instanceof ApiError && error.status === 404)) {
-          console.error("Failed to load photographer profile", error)
-        }
-        if (isMounted) {
-          setApiPhotographer(null)
-        }
-      })
-      .finally(() => {
-        if (isMounted) {
-          setIsLoadingApiPhotographer(false)
-        }
-      })
-
-    return () => {
-      isMounted = false
-    }
-  }, [id])
+  const apiPhotographerQuery = useQuery(publicPhotographerQueryOptions(id))
+  const apiPhotographer = apiPhotographerQuery.data ?? null
+  const isLoadingApiPhotographer = apiPhotographerQuery.isPending
 
   const activeProfile = useMemo(() => {
     const isKnownMockPhotographer = PHOTOGRAPHERS.some((p) => p.id === id)
+    // Visitors only see real profiles (the API hides pending/rejected ones); the owner sees their own
     if (
       !apiPhotographer &&
-      isLoadingApiPhotographer &&
-      !isKnownMockPhotographer
+      !isKnownMockPhotographer &&
+      (isLoadingApiPhotographer || !isOwner)
     ) {
       return null
     }
@@ -206,77 +212,61 @@ export function PhotographerProfile() {
       },
       dummyEvents: [],
     }
-  }, [id, apiPhotographer, isOwner, authUser, availableToHire])
+  }, [
+    id,
+    apiPhotographer,
+    isLoadingApiPhotographer,
+    isOwner,
+    authUser,
+    availableToHire,
+  ])
   const photographer = activeProfile?.photographer
 
-  useEffect(() => {
-    let isMounted = true
-
-    const fetchHighlightPhotos = async () => {
-      if (isOwner || !apiPhotographer?.highlights?.length) {
-        if (isMounted) setApiHighlightPhotos([])
-        return
-      }
-
-      const responses = await Promise.allSettled(
-        apiPhotographer.highlights
-          .slice(0, 10)
-          .map((photoId) => api.getPhoto(photoId))
-      )
-
-      if (!isMounted) return
-
-      const mappedPhotos = responses
-        .map((result) => (result.status === "fulfilled" ? result.value : null))
-        .filter((photo): photo is ApiPhoto => Boolean(photo))
-        .map((photo) => {
-          const ev = contextEvents.find((e) => e.id === photo.event_id)
-          return {
-            id: photo.id,
-            src:
-              resolveApiAssetUrl(
-                `/api/v1/photographer/photos/${photo.id}/preview`
-              ) || "",
-            rider:
-              photo.tags.find((tag) => tag.type === "rider")?.value ||
-              "Unknown",
-            horse:
-              photo.tags.find((tag) => tag.type === "horse")?.value ||
-              "Unknown",
-            event: ev?.title || "Event",
-            eventId: photo.event_id,
-            date:
-              ev?.date ||
-              new Date(photo.created_at).toLocaleDateString(undefined, {
-                day: "numeric",
-                month: "short",
-                year: "numeric",
-              }),
-            width: 600,
-            height: 800,
-            className: photo.class_name || "Class A",
-            time: new Date(photo.created_at).toLocaleTimeString().slice(0, 5),
-            city: ev?.city || "Sweden",
-            arena: ev?.venueName || "Main Arena",
-            countryCode: "SE",
-            discipline: ev?.disciplines?.[0] || "Showjumping",
-          }
-        })
-
-      setApiHighlightPhotos(mappedPhotos)
-    }
-
-    fetchHighlightPhotos().catch((error) => {
-      if (isMounted) {
-        setApiHighlightPhotos([])
-      }
-      console.error("Failed to load photographer highlights", error)
+  // Visitors see the highlights saved on the public profile
+  const highlightIds =
+    !isOwner && apiPhotographer?.highlights?.length
+      ? apiPhotographer.highlights.slice(0, 10)
+      : NO_IDS
+  const { photos: highlightApiPhotos, isPending: isLoadingHighlightPhotos } =
+    useQueries({
+      queries: highlightIds.map((photoId) => photoQueryOptions(photoId)),
+      combine: combineHighlightPhotos,
     })
-
-    return () => {
-      isMounted = false
-    }
-  }, [apiPhotographer, contextEvents, isOwner])
+  const apiHighlightPhotos = useMemo<Photo[]>(
+    () =>
+      highlightApiPhotos.map((photo) => {
+        const ev = contextEvents.find((e) => e.id === photo.event_id)
+        return {
+          id: photo.id,
+          src:
+            resolveApiAssetUrl(
+              `/api/v1/photographer/photos/${photo.id}/preview`
+            ) || "",
+          rider:
+            photo.tags.find((tag) => tag.type === "rider")?.value || "Unknown",
+          horse:
+            photo.tags.find((tag) => tag.type === "horse")?.value || "Unknown",
+          event: ev?.title || "Event",
+          eventId: photo.event_id,
+          date:
+            ev?.date ||
+            new Date(photo.created_at).toLocaleDateString(undefined, {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            }),
+          width: 600,
+          height: 800,
+          className: photo.class_name || "Class A",
+          time: new Date(photo.created_at).toLocaleTimeString().slice(0, 5),
+          city: ev?.city || "Sweden",
+          arena: ev?.venueName || "Main Arena",
+          countryCode: "SE",
+          discipline: ev?.disciplines?.[0] || "Showjumping",
+        }
+      }),
+    [contextEvents, highlightApiPhotos]
+  )
 
   const breadcrumbs = useMemo<BreadcrumbItem[]>(() => {
     const items: BreadcrumbItem[] = [
@@ -465,20 +455,43 @@ export function PhotographerProfile() {
     contextEvents,
   ])
 
+  // First load: until the profile and its highlights are there (the tabs depend on them)
+  const isLoadingHighlights = isOwner
+    ? // isOwner can match on the Clerk username before the API user is in
+      !isAuthLoaded ||
+      (isPhotographer &&
+        (ownHighlightsQuery.isPending || ownPhotosQuery.isPending))
+    : isLoadingHighlightPhotos
+
   // Guard after all hooks
-  if (isLoadingApiPhotographer) {
+  if (
+    isLoadingApiPhotographer ||
+    isLoadingHighlights ||
+    // A hidden (pending/rejected) profile may be the signed-in user's own
+    (!activeProfile && !isAuthLoaded)
+  ) {
+    const highlightCount = isOwner
+      ? contextHighlights.length
+      : highlightIds.length
     return (
-      <div className="flex min-h-screen flex-col">
-        <Header />
-        <div className="container flex items-center justify-center py-20">
-          <Spinner className="size-6 text-muted-foreground" />
-        </div>
-      </div>
+      <PhotographerProfileSkeleton
+        // Visitors only see tabs when there are highlights
+        showTabs={isOwner || !apiPhotographer || highlightCount > 0}
+        tileCount={highlightCount || 8}
+      />
     )
   }
 
   if (!activeProfile || !photographer) {
-    return <div>Photographer not found</div>
+    return (
+      <div className="flex min-h-screen flex-col">
+        <Header />
+        <div className="container flex-1 py-20">
+          <EmptyState title="Photographer not found" />
+        </div>
+        <Footer />
+      </div>
+    )
   }
 
   const photographerAvatar =
@@ -540,7 +553,7 @@ export function PhotographerProfile() {
         isOpen={isHighlightsModalOpen}
         onClose={() => setIsHighlightsModalOpen(false)}
         initialIds={contextHighlights}
-        onSave={updateHighlights}
+        onSave={(ids) => saveHighlights.mutate(ids)}
       />
 
       {/* Tabs only when the owner is viewing or there are highlights */}
@@ -598,7 +611,11 @@ export function PhotographerProfile() {
                   Select your best photos to display them at the top of your
                   profile.
                 </p>
-                <Button onClick={() => setIsHighlightsModalOpen(true)}>
+                <Button
+                  // Saving before they load would replace them with nothing
+                  disabled={ownHighlightsQuery.isPending}
+                  onClick={() => setIsHighlightsModalOpen(true)}
+                >
                   Add photos
                 </Button>
               </div>
@@ -713,6 +730,100 @@ export function PhotographerProfile() {
             </div>
           </section>
         )}
+      </div>
+
+      <Footer minimal />
+    </div>
+  )
+}
+
+/** First load: header, tabs and highlight tiles as placeholders */
+function PhotographerProfileSkeleton({
+  showTabs,
+  tileCount,
+}: {
+  showTabs: boolean
+  tileCount: number
+}) {
+  // Bars sit inline in text lines, so each line keeps its real height
+  const bar = "inline-block h-[0.8em] rounded-sm bg-border align-middle"
+
+  return (
+    <div className="flex min-h-screen flex-col">
+      <Header />
+
+      <div aria-busy="true">
+        <BreadcrumbsSkeleton />
+
+        <TitleHeader
+          className="border-b-0"
+          title={
+            <>
+              <span className="sr-only">Loading photographer…</span>
+              <Skeleton
+                aria-hidden="true"
+                className={cn(bar, "w-56 max-w-full")}
+              />
+            </>
+          }
+          avatar={<Skeleton aria-hidden="true" className="size-full" />}
+          subtitle={
+            // Like the DotList: one row, stacked on mobile
+            <div
+              aria-hidden="true"
+              className="flex flex-wrap gap-x-4 text-base leading-[1.15] max-md:flex-col max-md:gap-1.5"
+            >
+              <div>
+                <Skeleton className={cn(bar, "w-24")} />
+              </div>
+              <div>
+                <Skeleton className={cn(bar, "w-20")} />
+              </div>
+            </div>
+          }
+          stats={
+            <div aria-hidden="true" className="text-[0.8125rem]">
+              <Skeleton className={cn(bar, "w-32")} />
+            </div>
+          }
+          rightContent={
+            <ActionCluster>
+              <ActionSeparator />
+              <Skeleton aria-hidden="true" className="size-11 rounded-full" />
+              <Skeleton aria-hidden="true" className="size-11 rounded-full" />
+              <ActionSeparator />
+            </ActionCluster>
+          }
+        />
+
+        {showTabs && (
+          <div aria-hidden="true" className="border-b bg-card">
+            <div className="container flex text-sm leading-normal">
+              <div className="-mb-px px-6 pt-3.5 pb-4">
+                <Skeleton className={cn(bar, "w-18")} />
+              </div>
+              <div className="-mb-px px-6 pt-3.5 pb-4">
+                <Skeleton className={cn(bar, "w-12")} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="min-h-[60vh] pt-6 max-md:pt-3">
+          {showTabs && (
+            <div aria-hidden="true" className="container pb-20">
+              {/* Same grid as Highlights */}
+              <div className="mx-auto grid w-full max-w-233.75 grid-cols-3 gap-1 max-md:gap-0.5 md:grid-cols-4">
+                {Array.from({ length: tileCount }).map((_, index) => (
+                  <Skeleton
+                    key={index}
+                    className="aspect-square rounded-none"
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       <Footer minimal />

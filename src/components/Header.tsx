@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react"
 import { Link, useLocation, useNavigate } from "react-router"
-import { useUser } from "@clerk/clerk-react"
 import { Camera, LayoutDashboard, ShoppingBag, User } from "lucide-react"
 
 import { assetUrl, cn } from "@/lib/utils"
@@ -48,7 +47,7 @@ function getAvatarColor(name: string) {
 }
 
 const iconButtonClass =
-  "relative shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:scale-105 hover:border-border hover:shadow-[0_2px_4px_rgba(0,0,0,0.05)] aria-expanded:border-border"
+  "relative shadow-[0_1px_2px_rgba(0,0,0,0.04)] duration-200 hover:scale-105 hover:border-border hover:shadow-[0_2px_4px_rgba(0,0,0,0.05)] aria-expanded:border-border"
 
 export function Header({
   searchEvents,
@@ -72,7 +71,6 @@ export function Header({
 
   const { cart } = useCart()
   const { isLoaded, isAuthenticated, user, logout } = useAuth()
-  const { user: clerkUser } = useUser()
 
   const navigate = useNavigate()
   const location = useLocation()
@@ -81,19 +79,14 @@ export function Header({
   const isOnboarding = location.pathname.startsWith("/pg/onboarding")
   const isHomePage = location.pathname === "/"
 
-  const publicApprovalStatus =
-    typeof clerkUser?.publicMetadata?.approvalStatus === "string"
-      ? clerkUser.publicMetadata.approvalStatus
-      : undefined
-  const unsafeApprovalStatus =
-    typeof clerkUser?.unsafeMetadata?.approvalStatus === "string"
-      ? clerkUser.unsafeMetadata.approvalStatus
-      : undefined
-  const effectiveApprovalStatus =
-    user?.approvalStatus ?? publicApprovalStatus ?? unsafeApprovalStatus
+  // Approval comes from our API (set by admins), never from Clerk metadata
+  const effectiveApprovalStatus = user?.approvalStatus
   const isAdmin = user?.role === "admin"
   const isPendingPhotographer =
     !isAdmin && effectiveApprovalStatus !== "approved"
+  // "suspended" = an admin rejected the sign-up
+  const isRejectedPhotographer =
+    !isAdmin && effectiveApprovalStatus === "suspended"
   const workspacePath = isAdmin
     ? "/admin"
     : isPendingPhotographer
@@ -101,9 +94,11 @@ export function Header({
       : "/pg"
   const accountShortcutLabel = isAdmin
     ? "My Console"
-    : isPendingPhotographer
-      ? "Approval pending"
-      : "My Studio"
+    : isRejectedPhotographer
+      ? "Not approved"
+      : isPendingPhotographer
+        ? "Approval pending"
+        : "My Studio"
 
   const openAuth = (tab: AuthTab, type: AccountType = "photographer") => {
     setAuthModalConfig({ tab, type })
@@ -200,7 +195,8 @@ export function Header({
                 <>
                   {cartButton}
 
-                  {!isMobile && (
+                  {/* Pending / rejected: no studio to open; the avatar menu has their status */}
+                  {!isMobile && !isPendingPhotographer && (
                     <>
                       <Separator
                         orientation="vertical"
@@ -224,7 +220,7 @@ export function Header({
                   )}
 
                   <DropdownMenu>
-                    <DropdownMenuTrigger className="ml-2 flex items-center gap-3 rounded-full border bg-card py-1.5 pr-4 pl-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all hover:scale-[1.02] hover:bg-muted hover:shadow-[0_2px_4px_rgba(0,0,0,0.05)] max-md:border-0 max-md:p-1">
+                    <DropdownMenuTrigger className="ml-2 flex items-center gap-3 rounded-full border bg-card py-1.5 pr-4 pl-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all duration-200 hover:scale-[1.02] hover:bg-muted hover:shadow-[0_2px_4px_rgba(0,0,0,0.05)] max-md:border-0 max-md:p-1">
                       <Avatar className="size-9">
                         {user?.avatarUrl && (
                           <AvatarImage src={user.avatarUrl} alt="Avatar" />

@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { Link } from "react-router"
-import { useUser } from "@clerk/clerk-react"
 import { Camera, LayoutDashboard } from "lucide-react"
 
 import { assetUrl, cn } from "@/lib/utils"
 import { useAuth } from "@/context/AuthContext"
 import { Button } from "@/components/ui/button"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   ModernSearchBar,
   type EventSearchProps,
@@ -249,30 +249,62 @@ function GuestHero({ title, description, search }: HomeHeroProps) {
   )
 }
 
+/** Until the sign-in state is known: the guest layout, side cards as placeholders */
+function HeroSkeleton({ title, description, search }: HomeHeroProps) {
+  return (
+    <div>
+      <div className="max-md:-mx-4 max-md:w-[calc(100%+32px)] max-md:overflow-hidden">
+        <div className="grid w-full grid-cols-[minmax(420px,8fr)_minmax(240px,2fr)_minmax(240px,2fr)] items-stretch gap-6 max-lg:grid-cols-2 max-md:flex">
+          <MainCard
+            title={title}
+            description={description}
+            search={search}
+            guest
+          />
+          <Skeleton
+            aria-hidden="true"
+            className="min-h-80 rounded-[32px] bg-border max-md:hidden"
+          />
+          <Skeleton
+            aria-hidden="true"
+            className="min-h-80 rounded-[32px] bg-border max-md:hidden"
+          />
+        </div>
+      </div>
+
+      {/* The guest view's pagination dots (mobile) */}
+      <div
+        aria-hidden="true"
+        className="mx-auto mt-3 hidden w-fit items-center gap-1.5 rounded-full bg-black/4 px-2.5 py-1 max-md:flex"
+      >
+        <span className="h-1.5 w-5 rounded-[3px] bg-primary" />
+        <span className="size-1.5 rounded-full bg-black/20" />
+        <span className="size-1.5 rounded-full bg-black/20" />
+      </div>
+    </div>
+  )
+}
+
 function SignedInHero({ title, description, search }: HomeHeroProps) {
   const { user } = useAuth()
-  const { user: clerkUser } = useUser()
 
   const isAdmin = user?.role === "admin"
-  const publicApprovalStatus =
-    typeof clerkUser?.publicMetadata?.approvalStatus === "string"
-      ? clerkUser.publicMetadata.approvalStatus
-      : undefined
-  const unsafeApprovalStatus =
-    typeof clerkUser?.unsafeMetadata?.approvalStatus === "string"
-      ? clerkUser.unsafeMetadata.approvalStatus
-      : undefined
-  const effectiveApprovalStatus =
-    user?.approvalStatus ?? publicApprovalStatus ?? unsafeApprovalStatus
+  // Approval comes from our API (set by admins), never from Clerk metadata
+  const effectiveApprovalStatus = user?.approvalStatus
   const isPendingPhotographer =
     !isAdmin && effectiveApprovalStatus !== "approved"
+  // "suspended" = an admin rejected the sign-up
+  const isRejectedPhotographer =
+    !isAdmin && effectiveApprovalStatus === "suspended"
   const fullName = user?.displayName ?? "Photographer"
 
   const consoleDescription = isAdmin
     ? "Approve photographers, manage events, monitor platform activity, and keep everything running smoothly."
-    : isPendingPhotographer
-      ? "Your photographer account is waiting for approval. We will unlock studio access as soon as an admin approves it in Clerk."
-      : "Manage your events, upload galleries, track your sales, and grow your photography business — all in one place."
+    : isRejectedPhotographer
+      ? "Your photographer account was not approved. Please contact Gallopics if you think this is a mistake."
+      : isPendingPhotographer
+        ? "Your photographer account is waiting for approval. We will unlock studio access as soon as an admin approves it."
+        : "Manage your events, upload galleries, track your sales, and grow your photography business — all in one place."
   const consoleHref = isAdmin
     ? "/admin"
     : isPendingPhotographer
@@ -282,9 +314,11 @@ function SignedInHero({ title, description, search }: HomeHeroProps) {
         : "/pg"
   const consoleLabel = isAdmin
     ? "My Console"
-    : isPendingPhotographer
-      ? "Approval pending"
-      : "My Studio"
+    : isRejectedPhotographer
+      ? "Not approved"
+      : isPendingPhotographer
+        ? "Approval pending"
+        : "My Studio"
 
   return (
     <div className="grid grid-cols-[1fr_280px] items-stretch gap-6 max-lg:grid-cols-[1fr_240px] max-md:grid-cols-1">
@@ -325,7 +359,13 @@ export function HomeHero({ title, description, search }: HomeHeroProps) {
   return (
     <section className="pt-10 pb-6 max-md:pt-6">
       <div className="container">
-        {!isLoaded ? null : isAuthenticated ? (
+        {!isLoaded ? (
+          <HeroSkeleton
+            title={title}
+            description={description}
+            search={search}
+          />
+        ) : isAuthenticated ? (
           <SignedInHero
             title={title}
             description={description}
