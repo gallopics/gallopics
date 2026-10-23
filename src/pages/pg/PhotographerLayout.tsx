@@ -4,9 +4,11 @@ import {
   Camera,
   ChevronLeft,
   ChevronRight,
+  DollarSign,
   LayoutGrid,
   Menu,
   Users,
+  Wallet,
 } from "lucide-react"
 
 import { useAuth } from "@/context/AuthContext"
@@ -27,6 +29,7 @@ import {
 import { CopyrightBar } from "@/components/CopyrightBar"
 import { ErrorBoundary } from "@/components/ErrorBoundary"
 import { Header } from "@/components/Header"
+import { StripeConnectBanner } from "@/components/StripeConnectBanner"
 
 // Old sidebar widths: 72px collapsed, 260px expanded
 const sidebarSizes = {
@@ -58,7 +61,8 @@ function NavItem({
           setOpen(false)
           setOpenMobile(false)
         }}
-        className="h-10.5 gap-0 rounded-full p-0 font-medium text-muted-foreground group-data-[collapsible=icon]:size-10.5! group-data-[collapsible=icon]:p-0! hover:bg-muted hover:text-foreground data-active:bg-primary/8 data-active:text-primary [&_svg]:size-4.5"
+        // Old: colours fade in 150ms; the active item keeps its brand tint on hover
+        className="h-10.5 gap-0 rounded-full p-0 font-medium text-muted-foreground transition-[width,height,padding,color,background-color] duration-150 group-data-[collapsible=icon]:size-10.5! group-data-[collapsible=icon]:p-0! hover:bg-muted hover:text-foreground data-active:bg-primary/8 data-active:text-primary data-active:hover:bg-primary/8 data-active:hover:text-primary [&_svg]:size-4.5"
       >
         <span className="flex size-10.5 shrink-0 items-center justify-center">
           {icon}
@@ -110,6 +114,20 @@ function WorkspaceSidebar() {
               label="My Studio"
             />
           )}
+          {!isAdmin && (
+            <NavItem
+              to={`${basePath}/sold`}
+              icon={<DollarSign />}
+              label="Sales"
+            />
+          )}
+          {!isAdmin && (
+            <NavItem
+              to={`${basePath}/billing`}
+              icon={<Wallet />}
+              label="Payouts"
+            />
+          )}
           {isAdmin && (
             <NavItem
               to={`${basePath}/photographers`}
@@ -117,7 +135,7 @@ function WorkspaceSidebar() {
               label="Photographers"
             />
           )}
-          {/* Sales, Receipts, Billing details and Settings are hidden in the old app too */}
+          {/* Receipts and Settings are hidden in the old app too (still mock) */}
         </SidebarMenu>
         <SidebarSeparator className="mx-3 my-3 data-horizontal:w-auto" />
       </SidebarContent>
@@ -160,6 +178,7 @@ export function PhotographerLayout() {
         <WorkspaceSidebar />
         <main className="min-w-0 flex-1">
           <MobileMenuButton />
+          <StripeConnectBanner />
           <ErrorBoundary>
             <Outlet />
           </ErrorBoundary>

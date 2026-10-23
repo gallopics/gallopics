@@ -1,12 +1,17 @@
 import { useMemo, useState } from "react"
 import { Link } from "react-router"
-import { DollarSign, LayoutGrid, List, RotateCcw } from "lucide-react"
+import { useQuery } from "@tanstack/react-query"
+import { DollarSign, LayoutGrid, List } from "lucide-react"
 
+import { QUALITY_TIERS } from "@/constants/qualityTiers"
 import { cn } from "@/lib/utils"
-import { usePhotographer, type Photo } from "@/context/PhotographerContext"
+import { useAuth } from "@/context/AuthContext"
 import { useWorkspace } from "@/context/WorkspaceContext"
-import { Button } from "@/components/ui/button"
+import { resolveApiAssetUrl, type SaleItem } from "@/data/apiClient"
+import { salesQueryOptions } from "@/data/queries/sales"
+import type { Photo } from "@/types"
 import { Separator } from "@/components/ui/separator"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table,
   TableBody,
@@ -16,12 +21,11 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ConfirmDialog } from "@/components/ConfirmDialog"
 import { EmptyState } from "@/components/EmptyState"
 import { FilterBar, ResetFiltersButton } from "@/components/FilterBar"
 import { MasonryGrid } from "@/components/MasonryGrid"
 import { ModernDropdown } from "@/components/ModernDropdown"
-import { PhotoCard } from "@/components/PhotoCard"
+import { PhotoCard, PhotoCardSkeleton } from "@/components/PhotoCard"
 import { PhotoPreviewDialog } from "@/components/PhotoPreviewDialog"
 import {
   ScopedSearchBar,
@@ -29,104 +33,119 @@ import {
 } from "@/components/ScopedSearchBar"
 import { TitleHeader } from "@/components/TitleHeader"
 
+const MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+]
+
+// Old --bundle-* colours (Tailwind palette: gray-400, orange-500, purple-500)
+const QUALITY_SERIES = [
+  { key: "web", label: "Web", color: "bg-gray-400" },
+  { key: "high", label: "High", color: "bg-orange-500" },
+  { key: "commercial", label: "Commercial", color: "bg-purple-500" },
+] as const
+
+type QualityKey = (typeof QUALITY_SERIES)[number]["key"]
+
+const PAYOUT_LABELS: Record<string, { label: string; className: string }> = {
+  transferred: { label: "Paid to Stripe", className: "text-success" },
+  owed: { label: "Waiting for Stripe", className: "text-warning" },
+  failed: { label: "Waiting for Stripe", className: "text-warning" },
+  reversed: { label: "Refunded", className: "text-muted-foreground" },
+  cancelled: { label: "Refunded", className: "text-muted-foreground" },
+}
+
+const TABLE_COLUMNS = [
+  { label: "Photo", className: "w-18" },
+  { label: "Photo ID", className: "w-[13%]" },
+  { label: "Date / Time", className: "w-[12%]" },
+  { label: "Event", className: "w-[20%]" },
+  { label: "Quality", className: "w-[12%]" },
+  { label: "Price", className: "w-[11%] text-right" },
+  { label: "Your share", className: "w-[11%] text-right" },
+  { label: "Payout", className: "w-[15%]" },
+]
+
+const cellClass = "px-4 py-3 text-sm text-foreground/80"
+
+/** Amounts arrive in öre; öre are shown when there are any (374.25), like Stripe */
+const formatSek = (ore: number) =>
+  `SEK ${(ore / 100)
+    .toLocaleString("en-US", {
+      minimumFractionDigits: ore % 100 ? 2 : 0,
+      maximumFractionDigits: 2,
+    })
+    .replace(/,/g, " ")}`
+
+// Loading placeholders. Bars sit inline in text lines, so each line keeps its real height
+const bar = "inline-block h-[0.8em] rounded-sm bg-border align-middle"
+const statValueSkeleton = (
+  <Skeleton aria-hidden="true" className={cn(bar, "w-12")} />
+)
+/** Bar heights (% of the chart) while the sales load */
+const CHART_SKELETON_HEIGHTS = [30, 45, 25, 60, 40, 70, 35, 50, 65, 30, 55, 40]
+
+const photoCode = (photoId: string) => `#${photoId.slice(0, 8).toUpperCase()}`
+
+const qualityLabel = (quality: string) =>
+  QUALITY_SERIES.find((q) => q.key === quality)?.label ?? quality
+
+const photoUrl = (photoId: string) =>
+  resolveApiAssetUrl(`/api/v1/photographer/photos/${photoId}/preview`) ?? ""
+
 export function SoldPhotos() {
   const { basePath, isAdmin } = useWorkspace()
-  const { events, getPhotosByEvent } = usePhotographer()
+  const { isPhotographer } = useAuth()
 
-  // States
+  const salesQuery = useQuery({
+    ...salesQueryOptions(),
+    enabled: !isAdmin && isPhotographer,
+  })
+  const sales = salesQuery.data ?? null
+  // Only when there is nothing to show (a failed refetch keeps the sales)
+  const loadError =
+    salesQuery.isError && !salesQuery.data
+      ? salesQuery.error.message || "Could not load your sales."
+      : null
+  // First load only: a refetch keeps showing the sales
+  const isLoadingSales = !sales && !loadError
   const [selectedEventId, setSelectedEventId] = useState<string>("all")
-  const [selectedBundleId, setSelectedBundleId] = useState<string>("all")
+  const [selectedQuality, setSelectedQuality] = useState<string>("all")
   const [selectedPeriod, setSelectedPeriod] = useState<string>("this_year")
   const [searchQuery, setSearchQuery] = useState("")
-  const [viewMode, setViewMode] = useState<"card" | "grid">("card")
-  const [previewPhoto, setPreviewPhoto] = useState<any | null>(null)
+  // List ("grid") by default: it shows each sale's payout status
+  const [viewMode, setViewMode] = useState<"card" | "grid">("grid")
+  const [previewSrc, setPreviewSrc] = useState<string | null>(null)
   const [hoveredBarIndex, setHoveredBarIndex] = useState<number | null>(null)
-  const [confirmModal, setConfirmModal] = useState<{
-    isOpen: boolean
-    photoId: string
-    photoCode: string
-  } | null>(null)
 
-  // Mock Data Constants
-  const REVENUE = 24700
+  const allSales = useMemo(() => sales?.items ?? [], [sales])
 
-  // Bundle Colors Token
-  const BUNDLE_COLORS = {
-    basic: "var(--muted-foreground)",
-    standard: "#f97316",
-    premium: "#a855f7",
-    custom: "#facc15", // Yellow-400
-  }
+  const eventOptions = useMemo(() => {
+    const events = new Map<string, string>()
+    allSales.forEach((sale) => events.set(sale.event_id, sale.event_name))
+    return [
+      { label: "All events", value: "all" },
+      ...Array.from(events, ([value, label]) => ({ label, value })),
+    ]
+  }, [allSales])
 
-  // Helper Functions for Bundles
-  const getBundleId = (photoId: string) => {
-    const bundles = ["web", "high", "commercial", "custom"] as const
-    const bundleHash = photoId
-      .split("")
-      .reduce((acc, char) => acc + char.charCodeAt(0), 0)
-    return bundles[bundleHash % 4]
-  }
-
-  const getBundleLabel = (photoId: string) => {
-    const bundleId = getBundleId(photoId)
-    return {
-      web: "Web",
-      high: "High",
-      commercial: "Commercial",
-      custom: "Custom",
-    }[bundleId]
-  }
-
-  // Deterministic mock purchase date spread across 2025–2026
-  const getMockPurchaseDate = (photoId: string): Date => {
-    const hash = photoId.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0)
-    const slot = hash % 18 // 18 buckets: 6 months 2025 + 12 months 2026
-    const year = slot < 6 ? 2025 : 2026
-    const month = slot < 6 ? slot + 6 : slot - 6 // Jul–Dec 2025, Jan–Dec 2026
-    const day = (hash % 28) + 1
-    const hour = hash % 24
-    const minute = (hash * 7) % 60
-    return new Date(year, month, day, hour, minute)
-  }
-
-  const getBundleColor = (photoId: string) => {
-    const bundleId = getBundleId(photoId)
-    return {
-      web: BUNDLE_COLORS.basic,
-      high: BUNDLE_COLORS.standard,
-      commercial: BUNDLE_COLORS.premium,
-      custom: BUNDLE_COLORS.custom,
-    }[bundleId]
-  }
-
-  const bundleOptions = [
-    { label: "All bundles", value: "all" },
-    {
-      label: "Web",
-      value: "web",
-      icon: <div className="size-2 rounded-full bg-gray-400" />,
-    },
-    {
-      label: "High",
-      value: "high",
-      icon: <div className="size-2 rounded-full bg-orange-500" />,
-    },
-    {
-      label: "Commercial",
-      value: "commercial",
-      icon: <div className="size-2 rounded-full bg-purple-500" />,
-    },
-    {
-      label: "Custom",
-      value: "custom",
-      icon: <div className="size-2 rounded-full bg-yellow-400" />,
-    },
-  ]
-
-  // Options
-  const eventOptions = [
-    { label: "All events", value: "all" },
-    ...events.map((e) => ({ label: e.title, value: e.id })),
+  const qualityOptions = [
+    { label: "All qualities", value: "all" },
+    ...QUALITY_SERIES.map((q) => ({
+      label: q.label,
+      value: q.key,
+      icon: <span className={cn("size-2 rounded-full", q.color)} />,
+    })),
   ]
 
   const periodOptions = [
@@ -136,175 +155,143 @@ export function SoldPhotos() {
     { label: "Last year", value: "last_year" },
   ]
 
-  const allSoldPhotos = useMemo(() => {
-    return events
-      .flatMap((e) => getPhotosByEvent(e.id))
-      .filter((p) => p.soldCount > 0)
-      .map((p) => {
-        // For demo: some photos should have multiple sales
-        const hash = p.id
-          .split("")
-          .reduce((acc, char) => acc + char.charCodeAt(0), 0)
-        const mockSoldCount = hash % 8 === 0 ? 4 : hash % 5 === 0 ? 2 : 1
-        return {
-          ...p,
-          soldCount: mockSoldCount,
-          clientEmail: `client_${p.id.slice(0, 4)}@example.com`,
-        }
-      })
-  }, [events, getPhotosByEvent])
-
-  const filteredPhotos = useMemo(() => {
+  const filteredSales = useMemo(() => {
     const now = new Date()
-    return allSoldPhotos.filter((p) => {
-      const matchEvent =
-        selectedEventId === "all" || p.eventId === selectedEventId
-      const matchSearch =
-        !searchQuery ||
-        (p.photoCode || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (p.clientEmail || "").toLowerCase().includes(searchQuery.toLowerCase())
-
-      const mockBundle = getBundleId(p.id)
-      const matchBundle =
-        selectedBundleId === "all" || mockBundle === selectedBundleId
-
-      let matchPeriod = true
-      if (selectedPeriod !== "all") {
-        const d = getMockPurchaseDate(p.id)
-        if (selectedPeriod === "this_month")
-          matchPeriod =
-            d.getMonth() === now.getMonth() &&
-            d.getFullYear() === now.getFullYear()
-        else if (selectedPeriod === "this_year")
-          matchPeriod = d.getFullYear() === now.getFullYear()
-        else if (selectedPeriod === "last_year")
-          matchPeriod = d.getFullYear() === now.getFullYear() - 1
-      }
-
-      return matchEvent && matchSearch && matchBundle && matchPeriod
+    const query = searchQuery.trim().toLowerCase().replace(/^#/, "")
+    return allSales.filter((sale) => {
+      const soldAt = new Date(sale.sold_at)
+      const matchPeriod =
+        selectedPeriod === "all" ||
+        (selectedPeriod === "this_month" &&
+          soldAt.getMonth() === now.getMonth() &&
+          soldAt.getFullYear() === now.getFullYear()) ||
+        (selectedPeriod === "this_year" &&
+          soldAt.getFullYear() === now.getFullYear()) ||
+        (selectedPeriod === "last_year" &&
+          soldAt.getFullYear() === now.getFullYear() - 1)
+      return (
+        matchPeriod &&
+        (selectedEventId === "all" || sale.event_id === selectedEventId) &&
+        (selectedQuality === "all" || sale.quality === selectedQuality) &&
+        (!query || sale.photo_id.toLowerCase().startsWith(query))
+      )
     })
-  }, [
-    allSoldPhotos,
-    selectedEventId,
-    searchQuery,
-    selectedBundleId,
-    selectedPeriod,
-  ])
+  }, [allSales, searchQuery, selectedEventId, selectedPeriod, selectedQuality])
 
-  const searchOptions = useMemo<ScopedSearchOption[]>(() => {
-    const ids = Array.from(
-      new Set(
-        allSoldPhotos.map(
-          (p) => p.photoCode || `#M-0-${p.id.slice(0, 8).toUpperCase()}`
-        )
-      )
-    ).map((id) => ({ label: id, value: id, type: "id" as const }))
-    const emails = Array.from(
-      new Set(
-        allSoldPhotos.map(
-          (p) =>
-            (p as any).clientEmail || `client_${p.id.slice(0, 4)}@example.com`
-        )
-      )
-    ).map((e) => ({ label: e, value: e, type: "email" as const }))
-    return [...ids, ...emails]
-  }, [allSoldPhotos])
+  // Not refunded: what counts towards sales and earnings
+  const paidSales = useMemo(
+    () => filteredSales.filter((sale) => !sale.refunded),
+    [filteredSales]
+  )
 
-  const isResetDisabled =
-    selectedEventId === "all" &&
-    selectedBundleId === "all" &&
-    selectedPeriod === "all" &&
-    searchQuery === ""
+  // Card view: one card per photo, with how often it sold
+  const soldPhotos = useMemo(() => {
+    const byPhoto = new Map<string, { sale: SaleItem; count: number }>()
+    paidSales.forEach((sale) => {
+      const entry = byPhoto.get(sale.photo_id)
+      if (entry) entry.count += 1
+      else byPhoto.set(sale.photo_id, { sale, count: 1 })
+    })
+    return Array.from(byPhoto.values())
+  }, [paidSales])
 
-  const mapToUiPhoto = (photo: Photo) => {
-    const event = events.find((e) => e.id === photo.eventId)
-    const purchaseDate = getMockPurchaseDate(photo.id)
-    return {
-      id: photo.id,
-      src: photo.url,
-      rider: photo.rider || "Unknown",
-      horse: photo.horse || "Unknown",
-      event: event?.title || "Event",
-      eventId: photo.eventId,
-      date: purchaseDate.toISOString(),
-      time: purchaseDate.toLocaleTimeString("en-GB", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      city: event?.city || "Unknown",
-      countryCode: "SE",
-      priceStandard: photo.priceStandard,
-      priceHigh: photo.priceHigh,
-      priceCommercial: photo.priceCommercial,
-      width: photo.width,
-      height: photo.height,
-      className: "photo-grid-item",
-      arena: "Arena 1",
-      photographer: event?.assignedPhotographers?.[0]?.name,
-      soldCount: photo.soldCount,
-    }
-  }
+  const searchOptions = useMemo<ScopedSearchOption[]>(
+    () =>
+      Array.from(new Set(allSales.map((sale) => photoCode(sale.photo_id)))).map(
+        (code) => ({ label: code, value: code, type: "id" as const })
+      ),
+    [allSales]
+  )
 
-  // Graph Data — derived from filteredPhotos so chart and grid are always in sync
+  // Chart: sales count per quality in each bucket, plus the photographer's share
   const graphData = useMemo(() => {
-    const MONTHS = [
-      "Jan",
-      "Feb",
-      "Mar",
-      "Apr",
-      "May",
-      "Jun",
-      "Jul",
-      "Aug",
-      "Sep",
-      "Oct",
-      "Nov",
-      "Dec",
-    ]
-
-    let labels: string[] = []
+    const now = new Date()
+    let labels: string[]
     if (selectedPeriod === "this_month") {
-      labels = Array.from({ length: 30 }, (_, i) => (i + 1).toString())
-    } else if (selectedPeriod === "this_year") {
-      labels = MONTHS
-    } else if (selectedPeriod === "last_year") {
-      labels = MONTHS
+      const days = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+      labels = Array.from({ length: days }, (_, i) => (i + 1).toString())
+    } else if (selectedPeriod === "all") {
+      const years = paidSales.map((sale) =>
+        new Date(sale.sold_at).getFullYear()
+      )
+      const first = Math.min(now.getFullYear(), ...years)
+      labels = Array.from({ length: now.getFullYear() - first + 1 }, (_, i) =>
+        (first + i).toString()
+      )
     } else {
-      labels = ["2023", "2024", "2025", "2026"]
+      labels = MONTHS
     }
 
     const dataPoints = labels.map(() => ({
-      basic: 0,
-      standard: 0,
-      premium: 0,
-      custom: 0,
+      web: 0,
+      high: 0,
+      commercial: 0,
+      earnings: 0,
     }))
-
-    filteredPhotos.forEach((p) => {
-      const d = getMockPurchaseDate(p.id)
-      let key: string
-      if (selectedPeriod === "this_month") key = d.getDate().toString()
-      else if (selectedPeriod === "this_year" || selectedPeriod === "last_year")
-        key = MONTHS[d.getMonth()]
-      else key = d.getFullYear().toString()
-
-      const idx = labels.indexOf(key)
-      if (idx === -1) return
-
-      const count = p.soldCount || 1
-      const bundle = getBundleId(p.id)
-      if (bundle === "web") dataPoints[idx].basic += count
-      else if (bundle === "high") dataPoints[idx].standard += count
-      else if (bundle === "commercial") dataPoints[idx].premium += count
-      else if (bundle === "custom") dataPoints[idx].custom += count
+    paidSales.forEach((sale) => {
+      const soldAt = new Date(sale.sold_at)
+      const key =
+        selectedPeriod === "this_month"
+          ? soldAt.getDate().toString()
+          : selectedPeriod === "all"
+            ? soldAt.getFullYear().toString()
+            : MONTHS[soldAt.getMonth()]
+      const point = dataPoints[labels.indexOf(key)]
+      if (!point) return
+      if (sale.quality in point) point[sale.quality as QualityKey] += 1
+      point.earnings += sale.photographer_amount
     })
+    const maxTotal = Math.max(
+      1,
+      ...dataPoints.map((p) => p.web + p.high + p.commercial)
+    )
+    return { labels, dataPoints, maxTotal }
+  }, [paidSales, selectedPeriod])
 
-    return { labels, dataPoints }
-  }, [filteredPhotos, selectedPeriod])
-  const formatSek = (value: number) =>
-    `SEK ${value.toLocaleString().replace(/,/g, " ")}`
+  const isResetDisabled =
+    selectedEventId === "all" &&
+    selectedQuality === "all" &&
+    selectedPeriod === "all" &&
+    searchQuery === ""
 
-  // trend card: fixed widths like the old wrappers (200 / 160 / 160px)
+  const toUiPhoto = (sale: SaleItem, soldCount: number): Photo => {
+    const soldAt = new Date(sale.sold_at)
+    return {
+      id: sale.photo_id,
+      src: photoUrl(sale.photo_id),
+      rider: sale.class_name || sale.event_name,
+      horse: "",
+      event: sale.event_name,
+      eventId: sale.event_id,
+      date: soldAt.toISOString(),
+      time: soldAt.toLocaleTimeString("en-GB", {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      width: 600,
+      height: 400,
+      className: "photo-grid-item",
+      city: "",
+      arena: "",
+      countryCode: "SE",
+      soldCount,
+    } as Photo
+  }
+
+  const totals = {
+    count: paidSales.length,
+    earnings: paidSales.reduce(
+      (sum, sale) => sum + sale.photographer_amount,
+      0
+    ),
+    transferred: paidSales
+      .filter((sale) => sale.payout_status === "transferred")
+      .reduce((sum, sale) => sum + sale.photographer_amount, 0),
+    owed: paidSales
+      .filter((sale) => ["owed", "failed"].includes(sale.payout_status ?? ""))
+      .reduce((sum, sale) => sum + sale.photographer_amount, 0),
+  }
+
   const filterDropdowns = (trend = false) => (
     <>
       <ModernDropdown
@@ -317,11 +304,11 @@ export function SoldPhotos() {
         className={trend ? "md:w-50" : undefined}
       />
       <ModernDropdown
-        value={selectedBundleId}
-        options={bundleOptions}
-        onChange={setSelectedBundleId}
-        label="Bundle"
-        placeholder="All bundles"
+        value={selectedQuality}
+        options={qualityOptions}
+        onChange={setSelectedQuality}
+        label="Quality"
+        placeholder="All qualities"
         variant="pill"
         className={trend ? "md:w-40" : undefined}
       />
@@ -336,13 +323,20 @@ export function SoldPhotos() {
     </>
   )
 
-  const openUnpublish = (photo: Photo) =>
-    setConfirmModal({
-      isOpen: true,
-      photoId: photo.id,
-      photoCode:
-        photo.photoCode || `#M-0-${photo.id.slice(0, 8).toUpperCase()}`,
-    })
+  if (isAdmin) {
+    return (
+      <div className="pb-20">
+        <TitleHeader variant="workspace" title="Sales" />
+        <div className="container py-10">
+          <EmptyState
+            icon={<DollarSign />}
+            title="Platform sales overview is not available yet"
+            description="Photographers see their own sales here."
+          />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="pb-20">
@@ -351,7 +345,11 @@ export function SoldPhotos() {
       <div className="relative min-h-[calc(100vh-200px)] bg-background py-10">
         <div className="container">
           {/* Sales trend card */}
-          <div className="mb-6 rounded-xl border bg-card p-6">
+          <div
+            aria-busy={isLoadingSales || undefined}
+            className="mb-6 rounded-xl border bg-card p-6"
+          >
+            {isLoadingSales && <span className="sr-only">Loading sales…</span>}
             <div className="mb-10 flex flex-col gap-6">
               <div className="flex w-full items-center justify-between max-md:flex-col max-md:items-start max-md:gap-3">
                 <div className="mr-3 text-base font-semibold text-foreground">
@@ -364,90 +362,129 @@ export function SoldPhotos() {
 
               <div className="flex w-full items-center justify-between max-md:flex-col max-md:items-start max-md:gap-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <StatBadge label="Published" value="596" />
-                  {isAdmin ? (
-                    <>
-                      <StatBadge
-                        label="PG Earnings"
-                        value={formatSek(REVENUE)}
-                        className="bg-blue-50 text-blue-800 *:last:text-blue-700"
-                      />
-                      <StatBadge
-                        label="Gallop Earnings"
-                        value={formatSek(REVENUE * 10)}
-                        className="bg-violet-50 text-violet-800 *:last:text-violet-600"
-                      />
-                    </>
-                  ) : (
+                  <StatBadge
+                    label="Sold"
+                    value={isLoadingSales ? statValueSkeleton : totals.count}
+                  />
+                  <StatBadge
+                    label="Earnings"
+                    value={
+                      isLoadingSales
+                        ? statValueSkeleton
+                        : formatSek(totals.earnings)
+                    }
+                    className="bg-blue-50 text-blue-800 *:last:text-blue-700"
+                  />
+                  <StatBadge
+                    label="Paid to Stripe"
+                    value={
+                      isLoadingSales
+                        ? statValueSkeleton
+                        : formatSek(totals.transferred)
+                    }
+                    className="bg-emerald-50 text-emerald-800 *:last:text-emerald-700"
+                  />
+                  {totals.owed > 0 && (
                     <StatBadge
-                      label="Earnings"
-                      value={formatSek(REVENUE)}
-                      className="bg-blue-50 text-blue-800 *:last:text-blue-700"
+                      label="Waiting for Stripe"
+                      value={formatSek(totals.owed)}
+                      className="bg-amber-50 text-amber-800 *:last:text-amber-700"
                     />
                   )}
                 </div>
 
                 <div className="flex flex-wrap gap-4 max-md:gap-x-3 max-md:gap-y-1">
-                  {BUNDLE_SERIES.map((b) => (
+                  {QUALITY_SERIES.map((q) => (
                     <div
-                      key={b.key}
+                      key={q.key}
                       className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground"
                     >
-                      <LegendDot className={b.color} />
-                      <span>{b.label}</span>
+                      <LegendDot className={q.color} />
+                      <span>{q.label}</span>
                     </div>
                   ))}
                 </div>
               </div>
+              {isLoadingSales && (
+                // The share line below (two lines on phones)
+                <div aria-hidden="true" className="text-xs">
+                  <span className="block">
+                    <Skeleton className={cn(bar, "w-120 max-w-full")} />
+                  </span>
+                  <span className="block md:hidden">
+                    <Skeleton className={cn(bar, "w-24")} />
+                  </span>
+                </div>
+              )}
+              {sales && (
+                <p className="text-xs text-muted-foreground">
+                  Your share is {100 - sales.commission_percent}% of each sale.
+                  Stripe pays it to your bank on the {sales.payout_day_of_month}
+                  th of each month.
+                </p>
+              )}
             </div>
 
-            {/* Stacked bar chart */}
+            {/* Stacked bar chart, scaled to the busiest bucket */}
             <div className="relative flex h-50 w-full items-end gap-6 pb-6 max-md:gap-1">
               {graphData.dataPoints.map((point, i) => {
-                const total =
-                  point.basic + point.standard + point.premium + point.custom
-                // Show only every 5th label when there are many bars
+                const total = point.web + point.high + point.commercial
                 const showLabel =
                   selectedPeriod === "this_month" ? i % 5 === 0 : true
-                const label =
-                  selectedPeriod === "this_month"
-                    ? (i + 1).toString()
-                    : graphData.labels[i]
+                const label = graphData.labels[i]
                 const isHovered = hoveredBarIndex === i
                 const alignRight = i > graphData.dataPoints.length / 2
 
                 return (
                   <div
-                    key={i}
+                    key={label}
                     className="relative flex h-full flex-1 flex-col items-center justify-end gap-1"
                     onMouseEnter={() => setHoveredBarIndex(i)}
                     onMouseLeave={() => setHoveredBarIndex(null)}
                   >
-                    <div className="mb-0.5 text-[0.625rem] font-bold text-muted-foreground">
-                      {Math.round(total)}
-                    </div>
-                    <div
-                      className="flex min-h-1 w-full flex-col overflow-hidden rounded-t-sm transition-transform duration-200 hover:z-2 hover:scale-x-110"
-                      style={{ height: `${total}%` }}
-                    >
-                      {[...BUNDLE_SERIES].reverse().map((b) => (
+                    {isLoadingSales ? (
+                      <Skeleton
+                        aria-hidden="true"
+                        className="w-full rounded-t-sm rounded-b-none"
+                        style={{
+                          height: `${CHART_SKELETON_HEIGHTS[i % CHART_SKELETON_HEIGHTS.length]}%`,
+                        }}
+                      />
+                    ) : (
+                      <>
+                        <div className="mb-0.5 text-[0.625rem] font-bold text-muted-foreground">
+                          {total}
+                        </div>
                         <div
-                          key={b.key}
-                          className={cn(
-                            "w-full transition-[height] duration-300",
-                            b.color
-                          )}
-                          style={{ height: `${(point[b.key] / total) * 100}%` }}
-                        />
-                      ))}
-                    </div>
+                          className="flex min-h-1 w-full flex-col overflow-hidden rounded-t-sm bg-muted transition-transform duration-200 hover:z-2 hover:scale-x-110"
+                          style={{
+                            height: `${(total / graphData.maxTotal) * 85}%`,
+                          }}
+                        >
+                          {[...QUALITY_SERIES].reverse().map((q) => (
+                            <div
+                              key={q.key}
+                              className={cn(
+                                "w-full transition-[height] duration-300",
+                                q.color
+                              )}
+                              style={{
+                                height: total
+                                  ? `${(point[q.key] / total) * 100}%`
+                                  : 0,
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </>
+                    )}
                     {showLabel && (
                       <span className="absolute -bottom-6 text-xs font-semibold whitespace-nowrap text-muted-foreground/50">
                         {label}
                       </span>
                     )}
 
-                    {isHovered && (
+                    {isHovered && !isLoadingSales && (
                       <div
                         className={cn(
                           "pointer-events-none absolute bottom-full z-10 mb-3 flex min-w-50 flex-col gap-2 rounded-xl border border-muted bg-popover px-4 py-3 text-popover-foreground shadow-lg",
@@ -459,16 +496,16 @@ export function SoldPhotos() {
                         <div className="border-b border-muted pb-1.5 text-xs font-bold text-foreground">
                           {label} Sales
                         </div>
-                        {BUNDLE_SERIES.map((b) => (
+                        {QUALITY_SERIES.map((q) => (
                           <TooltipRow
-                            key={b.key}
+                            key={q.key}
                             label={
                               <>
-                                <LegendDot className={b.color} />
-                                {b.label}
+                                <LegendDot className={q.color} />
+                                {q.label}
                               </>
                             }
-                            value={Math.round(point[b.key])}
+                            value={point[q.key]}
                           />
                         ))}
                         <div className="mt-1 border-t border-muted pt-2">
@@ -479,31 +516,14 @@ export function SoldPhotos() {
                                 Total Sold
                               </span>
                             }
-                            value={Math.round(total)}
+                            value={total}
                           />
-                          {isAdmin ? (
-                            <>
-                              <TooltipRow
-                                className="mt-1"
-                                label="PG Earnings"
-                                value={`SEK ${Math.round(total * 450).toLocaleString()}`}
-                                valueClassName="text-success"
-                              />
-                              <TooltipRow
-                                className="mt-0.5"
-                                label="Gallop Earnings"
-                                value={`SEK ${Math.round(total * 4500).toLocaleString()}`}
-                                valueClassName="text-violet-600"
-                              />
-                            </>
-                          ) : (
-                            <TooltipRow
-                              className="mt-1"
-                              label="Earnings"
-                              value={`SEK ${Math.round(total * 450).toLocaleString()}`}
-                              valueClassName="text-success"
-                            />
-                          )}
+                          <TooltipRow
+                            className="mt-1"
+                            label="Earnings"
+                            value={formatSek(point.earnings)}
+                            valueClassName="text-success"
+                          />
                         </div>
                       </div>
                     )}
@@ -524,7 +544,7 @@ export function SoldPhotos() {
                   disabled={isResetDisabled}
                   onClick={() => {
                     setSelectedEventId("all")
-                    setSelectedBundleId("all")
+                    setSelectedQuality("all")
                     setSelectedPeriod("all")
                     setSearchQuery("")
                   }}
@@ -536,13 +556,14 @@ export function SoldPhotos() {
                 currentValue={searchQuery}
                 onSearchChange={setSearchQuery}
                 onSelect={setSearchQuery}
-                placeholder="Search photo ID or client email..."
+                placeholder="Search photo ID..."
                 options={searchOptions}
               />
             }
             meta={
               <div className="flex items-center gap-4">
-                Showing {filteredPhotos.length}
+                Showing{" "}
+                {viewMode === "card" ? soldPhotos.length : filteredSales.length}
                 <Separator
                   orientation="vertical"
                   className="h-6 data-vertical:self-center"
@@ -572,232 +593,195 @@ export function SoldPhotos() {
             }
           />
 
-          {filteredPhotos.length > 0 ? (
-            viewMode === "card" ? (
-              <MasonryGrid isLoading={false}>
-                {filteredPhotos.map((photo) => (
-                  <PhotoCard
-                    key={photo.id}
-                    photo={mapToUiPhoto(photo)}
-                    onClick={(p) => setPreviewPhoto(p)}
-                    variant="pgPublished"
-                    selectable={false}
-                    showEdit={false}
-                    onRemove={() => openUnpublish(photo)}
-                    pgMeta={{
-                      fileName: photo.fileName,
-                      photoCode:
-                        photo.photoCode ||
-                        `#M-0-${photo.id.slice(0, 8).toUpperCase()}`,
-                      soldCount: photo.soldCount,
-                      priceStandard: photo.priceStandard,
-                      priceHigh: photo.priceHigh,
-                      priceCommercial: photo.priceCommercial,
-                    }}
-                  />
-                ))}
-              </MasonryGrid>
-            ) : (
-              <div className="overflow-hidden rounded-xl border bg-card">
-                <Table className="table-fixed">
-                  <TableHeader>
-                    <TableRow className="bg-muted hover:bg-muted">
-                      {TABLE_COLUMNS.map((col) => (
-                        <TableHead
-                          key={col.label}
-                          className={cn(
-                            "h-auto px-4 py-3 text-xs font-semibold tracking-[0.05em] text-muted-foreground uppercase",
-                            col.className
-                          )}
-                        >
-                          {col.label}
-                        </TableHead>
-                      ))}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredPhotos.map((photo) => {
-                      const event = events.find((e) => e.id === photo.eventId)
-                      const photoIdDisplay =
-                        photo.photoCode ||
-                        `#M-0-${photo.id.slice(0, 8).toUpperCase()}`
-                      const clientEmail = photo.clientEmail
-                      const downloadLink = `gallopics.com/dl/${photo.photoCode || photo.id.slice(0, 8)}...`
-                      const eventTitle = event?.title || "Unknown Event"
-
-                      return (
-                        <TableRow
-                          key={photo.id}
-                          className="border-muted hover:bg-muted"
-                        >
-                          <TableCell className={cellClass}>
-                            <button
-                              type="button"
-                              aria-label="Preview photo"
-                              onClick={() =>
-                                setPreviewPhoto(mapToUiPhoto(photo))
-                              }
-                            >
-                              <img
-                                src={photo.url}
-                                className="size-10 cursor-pointer rounded object-cover"
-                                alt=""
-                              />
-                            </button>
-                          </TableCell>
-                          <TableCell
-                            className={cellClass}
-                            title={photoIdDisplay}
-                          >
-                            <div className="truncate font-semibold text-foreground">
-                              {photoIdDisplay}
-                            </div>
-                            {photo.fileName && (
-                              <div className="truncate text-xs text-muted-foreground">
-                                {photo.fileName}
-                              </div>
-                            )}
-                          </TableCell>
-                          <TableCell
-                            className={cellClass}
-                            title={`${photo.uploadDate} ${photo.timestamp || "14:20"}`}
-                          >
-                            <div className="truncate font-medium">
-                              {photo.uploadDate}
-                            </div>
-                            <div className="truncate text-xs text-muted-foreground">
-                              {photo.timestamp || "14:20"}
-                            </div>
-                          </TableCell>
-                          <TableCell className={cellClass} title={eventTitle}>
-                            <Link
-                              to={`${basePath}/events/${photo.eventId}`}
-                              className="block truncate font-medium text-primary hover:underline"
-                            >
-                              {eventTitle}
-                            </Link>
-                          </TableCell>
-                          <TableCell className={cellClass} title={clientEmail}>
-                            <div className="truncate text-muted-foreground">
-                              {clientEmail}
-                            </div>
-                          </TableCell>
-                          <TableCell
-                            className={cellClass}
-                            title={getBundleLabel(photo.id)}
-                          >
-                            <div className="inline-flex max-w-full items-center gap-1.5 font-medium">
-                              <span
-                                className="size-2 shrink-0 rounded-full"
-                                style={{
-                                  background: getBundleColor(photo.id),
-                                }}
-                              />
-                              <span className="truncate">
-                                {getBundleLabel(photo.id)}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell className={cn(cellClass, "text-center")}>
-                            <span className="inline-flex items-center justify-center rounded border border-emerald-100 bg-emerald-50 px-1.5 py-0.5 text-[0.6875rem] leading-none font-bold text-success transition-colors hover:border-emerald-200 hover:bg-emerald-100">
-                              {photo.soldCount || 1}
-                            </span>
-                          </TableCell>
-                          <TableCell
-                            className={cellClass}
-                            title={`https://gallopics.com/dl/${photo.photoCode || photo.id.slice(0, 8)}`}
-                          >
-                            <a
-                              href="#"
-                              className="block truncate text-primary"
-                              onClick={(e) => e.preventDefault()}
-                            >
-                              {downloadLink}
-                            </a>
-                          </TableCell>
-                          <TableCell className={cn(cellClass, "text-right")}>
-                            <Button
-                              variant="outline"
-                              size="icon-sm"
-                              title="Unpublish"
-                              aria-label="Unpublish"
-                              className="border-muted text-muted-foreground hover:border-destructive/25 hover:bg-destructive/10 hover:text-destructive"
-                              onClick={() => openUnpublish(photo)}
-                            >
-                              <RotateCcw />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            )
-          ) : (
+          {isLoadingSales ? (
+            <MasonryGrid
+              isLoading
+              skeletonCount={10}
+              renderSkeleton={() => <PhotoCardSkeleton pg landscape />}
+            >
+              {null}
+            </MasonryGrid>
+          ) : loadError ? (
+            <EmptyState
+              icon={<DollarSign />}
+              title="Sales could not be loaded"
+              description={loadError}
+            />
+          ) : filteredSales.length === 0 ? (
             <EmptyState
               icon={<DollarSign />}
               title={
-                allSoldPhotos.length === 0 ? "No sales yet" : "No results found"
+                allSales.length === 0 ? "No sales yet" : "No results found"
               }
               description={
-                allSoldPhotos.length === 0
+                allSales.length === 0
                   ? "Your sold photos will appear here once customers make a purchase."
                   : "Try adjusting your filters to find what you're looking for."
               }
             />
+          ) : viewMode === "card" ? (
+            <MasonryGrid isLoading={false}>
+              {soldPhotos.map(({ sale, count }) => (
+                <PhotoCard
+                  key={sale.photo_id}
+                  photo={toUiPhoto(sale, count)}
+                  onClick={(p) => setPreviewSrc(p.src)}
+                  variant="pgPublished"
+                  selectable={false}
+                  showEdit={false}
+                  pgMeta={{
+                    photoCode: photoCode(sale.photo_id),
+                    soldCount: count,
+                    priceStandard: QUALITY_TIERS[0].price,
+                    priceHigh: QUALITY_TIERS[1].price,
+                    priceCommercial: QUALITY_TIERS[2].price,
+                  }}
+                />
+              ))}
+            </MasonryGrid>
+          ) : (
+            <div className="overflow-hidden rounded-xl border bg-card">
+              {/* min width: the % columns were ~40px each on phones (text overlapped); now it scrolls */}
+              <Table className="min-w-220 table-fixed">
+                <TableHeader>
+                  <TableRow className="bg-muted hover:bg-muted">
+                    {TABLE_COLUMNS.map((col) => (
+                      <TableHead
+                        key={col.label}
+                        className={cn(
+                          "h-auto px-4 py-3 text-xs font-semibold tracking-[0.05em] text-muted-foreground uppercase",
+                          col.className
+                        )}
+                      >
+                        {col.label}
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredSales.map((sale) => {
+                    const soldAt = new Date(sale.sold_at)
+                    const payout = sale.refunded
+                      ? PAYOUT_LABELS.reversed
+                      : PAYOUT_LABELS[sale.payout_status ?? ""]
+                    return (
+                      <TableRow
+                        key={sale.id}
+                        className={cn(
+                          "border-muted hover:bg-muted",
+                          sale.refunded && "opacity-60"
+                        )}
+                      >
+                        <TableCell className={cellClass}>
+                          <button
+                            type="button"
+                            aria-label="Preview photo"
+                            onClick={() =>
+                              setPreviewSrc(photoUrl(sale.photo_id))
+                            }
+                          >
+                            <img
+                              src={photoUrl(sale.photo_id)}
+                              className="size-10 cursor-pointer rounded object-cover"
+                              alt=""
+                            />
+                          </button>
+                        </TableCell>
+                        <TableCell className={cellClass}>
+                          <div className="truncate font-semibold text-foreground">
+                            {photoCode(sale.photo_id)}
+                          </div>
+                          {sale.class_name && (
+                            <div
+                              className="truncate text-xs text-muted-foreground"
+                              title={sale.class_name}
+                            >
+                              {sale.class_name}
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className={cellClass}>
+                          <div className="truncate font-medium">
+                            {soldAt.toLocaleDateString("en-GB", {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                            })}
+                          </div>
+                          <div className="truncate text-xs text-muted-foreground">
+                            {soldAt.toLocaleTimeString("en-GB", {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </div>
+                        </TableCell>
+                        <TableCell
+                          className={cellClass}
+                          title={sale.event_name}
+                        >
+                          <Link
+                            to={`${basePath}/events/${sale.event_id}`}
+                            className="block truncate font-medium text-primary hover:underline"
+                          >
+                            {sale.event_name}
+                          </Link>
+                        </TableCell>
+                        <TableCell className={cellClass}>
+                          <div className="inline-flex max-w-full items-center gap-1.5 font-medium">
+                            <span
+                              className={cn(
+                                "size-2 shrink-0 rounded-full",
+                                QUALITY_SERIES.find(
+                                  (q) => q.key === sale.quality
+                                )?.color ?? "bg-muted-foreground"
+                              )}
+                            />
+                            <span className="truncate">
+                              {qualityLabel(sale.quality)}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className={cn(cellClass, "text-right")}>
+                          {formatSek(sale.amount)}
+                        </TableCell>
+                        <TableCell
+                          className={cn(
+                            cellClass,
+                            "text-right font-semibold text-foreground"
+                          )}
+                        >
+                          {/* A refunded sale's share was taken back or cancelled */}
+                          {sale.refunded
+                            ? "—"
+                            : formatSek(sale.photographer_amount)}
+                        </TableCell>
+                        <TableCell className={cellClass}>
+                          <span
+                            className={cn(
+                              "text-sm font-medium",
+                              payout?.className ?? "text-muted-foreground"
+                            )}
+                          >
+                            {payout?.label ?? "—"}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </div>
       </div>
 
       <PhotoPreviewDialog
-        src={previewPhoto?.src}
-        onClose={() => setPreviewPhoto(null)}
-      />
-
-      <ConfirmDialog
-        open={!!confirmModal?.isOpen}
-        onCancel={() => setConfirmModal(null)}
-        onConfirm={() => {
-          // Mock action, as in the old app
-          console.log("Unpublishing photo:", confirmModal?.photoId)
-          setConfirmModal(null)
-        }}
-        title="Unpublish photo?"
-        description={
-          <>
-            This will move photo <strong>{confirmModal?.photoCode}</strong> to
-            the Archive tab. You can undo this action later from the event
-            details page.
-          </>
-        }
-        confirmLabel="Unpublish"
+        src={previewSrc ?? undefined}
+        onClose={() => setPreviewSrc(null)}
       />
     </div>
   )
 }
-
-// Old --bundle-* colours (Tailwind palette: gray-400, orange-500, purple-500, yellow-400)
-const BUNDLE_SERIES = [
-  { key: "basic", label: "Web", color: "bg-gray-400" },
-  { key: "standard", label: "High", color: "bg-orange-500" },
-  { key: "premium", label: "Commercial", color: "bg-purple-500" },
-  { key: "custom", label: "Custom", color: "bg-yellow-400" },
-] as const
-
-const TABLE_COLUMNS = [
-  { label: "Photo", className: "w-18" },
-  { label: "Photo ID", className: "w-[15%]" },
-  { label: "Date / Time", className: "w-[12%]" },
-  { label: "Event", className: "w-[15%]" },
-  { label: "Client Info", className: "w-[18%]" },
-  { label: "Bundle", className: "w-[12%]" },
-  { label: "Count", className: "w-20 text-center" },
-  { label: "Download Link", className: "w-[15%]" },
-  { label: "Actions", className: "w-25 text-right" },
-]
-
-const cellClass = "px-4 py-3 text-sm text-foreground/80"
 
 function StatBadge({
   label,

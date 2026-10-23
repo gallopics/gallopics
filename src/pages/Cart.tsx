@@ -1,16 +1,12 @@
-import { useMemo, useState } from "react"
+import { useMemo } from "react"
 import { useNavigate, useSearchParams } from "react-router"
-import { ArrowLeft, Check, Eye, ShoppingBag, Trash2 } from "lucide-react"
+import { ArrowLeft, Eye, ShoppingBag, Trash2 } from "lucide-react"
 
 import { getDefaultCartTier } from "@/constants/qualityTiers"
 import { useCart } from "@/context/CartContext"
-import {
-  api,
-  type CheckoutLineItem,
-  type CheckoutOrder,
-} from "@/data/apiClient"
+import type { CheckoutItem } from "@/data/apiClient"
 import { COMPETITIONS } from "@/data/mockData"
-import type { CartItem, Photo } from "@/types"
+import type { Photo } from "@/types"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -57,16 +53,9 @@ function RecentlyViewed({
 }
 
 export function Cart() {
-  const { cart, addToCart, removeFromCart, total, clearCart } = useCart()
+  const { cart, addToCart, removeFromCart, total } = useCart()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const [isSuccess, setIsSuccess] = useState(false)
-  const [capturedOrderId, setCapturedOrderId] = useState<string | null>(null)
-  const [purchasedItems, setPurchasedItems] = useState<CartItem[]>([])
-  const [downloadError, setDownloadError] = useState<string | null>(null)
-  const [downloadingPhotoId, setDownloadingPhotoId] = useState<string | null>(
-    null
-  )
 
   const handleAddToCart = (photo: Photo) => {
     // Default to high quality tier
@@ -121,59 +110,9 @@ export function Cart() {
     return items
   }, [fromPath, navigate])
 
-  const handlePay = (order?: CheckoutOrder) => {
-    setPurchasedItems(cart)
-    setCapturedOrderId(order?.id ?? null)
-    setDownloadError(null)
-    setIsSuccess(true)
-    clearCart()
-  }
-
-  const handleDownload = async (item: CartItem) => {
-    if (!capturedOrderId) {
-      setDownloadError(
-        "Download is not ready yet. Please try again in a moment."
-      )
-      return
-    }
-
-    setDownloadingPhotoId(item.photoId)
-    setDownloadError(null)
-
-    try {
-      const download = await api.createPhotoDownload(
-        item.photoId,
-        capturedOrderId
-      )
-      window.location.assign(download.url)
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Could not prepare the download."
-      setDownloadError(message)
-    } finally {
-      setDownloadingPhotoId(null)
-    }
-  }
-
-  const checkoutLineItems = useMemo<CheckoutLineItem[]>(
+  const checkoutItems = useMemo<CheckoutItem[]>(
     () =>
-      cart.map((item) => {
-        const amount = Math.round(item.price * 100)
-        return {
-          name: `${item.photo.rider} / ${item.photo.horse} - ${item.qualityLabel}`,
-          quantity: 1,
-          unit_price: amount,
-          total_amount: amount,
-          reference: item.photoId,
-          type: "digital",
-          tax_rate: 0,
-          total_tax_amount: 0,
-          photo_id: item.photoId,
-          quality: item.quality,
-        }
-      }),
+      cart.map((item) => ({ photo_id: item.photoId, quality: item.quality })),
     [cart]
   )
 
@@ -196,91 +135,18 @@ export function Cart() {
 
       <div>
         <Breadcrumbs items={breadcrumbs} />
-        {!isSuccess && (
-          <div className="border-b bg-card pb-6 max-md:pb-5">
-            <div className="container">
-              <h1 className="text-[1.75rem] leading-[1.2] font-extrabold text-foreground max-md:text-[1.375rem]">
-                Cart
-              </h1>
-            </div>
+        <div className="border-b bg-card pb-6 max-md:pb-5">
+          <div className="container">
+            <h1 className="text-[1.75rem] leading-[1.2] font-extrabold text-foreground max-md:text-[1.375rem]">
+              Cart
+            </h1>
           </div>
-        )}
+        </div>
       </div>
 
       <main className="flex-1 pt-10 pb-20 max-md:pt-6 max-md:pb-15">
         <div className="container">
-          {isSuccess ? (
-            <div className="flex flex-col gap-15">
-              <div className="flex justify-center py-15">
-                <Card className="w-full max-w-125 gap-0 rounded-3xl px-10 py-15 text-center shadow-[0_10px_40px_rgba(0,0,0,0.05)]">
-                  <div className="mx-auto mb-8 flex size-25 items-center justify-center rounded-full bg-success/10 text-success">
-                    <Check className="size-16" />
-                  </div>
-                  <h1 className="mb-4 text-[2rem] font-extrabold">
-                    Payment Successful!
-                  </h1>
-                  <p className="mb-10 leading-[1.6] text-muted-foreground">
-                    Thank you for your purchase. Your Gallopics receipt has been
-                    sent by email, and your download links are ready.
-                  </p>
-                  {capturedOrderId && (
-                    <p className="mb-6 text-xs break-all text-muted-foreground">
-                      Order ID: {capturedOrderId}
-                    </p>
-                  )}
-
-                  {purchasedItems.length > 0 && (
-                    <div className="mb-8 flex flex-col gap-3 text-left">
-                      {purchasedItems.map((item) => (
-                        <div
-                          key={item.cartId}
-                          className="flex items-center justify-between gap-4 rounded-xl border p-3"
-                        >
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-semibold text-foreground">
-                              {item.photo.rider} / {item.photo.horse}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {item.qualityLabel}
-                            </div>
-                          </div>
-                          <Button
-                            size="sm"
-                            className="shrink-0 bg-black hover:bg-foreground"
-                            onClick={() => handleDownload(item)}
-                            disabled={downloadingPhotoId === item.photoId}
-                          >
-                            {downloadingPhotoId === item.photoId
-                              ? "Preparing"
-                              : "Download"}
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {downloadError && (
-                    <div className="mb-6 rounded-xl border border-destructive bg-destructive/8 p-3 text-left text-sm text-destructive">
-                      {downloadError}
-                    </div>
-                  )}
-
-                  <div className="flex flex-col gap-4">
-                    <Button
-                      className="h-12 bg-black hover:bg-foreground"
-                      onClick={() => navigate("/")}
-                    >
-                      Continue browsing
-                    </Button>
-                    <p className="text-[0.8125rem] text-muted-foreground opacity-70">
-                      Download links are active for 24 hours.
-                    </p>
-                  </div>
-                </Card>
-              </div>
-              {recentlyViewed}
-            </div>
-          ) : cart.length === 0 ? (
+          {cart.length === 0 ? (
             <div className="flex flex-col gap-15">
               <div className="mx-auto max-w-120 py-24 text-center">
                 <div className="mb-6 flex justify-center text-border">
@@ -387,12 +253,7 @@ export function Cart() {
 
               <div className="max-lg:order-2 max-lg:mt-6">
                 <Card className="sticky top-25 gap-0 rounded-3xl p-6 max-lg:static">
-                  <CheckoutPanel
-                    total={total}
-                    lineItems={checkoutLineItems}
-                    onPaymentSuccess={handlePay}
-                    onPay={() => handlePay()}
-                  />
+                  <CheckoutPanel total={total} items={checkoutItems} />
                 </Card>
               </div>
             </div>

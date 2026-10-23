@@ -36,6 +36,11 @@ const RiderProfile = lazy(() =>
 const Cart = lazy(() =>
   import("@/pages/Cart").then((m) => ({ default: m.Cart }))
 )
+const CheckoutSuccess = lazy(() =>
+  import("@/pages/CheckoutSuccess").then((m) => ({
+    default: m.CheckoutSuccess,
+  }))
+)
 const ImageProfile = lazy(() =>
   import("@/pages/ImageProfile").then((m) => ({ default: m.ImageProfile }))
 )
@@ -134,6 +139,7 @@ function App() {
                   />
                   <Route path="/photo/:id" element={<ImageProfile />} />
                   <Route path="/cart" element={<Cart />} />
+                  <Route path="/cart/success" element={<CheckoutSuccess />} />
                   {/* Photographer / admin workspace */}
                   <Route
                     element={
