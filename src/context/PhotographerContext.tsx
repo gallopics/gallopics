@@ -3,321 +3,185 @@ import React, {
   useContext,
   useState,
   type ReactNode,
-} from 'react';
-import { formatLabel } from '../lib/utils';
-import { useAuth } from './AuthContext';
+} from "react"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
+
 import {
-  api,
-  ApiError,
-  type ApiPhoto,
   getApiBaseUrl,
+  getSessionToken,
   resolveApiAssetUrl,
-} from '../data/apiClient';
-import { useAuth as useClerkAuth } from '@clerk/clerk-react';
+  type ApiPhoto,
+} from "../data/apiClient"
+import { PHOTOGRAPHERS } from "../data/mockData"
+import { invalidateEventPhotos } from "../data/queries/events"
+import {
+  deletePhotosMutationOptions,
+  getApiPhotoClassId,
+  getApiPhotoClassName,
+  getApiPhotoTag,
+  updateCachedPhotos,
+} from "../data/queries/photographer"
+import { useAuth } from "./AuthContext"
 
 // --- Types ---
 
-export type EventStatus = 'upcoming' | 'open' | 'archived';
+export type EventStatus = "upcoming" | "open" | "archived"
 
 export interface PgEvent {
-  id: string;
-  title: string;
-  date: string; // Start date for sorting/simple display
-  endDate?: string;
-  dateRange: string; // Full range "26 Nov – 30 Nov 2026"
-  location: string;
-  coverImage: string;
-  status: EventStatus;
+  id: string
+  title: string
+  date: string // Start date for sorting/simple display
+  endDate?: string
+  dateRange: string // Full range "26 Nov – 30 Nov 2026"
+  location: string
+  coverImage: string
+  status: EventStatus
 
   // Stats for "My events"
-  photosCount?: number;
-  publishedCount?: number;
-  soldCount?: number;
+  photosCount?: number
+  publishedCount?: number
+  soldCount?: number
 
   // For "Upcoming" logic
-  isRegistered?: boolean;
-  logo: string;
-  venueName: string;
-  disciplines: string[];
-  city: string;
-  assignedPhotographers?: { id: string; name: string; avatar: string }[];
-  applicationsWelcomed?: boolean;
-  canUploadPhotos?: boolean;
+  isRegistered?: boolean
+  logo: string
+  venueName: string
+  disciplines: string[]
+  city: string
+  assignedPhotographers?: { id: string; name: string; avatar: string }[]
+  applicationsWelcomed?: boolean
+  canUploadPhotos?: boolean
 }
 
 export interface Photo {
-  id: string;
-  url: string;
-  eventId: string;
+  id: string
+  url: string
+  eventId: string
   status:
-    | 'uploading'
-    | 'processing'
-    | 'needsReview'
-    | 'uploadedUnpublished'
-    | 'published'
-    | 'archived';
-  soldCount: number;
+    | "uploading"
+    | "processing"
+    | "needsReview"
+    | "uploadedUnpublished"
+    | "published"
+    | "archived"
+  soldCount: number
   /* Metadata */
-  rider?: string;
-  riderId?: string;
-  horse?: string;
-  horseId?: string;
-  timestamp?: string;
-  width: number;
-  height: number;
-  title?: string;
-  description?: string;
-  isGeneric?: boolean;
+  rider?: string
+  riderId?: string
+  horse?: string
+  horseId?: string
+  timestamp?: string
+  width: number
+  height: number
+  title?: string
+  description?: string
+  isGeneric?: boolean
   /* New fields for Uploads tab */
-  fileName?: string;
-  photoCode?: string; // e.g. "PHT-9X2A1"
-  uploadDate?: string; // ISO date string
-  batch?: string; // Batch name (empty = Uncategorised)
-  classId?: string;
-  className?: string;
-  isDuplicate?: boolean;
-  duplicateResolved?: boolean; // True after "Keep" action resolves duplicates
-  duplicateGroupId?: string; // Identifies which duplicate group this instance belongs to
-  storedLocation?: 'Random' | 'Misc' | 'Uncategorised' | 'Published'; // Where this instance lives
-  priceStandard?: number; // e.g. 499
-  priceHigh?: number; // e.g. 999
-  priceCommercial?: number; // e.g. 1500
+  fileName?: string
+  photoCode?: string // e.g. "PHT-9X2A1"
+  uploadDate?: string // ISO date string
+  batch?: string // Batch name (empty = Uncategorised)
+  classId?: string
+  className?: string
+  isDuplicate?: boolean
+  duplicateResolved?: boolean // True after "Keep" action resolves duplicates
+  duplicateGroupId?: string // Identifies which duplicate group this instance belongs to
+  storedLocation?: "Random" | "Misc" | "Uncategorised" | "Published" // Where this instance lives
+  priceStandard?: number // e.g. 499
+  priceHigh?: number // e.g. 999
+  priceCommercial?: number // e.g. 1500
 }
 
 export interface UploadFile {
-  id: string;
-  file: File;
-  progress: number;
-  status: 'pending' | 'uploading' | 'completed' | 'failed';
-  error?: string;
-  uploadedPhotoIds?: string[];
-  takenAt?: string;
-  matchedRider?: string;
-  matchedHorse?: string;
-  matchConfidence?: string;
+  id: string
+  file: File
+  progress: number
+  status: "pending" | "uploading" | "completed" | "failed"
+  error?: string
+  uploadedPhotoIds?: string[]
+  takenAt?: string
+  matchedRider?: string
+  matchedHorse?: string
+  matchConfidence?: string
 }
 
 export interface UploadSession {
-  eventId: string;
-  status: 'uploading' | 'completed';
-  files: UploadFile[];
-  startTime: number;
+  eventId: string
+  status: "uploading" | "completed"
+  files: UploadFile[]
+  startTime: number
 }
 
+// Server data (booked events, photos, highlights) and its writes live in
+// TanStack Query: see data/queries/photographer.ts and the hooks in
+// useWorkspaceData. This context keeps the studio's local state (uploads).
 interface PhotographerContextType {
-  photographerId: string;
-  events: PgEvent[];
-  allPhotos: Photo[];
-  getEvent: (id: string) => PgEvent | undefined;
-
-  // Actions
-  registerForEvent: (eventId: string) => void;
-
-  // Photos
-  getPhotosByEvent: (eventId: string) => Photo[];
-  updatePhotoStatus: (photoIds: string[], status: Photo['status']) => void;
-  deletePhotos: (photoIds: string[]) => Promise<void>;
-  restorePhotos: (photosToRestore: Photo[]) => void;
-  setPhotoPrice: (photoIds: string[], price: number) => void;
-  updatePhotoMetadata: (
-    photoIds: string[],
-    metadata: Partial<Photo>
-  ) => Promise<void>;
-  republishPhoto: (photoId: string) => void;
-
-  // Duplicates
-  resolveDuplicate: (photoId: string, action: 'keep' | 'remove') => void;
+  photographerId: string
 
   // Upload System
-  isUploadOverlayOpen: boolean;
-  currentUploadEventId: string | null;
-  uploadSessions: Record<string, UploadSession>; // Keyed by eventId
-  openUploadOverlay: (eventId: string) => void;
-  closeUploadOverlay: () => void;
-  setCurrentUploadEventId: (eventId: string | null) => void; // New export
-  startUpload: (
-    files: File[],
-    metadata?: UploadMetadata
-  ) => void; // Updated sig
+  uploadSessions: Record<string, UploadSession> // Keyed by eventId
+  setCurrentUploadEventId: (eventId: string | null) => void
+  startUpload: (files: File[], metadata?: UploadMetadata) => void
   clearUploadSession: (
     eventId: string,
     options?: { deleteUploaded?: boolean }
-  ) => Promise<void>;
+  ) => Promise<void>
   removeUploadFile: (
     eventId: string,
     fileId: string,
     options?: { deleteUploaded?: boolean }
-  ) => Promise<void>;
+  ) => Promise<void>
 
-  // Highlights
-  highlights: string[];
-  updateHighlights: (ids: string[]) => void;
-  availableToHire: boolean;
-  toggleAvailableToHire: (val: boolean) => void;
+  // Profile
+  availableToHire: boolean
+  toggleAvailableToHire: (val: boolean) => void
 }
 
-import { allMockEvents, type EventData, SHOW_EVENTS } from '../data/mockEvents';
-import { PHOTOGRAPHERS } from '../data/mockData';
-
-// Mapped Data based on shared mockEvents
-// Filter/Assign events to our mock photographer "Klara Fors"
-// For the purpose of this workspace demo, we'll treat the first few events as "My Events" (registered)
-// and others as "Upcoming".
-
-const mapToPgEvent = (e: EventData, isMyEvent: boolean): PgEvent => {
-  return {
-    id: e.id,
-    title: e.name,
-    date: e.startDate || e.period.split(' – ')[0] || e.period,
-    endDate: e.endDate || e.startDate,
-    dateRange: e.period,
-    location: `${e.city}, Sweden`, // Based on mockEvents hardcoded '🇸🇪'
-    coverImage: e.coverImage,
-    status: isMyEvent ? 'open' : 'upcoming',
-    isRegistered: isMyEvent,
-    photosCount: e.photoCount || 0,
-    publishedCount: isMyEvent ? Math.floor((e.photoCount || 0) * 0.8) : 0,
-    soldCount: isMyEvent ? Math.floor((e.photoCount || 0) * 0.1) : 0,
-    logo: e.logo,
-    venueName: e.name.includes('Gothenburg')
-      ? 'Scandinavium'
-      : e.name.includes('Falsterbo')
-      ? 'Falsterbo Arena'
-      : 'Main Arena', // Simple mock mapping or use actual data if available
-    disciplines: [e.discipline],
-    city: e.city,
-    assignedPhotographers: e.photographer ? [e.photographer] : [],
-    applicationsWelcomed: true, // Defaulting to true for mock data
-    canUploadPhotos: isMyEvent,
-  };
-};
-
-const MY_EVENT_IDS = ['c1', 'c2', 'c3', 'c4', 'c5'];
-
-const MOCK_EVENTS: PgEvent[] = allMockEvents.map(e => {
-  const isMine = MY_EVENT_IDS.includes(e.id);
-  const mapped = mapToPgEvent(e, isMine);
-
-  // Apply Admin flow logic based on status
-  const isUpcoming = mapped.status === 'upcoming';
-
-  if (isUpcoming) {
-    if (e.id === 'c10') {
-      // "Last 3rd card from the below" (of the original 7)
-      // One pg assigned, status OPEN (more than one can apply)
-      mapped.assignedPhotographers = [
-        {
-          id: PHOTOGRAPHERS[1].id,
-          name: `${PHOTOGRAPHERS[1].firstName} ${PHOTOGRAPHERS[1].lastName}`,
-          avatar: '',
-        },
-      ];
-      mapped.applicationsWelcomed = true;
-    } else if (e.id === 'd1' || e.id === 'd2') {
-      // Last two
-      mapped.applicationsWelcomed = false;
-      if (
-        !mapped.assignedPhotographers ||
-        mapped.assignedPhotographers.length === 0
-      ) {
-        mapped.assignedPhotographers = [
-          {
-            id: PHOTOGRAPHERS[0].id,
-            name: `${PHOTOGRAPHERS[0].firstName} ${PHOTOGRAPHERS[0].lastName}`,
-            avatar: '',
-          },
-        ];
-      }
-    } else {
-      // c6, c7, c8, c9
-      mapped.assignedPhotographers = [];
-      mapped.applicationsWelcomed = true;
-    }
-  } else {
-    // Live, Past, Archived: Always Assigned & App status OFF
-    mapped.applicationsWelcomed = false;
-    // assignedPhotographers logic already handles assigning a photographer if present in mockData
-    if (
-      !mapped.assignedPhotographers ||
-      mapped.assignedPhotographers.length === 0
-    ) {
-      // Fallback: assign the first photographer if none exists
-      mapped.assignedPhotographers = [
-        {
-          id: PHOTOGRAPHERS[0].id,
-          name: `${PHOTOGRAPHERS[0].firstName} ${PHOTOGRAPHERS[0].lastName}`,
-          avatar: '',
-        },
-      ];
-    }
-  }
-
-  // User request: Let the first one (c1) have no cover.
-  if (e.id === 'c1') {
-    mapped.coverImage = '';
-  }
-
-  return mapped;
-});
-
 const generatePhotoCode = () => {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
   return (
-    'PHT-' +
+    "PHT-" +
     Array.from(
       { length: 5 },
       () => chars[Math.floor(Math.random() * chars.length)]
-    ).join('')
-  );
-};
-
-const getApiPhotoClassId = (photo: ApiPhoto) =>
-  photo.equipe_class_section_id ||
-  photo.class_id ||
-  photo.class_section_id ||
-  photo.event_class_id ||
-  '';
-
-const getApiPhotoClassName = (photo: ApiPhoto) =>
-  photo.class_name || photo.event_class_name || '';
-
-const getApiPhotoTag = (photo: ApiPhoto, type: string) =>
-  photo.tags.find(tag => tag.type === type)?.value;
+    ).join("")
+  )
+}
 
 const isUuid = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
     value
-  );
+  )
 
 export interface UploadMetadata {
-  classId?: string;
-  eventClassId?: string;
-  classSectionId?: string;
-  equipeClassSectionId?: string;
-  className?: string;
-  takenAt?: string;
+  classId?: string
+  eventClassId?: string
+  classSectionId?: string
+  equipeClassSectionId?: string
+  className?: string
+  takenAt?: string
 }
 
 const getUploadErrorMessage = (status: number) => {
   if (status === 413) {
-    return 'File is too large for the current upload limit.';
+    return "File is too large for the current upload limit."
   }
-  return `Upload failed: ${status}`;
-};
+  return `Upload failed: ${status}`
+}
 
 const readUint16 = (view: DataView, offset: number, littleEndian: boolean) =>
-  view.getUint16(offset, littleEndian);
+  view.getUint16(offset, littleEndian)
 
 const readUint32 = (view: DataView, offset: number, littleEndian: boolean) =>
-  view.getUint32(offset, littleEndian);
+  view.getUint32(offset, littleEndian)
 
 const parseExifDateTime = (value: string) => {
   const match = value
     .trim()
-    .match(/^(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
-  if (!match) return null;
+    .match(/^(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})$/)
+  if (!match) return null
 
-  const [, year, month, day, hour, minute, second] = match;
+  const [, year, month, day, hour, minute, second] = match
   const date = new Date(
     Number(year),
     Number(month) - 1,
@@ -325,10 +189,10 @@ const parseExifDateTime = (value: string) => {
     Number(hour),
     Number(minute),
     Number(second)
-  );
+  )
 
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
-};
+  return Number.isNaN(date.getTime()) ? null : date.toISOString()
+}
 
 const readExifAscii = (
   view: DataView,
@@ -337,20 +201,17 @@ const readExifAscii = (
   count: number,
   littleEndian: boolean
 ) => {
-  const inlineValueSize = 4;
+  const inlineValueSize = 4
   const stringOffset =
     count <= inlineValueSize
       ? valueOffset
-      : tiffStart + readUint32(view, valueOffset, littleEndian);
+      : tiffStart + readUint32(view, valueOffset, littleEndian)
 
-  if (stringOffset < 0 || stringOffset + count > view.byteLength) return null;
+  if (stringOffset < 0 || stringOffset + count > view.byteLength) return null
 
-  const bytes = new Uint8Array(view.buffer, stringOffset, count);
-  return new TextDecoder('ascii')
-    .decode(bytes)
-    .replace(/\0+$/g, '')
-    .trim();
-};
+  const bytes = new Uint8Array(view.buffer, stringOffset, count)
+  return new TextDecoder("ascii").decode(bytes).replace(/\0+$/g, "").trim()
+}
 
 const findExifDateInIfd = (
   view: DataView,
@@ -358,17 +219,17 @@ const findExifDateInIfd = (
   ifdOffset: number,
   littleEndian: boolean
 ) => {
-  if (ifdOffset < 0 || ifdOffset + 2 > view.byteLength) return null;
+  if (ifdOffset < 0 || ifdOffset + 2 > view.byteLength) return null
 
-  const tagCount = readUint16(view, ifdOffset, littleEndian);
+  const tagCount = readUint16(view, ifdOffset, littleEndian)
   for (let index = 0; index < tagCount; index += 1) {
-    const entryOffset = ifdOffset + 2 + index * 12;
-    if (entryOffset + 12 > view.byteLength) return null;
+    const entryOffset = ifdOffset + 2 + index * 12
+    if (entryOffset + 12 > view.byteLength) return null
 
-    const tag = readUint16(view, entryOffset, littleEndian);
-    const type = readUint16(view, entryOffset + 2, littleEndian);
-    const count = readUint32(view, entryOffset + 4, littleEndian);
-    const valueOffset = entryOffset + 8;
+    const tag = readUint16(view, entryOffset, littleEndian)
+    const type = readUint16(view, entryOffset + 2, littleEndian)
+    const count = readUint32(view, entryOffset + 4, littleEndian)
+    const valueOffset = entryOffset + 8
 
     if ((tag === 0x9003 || tag === 0x9004) && type === 2) {
       const value = readExifAscii(
@@ -377,85 +238,86 @@ const findExifDateInIfd = (
         valueOffset,
         count,
         littleEndian
-      );
-      const parsed = value ? parseExifDateTime(value) : null;
-      if (parsed) return parsed;
+      )
+      const parsed = value ? parseExifDateTime(value) : null
+      if (parsed) return parsed
     }
   }
 
-  return null;
-};
+  return null
+}
 
 const extractJpegTakenAt = async (file: File) => {
-  if (!file.type.includes('jpeg') && !/\.(jpe?g)$/i.test(file.name)) {
-    return null;
+  if (!file.type.includes("jpeg") && !/\.(jpe?g)$/i.test(file.name)) {
+    return null
   }
 
-  const buffer = await file.slice(0, 256 * 1024).arrayBuffer();
-  const view = new DataView(buffer);
-  let offset = 2;
+  const buffer = await file.slice(0, 256 * 1024).arrayBuffer()
+  const view = new DataView(buffer)
+  let offset = 2
 
-  if (view.byteLength < 4 || view.getUint16(0) !== 0xffd8) return null;
+  if (view.byteLength < 4 || view.getUint16(0) !== 0xffd8) return null
 
   while (offset + 4 <= view.byteLength) {
-    if (view.getUint8(offset) !== 0xff) return null;
+    if (view.getUint8(offset) !== 0xff) return null
 
-    const marker = view.getUint8(offset + 1);
-    const segmentLength = view.getUint16(offset + 2);
-    const segmentStart = offset + 4;
-    const segmentEnd = offset + 2 + segmentLength;
+    const marker = view.getUint8(offset + 1)
+    const segmentLength = view.getUint16(offset + 2)
+    const segmentStart = offset + 4
+    const segmentEnd = offset + 2 + segmentLength
 
     if (marker === 0xe1 && segmentEnd <= view.byteLength) {
-      const header = new TextDecoder('ascii').decode(
+      const header = new TextDecoder("ascii").decode(
         new Uint8Array(view.buffer, segmentStart, 6)
-      );
-      if (header === 'Exif\0\0') {
-        const tiffStart = segmentStart + 6;
-        const byteOrder = view.getUint16(tiffStart);
-        const littleEndian = byteOrder === 0x4949;
-        if (!littleEndian && byteOrder !== 0x4d4d) return null;
+      )
+      if (header === "Exif\0\0") {
+        const tiffStart = segmentStart + 6
+        const byteOrder = view.getUint16(tiffStart)
+        const littleEndian = byteOrder === 0x4949
+        if (!littleEndian && byteOrder !== 0x4d4d) return null
 
-        const firstIfdOffset = tiffStart + readUint32(view, tiffStart + 4, littleEndian);
-        const tagCount = readUint16(view, firstIfdOffset, littleEndian);
+        const firstIfdOffset =
+          tiffStart + readUint32(view, tiffStart + 4, littleEndian)
+        const tagCount = readUint16(view, firstIfdOffset, littleEndian)
         for (let index = 0; index < tagCount; index += 1) {
-          const entryOffset = firstIfdOffset + 2 + index * 12;
-          if (entryOffset + 12 > view.byteLength) return null;
+          const entryOffset = firstIfdOffset + 2 + index * 12
+          if (entryOffset + 12 > view.byteLength) return null
 
-          const tag = readUint16(view, entryOffset, littleEndian);
+          const tag = readUint16(view, entryOffset, littleEndian)
           if (tag === 0x8769) {
             const exifIfdOffset =
-              tiffStart + readUint32(view, entryOffset + 8, littleEndian);
+              tiffStart + readUint32(view, entryOffset + 8, littleEndian)
             return findExifDateInIfd(
               view,
               tiffStart,
               exifIfdOffset,
               littleEndian
-            );
+            )
           }
         }
       }
     }
 
-    offset = segmentEnd;
+    offset = segmentEnd
   }
 
-  return null;
-};
+  return null
+}
 
 const getFileTakenAt = async (file: File) => {
   try {
-    const exifTakenAt = await extractJpegTakenAt(file);
-    if (exifTakenAt) return exifTakenAt;
+    const exifTakenAt = await extractJpegTakenAt(file)
+    if (exifTakenAt) return exifTakenAt
   } catch {
     // Fall back to the browser file timestamp when EXIF is absent or unreadable.
   }
 
-  return file.lastModified ? new Date(file.lastModified).toISOString() : null;
-};
+  return file.lastModified ? new Date(file.lastModified).toISOString() : null
+}
 
 const normalizeUploadMetadata = (metadata?: UploadMetadata) => {
-  const classId = metadata?.classId;
-  const classIdIsInternal = classId ? isUuid(classId) : false;
+  const classId = metadata?.classId
+  const classIdIsInternal = classId ? isUuid(classId) : false
 
   return {
     classSectionId:
@@ -465,471 +327,74 @@ const normalizeUploadMetadata = (metadata?: UploadMetadata) => {
       metadata?.eventClassId || (!classIdIsInternal ? classId : undefined),
     className: metadata?.className,
     takenAt: metadata?.takenAt,
-  };
-};
+  }
+}
 
 // --- Context & Provider ---
 
 const PhotographerContext = createContext<PhotographerContextType | undefined>(
   undefined
-);
+)
 
 export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
-  const { user } = useAuth();
-  const {
-    getToken: getClerkToken,
-    isLoaded: isClerkLoaded,
-    isSignedIn,
-    userId: clerkUserId,
-  } = useClerkAuth();
-  const photographerId = user?.id || '';
-  const photographerDisplayName = user?.displayName || 'Photographer';
-  const [events, setEvents] = useState<PgEvent[]>(
-    SHOW_EVENTS ? MOCK_EVENTS : []
-  );
-  const [photos, setPhotos] = useState<Photo[]>([]);
+  const { user } = useAuth()
+  const queryClient = useQueryClient()
+  const photographerId = user?.id || ""
 
   // Upload State
-  const [isUploadOverlayOpen, setIsUploadOverlayOpen] = useState(false);
   const [currentUploadEventId, setCurrentUploadEventId] = useState<
     string | null
-  >(null);
+  >(null)
   // Keyed by eventId
   const [uploadSessions, setUploadSessions] = useState<
     Record<string, UploadSession>
-  >({});
+  >({})
 
-  // Highlights
-  const [highlights, setHighlights] = useState<string[]>([]);
-  const [availableToHire, setAvailableToHire] = useState(true);
-
-  // Initialize from mock data on mount
-  React.useEffect(() => {
-    const p = PHOTOGRAPHERS.find(p => p.id === photographerId);
-    if (p) {
-      if (p.highlights) setHighlights(p.highlights);
-      if (typeof p.isAvailableToHire !== 'undefined')
-        setAvailableToHire(p.isAvailableToHire);
-    }
-  }, [photographerId]);
-
-  React.useEffect(() => {
-    const fetchHighlights = async () => {
-      if (SHOW_EVENTS) return;
-      if (!isClerkLoaded) return;
-      if (!isSignedIn) {
-        setHighlights([]);
-        return;
-      }
-      const token = await getClerkToken?.();
-      if (!token) return;
-
-      try {
-        const response = await api.getMyHighlights(getClerkToken);
-        setHighlights(response.highlights);
-      } catch (error) {
-        if (!(error instanceof ApiError && error.status === 404)) {
-          console.error('Failed to fetch highlights:', error);
-        }
-      }
-    };
-
-    fetchHighlights();
-  }, [SHOW_EVENTS, getClerkToken, isClerkLoaded, isSignedIn, clerkUserId]);
-
-  // Fetch events from API on mount (when not using mock data)
-  React.useEffect(() => {
-    let isMounted = true;
-
-    const fetchEvents = async () => {
-      if (SHOW_EVENTS) return; // Skip if using mock data
-      if (!isClerkLoaded) return;
-      if (!isSignedIn) {
-        setEvents([]);
-        return;
-      }
-      const token = await getClerkToken?.();
-      if (!token) return;
-
-      try {
-        const response = await fetch(
-          `${getApiBaseUrl()}/api/v1/photographer/bookings`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        if (!response.ok) {
-          throw new Error(`Failed to fetch events: ${response.status}`);
-        }
-        const data = await response.json();
-        console.log('Fetched events from API:', data.length, 'events');
-        // Map API events to PgEvent format
-        const mappedEvents: PgEvent[] = data.map((e: any) => ({
-          id: e.id,
-          title: e.name || e.title || 'Untitled Event',
-          date: e.start_date || e.startDate || new Date().toISOString(),
-          endDate: e.end_date || e.endDate || e.start_date || e.startDate,
-          dateRange: e.period || e.dateRange || '',
-          location: e.location || e.city || '',
-          coverImage: e.cover_image || e.coverImage || '',
-          status: 'open' as const,
-          isRegistered: true,
-          photosCount: 0,
-          publishedCount: 0,
-          soldCount: 0,
-          logo: e.logo || '',
-          venueName: e.venue_name || e.venueName || '',
-          disciplines: Array.isArray(e.disciplines)
-            ? e.disciplines.map(formatLabel).filter(Boolean)
-            : e.discipline
-            ? [formatLabel(e.discipline)]
-            : [],
-          city: e.city || '',
-          assignedPhotographers: [],
-          applicationsWelcomed: true,
-          canUploadPhotos: true,
-        }));
-        if (isMounted) setEvents(mappedEvents);
-      } catch (error) {
-        console.error('Failed to fetch events:', error);
-      }
-    };
-
-    fetchEvents();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [SHOW_EVENTS, getClerkToken, isClerkLoaded, isSignedIn, clerkUserId]);
-
-  // Fetch photos from API on mount (with pagination support)
-  React.useEffect(() => {
-    let isMounted = true;
-
-    const fetchPhotos = async () => {
-      if (SHOW_EVENTS) return; // Skip if using mock data
-      if (!isClerkLoaded) return;
-      if (!isSignedIn) {
-        setPhotos([]);
-        return;
-      }
-      const token = await getClerkToken?.();
-      if (!token) return;
-
-      try {
-        const allPhotos: any[] = [];
-        let page = 1;
-        const PAGE_SIZE = 100;
-
-        while (true) {
-          const response = await fetch(
-            `${getApiBaseUrl()}/api/v1/photographer/photos?page=${page}&page_size=${PAGE_SIZE}`,
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-          if (!response.ok) {
-            throw new Error(`Failed to fetch photos: ${response.status}`);
-          }
-          const data = await response.json();
-          const items = data.items || [];
-
-          allPhotos.push(...items);
-
-          // Stop if we've fetched all photos
-          if (allPhotos.length >= data.total || items.length === 0) break;
-          page += 1;
-        }
-
-        const mappedPhotos: Photo[] = allPhotos.map((p: any) => ({
-          id: p.id,
-          // Always use preview URL - the serving endpoint falls back to original if no preview exists
-          url:
-            resolveApiAssetUrl(`/api/v1/photographer/photos/${p.id}/preview`) ||
-            '',
-          eventId: p.event_id,
-          status: p.status === 'ready' ? 'uploadedUnpublished' : 'processing',
-          soldCount: 0,
-          rider: getApiPhotoTag(p, 'rider'),
-          riderId: p.equipe_rider_id || undefined,
-          horse: getApiPhotoTag(p, 'horse'),
-          horseId: p.equipe_horse_id || undefined,
-          timestamp: new Date(p.created_at).toLocaleTimeString().slice(0, 5),
-          width: 600,
-          height: 800,
-          fileName: p.storage_key_original?.split('/').pop(),
-          photoCode: '',
-          uploadDate: p.created_at,
-          batch: '',
-          classId: getApiPhotoClassId(p),
-          className: getApiPhotoClassName(p),
-          photographer: photographerDisplayName,
-          isDuplicate: false,
-          storedLocation: 'Uncategorised',
-          priceStandard: 499,
-          priceHigh: 999,
-          priceCommercial: 1500,
-        }));
-
-        if (isMounted) setPhotos(mappedPhotos);
-        console.log('Fetched photos from API:', mappedPhotos.length, 'photos');
-      } catch (error) {
-        console.error('Failed to fetch photos:', error);
-      }
-    };
-
-    fetchPhotos();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [SHOW_EVENTS, getClerkToken, isClerkLoaded, isSignedIn, clerkUserId]);
-
-  const updateHighlights = (ids: string[]) => {
-    const previousIds = highlights;
-    setHighlights(ids);
-    // Sync to mock data for public visibility
-    const p = PHOTOGRAPHERS.find(p => p.id === photographerId);
-    if (p) {
-      p.highlights = ids;
-    }
-
-    if (!SHOW_EVENTS) {
-      void api
-        .updateMyHighlights(getClerkToken, ids)
-        .then(response => setHighlights(response.highlights))
-        .catch(error => {
-          setHighlights(previousIds);
-          if (p) {
-            p.highlights = previousIds;
-          }
-          console.error('Failed to update highlights:', error);
-        });
-    }
-  };
+  // Not stored by the API yet: the mock profile's value until changed here
+  const [availableToHireOverride, setAvailableToHireOverride] = useState<
+    boolean | null
+  >(null)
+  const availableToHire =
+    availableToHireOverride ??
+    PHOTOGRAPHERS.find((p) => p.id === photographerId)?.isAvailableToHire ??
+    true
 
   const toggleAvailableToHire = (val: boolean) => {
-    setAvailableToHire(val);
-    const p = PHOTOGRAPHERS.find(p => p.id === photographerId);
+    setAvailableToHireOverride(val)
+    const p = PHOTOGRAPHERS.find((p) => p.id === photographerId)
     if (p) {
-      p.isAvailableToHire = val;
+      p.isAvailableToHire = val
     }
-  };
-
-  const getEvent = (id: string) => events.find(e => e.id === id);
-
-  const registerForEvent = (eventId: string) => {
-    setEvents(prev =>
-      prev.map(e =>
-        e.id === eventId ? { ...e, isRegistered: true, status: 'open' } : e
-      )
-    );
-  };
-
-  const getPhotosByEvent = (eventId: string) =>
-    photos.filter(p => p.eventId === eventId);
-
-  const updatePhotoStatus = (photoIds: string[], status: Photo['status']) => {
-    setPhotos(prev =>
-      prev.map(p => (photoIds.includes(p.id) ? { ...p, status } : p))
-    );
-  };
-
-  const deletePhotos = async (photoIds: string[]) => {
-    const photosToDelete = photos.filter(p => photoIds.includes(p.id));
-
-    setPhotos(prev => prev.filter(p => !photoIds.includes(p.id)));
-
-    if (SHOW_EVENTS || photoIds.length === 0) return;
-
-    try {
-      await Promise.all(
-        photoIds.map(photoId => api.deletePhoto(getClerkToken, photoId))
-      );
-    } catch (error) {
-      setPhotos(prev => {
-        const remainingIds = new Set(prev.map(p => p.id));
-        const missingPhotos = photosToDelete.filter(
-          p => !remainingIds.has(p.id)
-        );
-        return [...missingPhotos, ...prev];
-      });
-      console.error('Failed to delete photos:', error);
-      throw error;
-    }
-  };
-
-  const restorePhotos = (photosToRestore: Photo[]) => {
-    setPhotos(prev => {
-      // Avoid duplicates just in case
-      const newIds = new Set(photosToRestore.map(p => p.id));
-      const filtered = prev.filter(p => !newIds.has(p.id));
-      return [...filtered, ...photosToRestore];
-    });
-  };
-
-  const setPhotoPrice = (photoIds: string[], price: number) => {
-    // Mock impl
-    console.log(`Set price to ${price} for`, photoIds);
-  };
-
-  const updatePhotoMetadata = async (
-    photoIds: string[],
-    metadata: Partial<Photo>
-  ) => {
-    setPhotos(prev =>
-      prev.map(p => (photoIds.includes(p.id) ? { ...p, ...metadata } : p))
-    );
-
-    const apiPhotoIds = photoIds.filter(isUuid);
-    if (apiPhotoIds.length === 0) return;
-
-    const buildTags = (photo: Photo, updates: Partial<Photo>) => {
-      const next = { ...photo, ...updates };
-      const tags: Array<{ type: string; value: string }> = [];
-
-      if (next.rider && !next.isGeneric) {
-        tags.push({ type: 'rider', value: next.rider });
-      }
-      if (next.horse && !next.isGeneric) {
-        tags.push({ type: 'horse', value: next.horse });
-      }
-      if (next.className && !next.isGeneric) {
-        tags.push({ type: 'class', value: next.className });
-      }
-      return tags;
-    };
-
-    const photosById = new Map(photos.map(photo => [photo.id, photo]));
-    await Promise.all(
-      apiPhotoIds.map(photoId => {
-        const photo = photosById.get(photoId);
-        if (!photo) return Promise.resolve();
-
-        return api.updatePhoto(getClerkToken, photoId, {
-          tags: buildTags(photo, metadata),
-        });
-      })
-    );
-  };
-
-  const republishPhoto = (photoId: string) => {
-    setPhotos(prev => {
-      const original = prev.find(p => p.id === photoId);
-      if (!original) return prev;
-
-      // Generate new ID for payment log reasons
-      const newId = `${original.eventId}-p-repub-${Date.now()}`;
-
-      const newPhoto: Photo = {
-        ...original,
-        id: newId,
-        status: 'published',
-        soldCount: 0, // Reset sales
-        uploadDate: new Date().toISOString(),
-      };
-
-      // We usually keep the archived one or replace it?
-      // "Re-publishing... generate new... payment log".
-      // Usually we'd archive the old one or just treating this as a new entry.
-      // If we replace, we lose history of the old ID.
-      // I'll Append new one, and maybe keep old one as archived?
-      // "Archive stores photos removed/unpublished".
-      // If I republish, does it leave the archive?
-      // Standard "Move" logic implies it leaves.
-      // But if I create NEW ID, the old ID stays in Archive?
-      // "Re-publishing... must generate new ID".
-      // I'll assume: Keep old in Archive, Add new to Published.
-      // Or Replace?
-      // I'll Replace the old object but update ID. Effectively "Moving and Renaming".
-      return prev.map(p => (p.id === photoId ? newPhoto : p));
-    });
-  };
-
-  // --- Duplicates Logic ---
-  const resolveDuplicate = (photoId: string, action: 'keep' | 'remove') => {
-    if (action === 'remove') {
-      const photoToRemove = photos.find(p => p.id === photoId);
-      if (!photoToRemove) return;
-
-      // Check if removing this leaves only 1 duplicate group member
-      const potentialGroup = photos.filter(
-        p => p.url === photoToRemove.url && p.isDuplicate && p.id !== photoId
-      );
-
-      if (potentialGroup.length === 1) {
-        // Only 1 left, so it's no longer a duplicate
-        const survivor = potentialGroup[0];
-        setPhotos(prev =>
-          prev
-            .filter(p => p.id !== photoId)
-            .map(p =>
-              p.id === survivor.id
-                ? { ...p, isDuplicate: false, duplicateResolved: true }
-                : p
-            )
-        );
-      } else {
-        // Remove this photo entirely from everywhere
-        setPhotos(prev => prev.filter(p => p.id !== photoId));
-      }
-    } else if (action === 'keep') {
-      // Mark this photo as resolved (kept) and remove other duplicates with same url
-      const photo = photos.find(p => p.id === photoId);
-      if (photo) {
-        setPhotos(prev =>
-          prev
-            .map(p => {
-              if (p.id === photoId) {
-                // Mark as resolved
-                return { ...p, duplicateResolved: true };
-              }
-              // Remove other duplicates that have the same url (simplified duplicate detection)
-              if (p.url === photo.url && p.id !== photoId && p.isDuplicate) {
-                return null; // Will be filtered out
-              }
-              return p;
-            })
-            .filter((p): p is Photo => p !== null)
-        );
-      }
-    }
-  };
+  }
 
   // --- Upload Logic ---
 
-  const openUploadOverlay = (eventId: string) => {
-    setCurrentUploadEventId(eventId);
-    setIsUploadOverlayOpen(true);
-  };
-
-  const closeUploadOverlay = () => {
-    setIsUploadOverlayOpen(false);
-    // Do NOT clear session or currentUploadEventId immediately if we want persistence across toggles
-    // But if user clicks X, usually they want to hide it.
-    // Persistence requirement: "Upload overlay must be controlled by local UI state... and must not navigate away."
-    // "Persist upload session state... if modal unmounts/remounts".
-    // So we just toggle visibility. We keep currentUploadEventId?
-    // If user navigates to another event, openUploadOverlay(newEvent) is called.
-    // So keeping currentUploadEventId here is fine.
-  };
+  const removePhotos = useMutation(deletePhotosMutationOptions())
+  const deletePhotos = async (photoIds: string[]) => {
+    if (photoIds.length === 0) return
+    await removePhotos.mutateAsync({ photoIds })
+  }
 
   const clearUploadSession = async (
     eventId: string,
     options?: { deleteUploaded?: boolean }
   ) => {
     const uploadedPhotoIds =
-      uploadSessions[eventId]?.files.flatMap(f => f.uploadedPhotoIds || []) ||
-      [];
+      uploadSessions[eventId]?.files.flatMap((f) => f.uploadedPhotoIds || []) ||
+      []
 
     if (options?.deleteUploaded && uploadedPhotoIds.length > 0) {
-      await deletePhotos(uploadedPhotoIds);
+      await deletePhotos(uploadedPhotoIds)
     }
 
-    setUploadSessions(prev => {
-      const next = { ...prev };
-      delete next[eventId];
-      return next;
-    });
-  };
+    setUploadSessions((prev) => {
+      const next = { ...prev }
+      delete next[eventId]
+      return next
+    })
+  }
 
   const removeUploadFile = async (
     eventId: string,
@@ -937,18 +402,18 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
     options?: { deleteUploaded?: boolean }
   ) => {
     const uploadedPhotoIds =
-      uploadSessions[eventId]?.files.find(f => f.id === fileId)
-        ?.uploadedPhotoIds || [];
+      uploadSessions[eventId]?.files.find((f) => f.id === fileId)
+        ?.uploadedPhotoIds || []
 
     if (options?.deleteUploaded !== false && uploadedPhotoIds.length > 0) {
-      await deletePhotos(uploadedPhotoIds);
+      await deletePhotos(uploadedPhotoIds)
     }
 
-    setUploadSessions(prev => {
-      const session = prev[eventId];
-      if (!session) return prev;
+    setUploadSessions((prev) => {
+      const session = prev[eventId]
+      if (!session) return prev
 
-      const updatedFiles = session.files.filter(f => f.id !== fileId);
+      const updatedFiles = session.files.filter((f) => f.id !== fileId)
 
       return {
         ...prev,
@@ -956,153 +421,146 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
           ...session,
           files: updatedFiles,
         },
-      };
-    });
-  };
+      }
+    })
+  }
 
-  const startUpload = async (
-    files: File[],
-    metadata?: UploadMetadata
-  ) => {
-    if (!currentUploadEventId) return;
-    const eventId = currentUploadEventId;
-    const currentEvent = events.find(event => event.id === eventId);
-    if (currentEvent?.canUploadPhotos === false) return;
-    const uploadMetadata = normalizeUploadMetadata(metadata);
+  const startUpload = async (files: File[], metadata?: UploadMetadata) => {
+    if (!currentUploadEventId) return
+    const eventId = currentUploadEventId
+    const uploadMetadata = normalizeUploadMetadata(metadata)
 
     // Create local tracking for each file
-    const newFiles: UploadFile[] = files.map(f => ({
+    const newFiles: UploadFile[] = files.map((f) => ({
       id: Math.random().toString(36).substr(2, 9),
       file: f,
       progress: 0,
-      status: 'pending',
-    }));
+      status: "pending",
+    }))
 
-    setUploadSessions(prev => {
-      const existing = prev[eventId];
+    setUploadSessions((prev) => {
+      const existing = prev[eventId]
       return {
         ...prev,
         [eventId]: {
           eventId,
           startTime: existing ? existing.startTime : Date.now(),
-          status: 'uploading',
+          status: "uploading",
           files: existing ? [...existing.files, ...newFiles] : newFiles,
         },
-      };
-    });
+      }
+    })
 
-    const updateQueuedFile = (
-      fileId: string,
-      updates: Partial<UploadFile>
-    ) => {
-      setUploadSessions(prev => {
-        const session = prev[eventId];
-        if (!session) return prev;
+    const updateQueuedFile = (fileId: string, updates: Partial<UploadFile>) => {
+      setUploadSessions((prev) => {
+        const session = prev[eventId]
+        if (!session) return prev
         return {
           ...prev,
           [eventId]: {
             ...session,
-            files: session.files.map(f => ({
+            files: session.files.map((f) => ({
               ...f,
               ...(f.id === fileId ? updates : {}),
             })),
           },
-        };
-      });
-    };
+        }
+      })
+    }
 
     const getUploadToken = async (skipCache = false) => {
-      const token = await getClerkToken?.({ skipCache } as any);
-      if (!token) throw new Error('Not authenticated');
-      return token;
-    };
+      const token = await getSessionToken({ skipCache })
+      if (!token) throw new Error("Not authenticated")
+      return token
+    }
 
     const uploadFormData = async (formData: FormData) => {
-      let token = await getUploadToken();
+      let token = await getUploadToken()
       let response = await fetch(
         `${getApiBaseUrl()}/api/v1/photographer/uploads`,
         {
-          method: 'POST',
+          method: "POST",
           headers: { Authorization: `Bearer ${token}` },
           body: formData,
         }
-      );
+      )
 
       if (response.status === 401) {
-        token = await getUploadToken(true);
+        token = await getUploadToken(true)
         response = await fetch(
           `${getApiBaseUrl()}/api/v1/photographer/uploads`,
           {
-            method: 'POST',
+            method: "POST",
             headers: { Authorization: `Bearer ${token}` },
             body: formData,
           }
-        );
+        )
       }
 
-      return response;
-    };
+      return response
+    }
 
+    let uploadedCount = 0
     for (const [index, file] of files.entries()) {
-      const queuedFile = newFiles[index];
-      if (!queuedFile) continue;
+      const queuedFile = newFiles[index]
+      if (!queuedFile) continue
 
       try {
-        const takenAt = uploadMetadata.takenAt || (await getFileTakenAt(file));
-        const formData = new FormData();
-        formData.set('event_id', eventId);
+        const takenAt = uploadMetadata.takenAt || (await getFileTakenAt(file))
+        const formData = new FormData()
+        formData.set("event_id", eventId)
         if (uploadMetadata.classSectionId) {
-          formData.set('class_section_id', uploadMetadata.classSectionId);
+          formData.set("class_section_id", uploadMetadata.classSectionId)
         }
         if (uploadMetadata.equipeClassSectionId) {
           formData.set(
-            'equipe_class_section_id',
+            "equipe_class_section_id",
             uploadMetadata.equipeClassSectionId
-          );
+          )
         }
         if (uploadMetadata.eventClassId) {
-          formData.set('event_class_id', uploadMetadata.eventClassId);
+          formData.set("event_class_id", uploadMetadata.eventClassId)
         }
         if (uploadMetadata.className) {
-          formData.set('class_name', uploadMetadata.className);
+          formData.set("class_name", uploadMetadata.className)
         }
         if (takenAt) {
-          formData.set('taken_at', takenAt);
+          formData.set("taken_at", takenAt)
         }
-        formData.append('files', file);
+        formData.append("files", file)
 
         updateQueuedFile(queuedFile.id, {
-          status: 'uploading',
+          status: "uploading",
           progress: 50,
           error: undefined,
           takenAt: takenAt || undefined,
-        });
+        })
 
-        const response = await uploadFormData(formData);
+        const response = await uploadFormData(formData)
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
+          const errorData = await response.json().catch(() => ({}))
           throw new Error(
             errorData.detail || getUploadErrorMessage(response.status)
-          );
+          )
         }
 
-        const photos: ApiPhoto[] = await response.json();
+        const photos: ApiPhoto[] = await response.json()
 
         const newPhotoList: Photo[] = photos.map((p, photoIndex) => {
-          const rider = getApiPhotoTag(p, 'rider');
-          const horse = getApiPhotoTag(p, 'horse');
+          const rider = getApiPhotoTag(p, "rider")
+          const horse = getApiPhotoTag(p, "horse")
 
           return {
             id: p.id || queuedFile.id || `api-${Date.now()}-${photoIndex}`,
             url:
-              p.status === 'ready'
+              p.status === "ready"
                 ? resolveApiAssetUrl(
                     `/api/v1/photographer/photos/${p.id}/preview`
-                  ) || ''
-                : '',
+                  ) || ""
+                : "",
             eventId: p.event_id,
-            status: p.status === 'ready' ? 'uploadedUnpublished' : 'processing',
+            status: p.status === "ready" ? "uploadedUnpublished" : "processing",
             soldCount: 0,
             rider,
             riderId: p.equipe_rider_id || undefined,
@@ -1110,98 +568,85 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
             horseId: p.equipe_horse_id || undefined,
             timestamp: new Date(
               p.taken_at || takenAt || p.created_at || Date.now()
-            )
-              .toLocaleTimeString()
-              .slice(0, 5),
+            ).toLocaleTimeString("en-GB", {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
             width: 600,
             height: 800,
             fileName: file.name,
             photoCode: generatePhotoCode(),
             uploadDate: new Date().toISOString(),
-            batch: '',
+            batch: "",
             classId:
               getApiPhotoClassId(p) ||
               uploadMetadata.equipeClassSectionId ||
               uploadMetadata.classSectionId ||
               uploadMetadata.eventClassId ||
-              '',
+              "",
             className:
               getApiPhotoClassName(p) ||
               uploadMetadata.className ||
               uploadMetadata.equipeClassSectionId ||
               uploadMetadata.classSectionId ||
               uploadMetadata.eventClassId ||
-              '',
-            photographer: photographerDisplayName,
-          };
-        });
+              "",
+          }
+        })
 
-        setPhotos(prev => [...newPhotoList, ...prev]);
+        // Into the cached list (fetched in full later if not loaded yet)
+        updateCachedPhotos(queryClient, (prev) => [...newPhotoList, ...prev])
+        uploadedCount += 1
         updateQueuedFile(queuedFile.id, {
           progress: 100,
-          status: 'completed',
+          status: "completed",
           error: undefined,
-          uploadedPhotoIds: newPhotoList.map(photo => photo.id),
+          uploadedPhotoIds: newPhotoList.map((photo) => photo.id),
           matchedRider: newPhotoList[0]?.rider,
           matchedHorse: newPhotoList[0]?.horse,
           matchConfidence: photos[0]?.match_confidence || undefined,
-        });
+        })
       } catch (error) {
         const errorMsg =
-          error instanceof Error ? error.message : 'Upload failed';
+          error instanceof Error ? error.message : "Upload failed"
         updateQueuedFile(queuedFile.id, {
           progress: 0,
-          status: 'failed',
+          status: "failed",
           error: errorMsg,
-        });
+        })
       }
     }
-  };
+
+    // New photos change the event's public gallery and photo counts
+    if (uploadedCount > 0) invalidateEventPhotos(queryClient, [eventId])
+  }
 
   return (
     <PhotographerContext.Provider
       value={{
         photographerId,
-        events,
-        allPhotos: photos,
-        getEvent,
-        registerForEvent,
-        getPhotosByEvent,
-        updatePhotoStatus,
-        deletePhotos,
-        restorePhotos,
-        setPhotoPrice,
-        updatePhotoMetadata,
-        republishPhoto,
-        resolveDuplicate,
         // Upload controls
-        isUploadOverlayOpen,
-        currentUploadEventId,
         uploadSessions,
-        openUploadOverlay,
-        closeUploadOverlay,
         setCurrentUploadEventId,
         startUpload,
         clearUploadSession,
         removeUploadFile,
-        // Highlights
-        highlights,
-        updateHighlights,
+        // Profile
         availableToHire,
         toggleAvailableToHire,
       }}
     >
       {children}
     </PhotographerContext.Provider>
-  );
-};
+  )
+}
 
 export const usePhotographer = () => {
-  const context = useContext(PhotographerContext);
+  const context = useContext(PhotographerContext)
   if (!context) {
     throw new Error(
-      'usePhotographer must be used within a PhotographerProvider'
-    );
+      "usePhotographer must be used within a PhotographerProvider"
+    )
   }
-  return context;
-};
+  return context
+}

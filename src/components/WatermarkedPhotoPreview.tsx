@@ -1,31 +1,30 @@
-import React from 'react';
+import { cn } from "@/lib/utils"
 
-interface WatermarkedPhotoPreviewProps extends React.ImgHTMLAttributes<HTMLImageElement> {
-  photographer?: string;
-  onLoad?: (e: React.SyntheticEvent<HTMLImageElement, Event>) => void;
-}
+type WatermarkedPhotoPreviewProps = React.ImgHTMLAttributes<HTMLImageElement>
 
-export const WatermarkedPhotoPreview: React.FC<
-  WatermarkedPhotoPreviewProps
-> = ({ onLoad, className, alt, photographer, ...props }) => {
+/**
+ * Full-size photo preview with the "preview" notice at the bottom.
+ * (develop removed the repeating logo pattern; on mobile the notice is two lines)
+ */
+export function WatermarkedPhotoPreview({
+  className,
+  alt,
+  ...props
+}: WatermarkedPhotoPreviewProps) {
   return (
     <div
-      className={`relative w-full h-full flex justify-center items-center bg-[var(--ui-bg-subtle)] overflow-hidden ${className || ''}`}
+      className={cn(
+        "relative flex size-full items-center justify-center overflow-hidden bg-muted",
+        className
+      )}
     >
       <img
-        className="max-w-full max-h-full object-contain block"
+        className="block max-h-full max-w-full object-contain"
         alt={alt}
-        onLoad={onLoad}
         {...props}
       />
-      {/* Center Standard Mark */}
-      <div
-        className={[
-          'absolute bottom-6 left-1/2 -translate-x-1/2',
-          'z-[11] pointer-events-none flex max-w-[80%] max-md:max-w-[94%] items-center justify-center opacity-60',
-        ].join(' ')}
-      >
-        <span className="text-center text-white text-[1rem] max-md:text-[0.68rem] font-semibold leading-[1.35] [text-shadow:0_2px_4px_rgba(0,0,0,0.65)]">
+      <div className="pointer-events-none absolute bottom-6 left-1/2 z-11 flex max-w-[80%] -translate-x-1/2 items-center justify-center opacity-60 max-md:max-w-[94%]">
+        <span className="text-center text-base leading-[1.35] font-semibold text-white [text-shadow:0_2px_4px_rgba(0,0,0,0.65)] max-md:text-[0.68rem]">
           <span className="max-md:block max-md:whitespace-nowrap">
             This image is a preview and may not
           </span>
@@ -36,5 +35,5 @@ export const WatermarkedPhotoPreview: React.FC<
         </span>
       </div>
     </div>
-  );
-};
+  )
+}

@@ -1,323 +1,301 @@
 import React, {
   createContext,
-  useCallback,
   useContext,
   useEffect,
   useMemo,
-  useState,
-} from 'react';
-import {
-  useAuth as useClerkAuth,
-  useClerk,
-  useUser,
-} from '@clerk/clerk-react';
+  useRef,
+} from "react"
+import { useClerk, useAuth as useClerkAuth, useUser } from "@clerk/clerk-react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+
 import {
   api,
-  ApiError,
   resolveApiAssetUrl,
   type ApiPhotographer,
   type ApiUser,
-} from '../data/apiClient';
+  type UpsertPhotographerProfile,
+} from "../data/apiClient"
+import {
+  accountKeys,
+  meQueryOptions,
+  photographerProfileQueryOptions,
+} from "../data/queries/account"
+import { photographerKeys } from "../data/queries/photographer"
 
 export interface UserProfile {
-  id?: string;
-  displayName: string;
-  city: string;
-  country?: string;
-  avatarUrl?: string | null;
-  phone?: string | null;
-  hasCompletedOnboarding?: boolean;
-  role?: 'pg' | 'admin';
-  approvalStatus?: 'pending' | 'approved';
+  id?: string
+  displayName: string
+  city: string
+  country?: string
+  avatarUrl?: string | null
+  phone?: string | null
+  hasCompletedOnboarding?: boolean
+  role?: "pg" | "admin"
+  /** From our API; "suspended" = rejected by an admin (no studio access, like pending) */
+  approvalStatus?: "pending" | "approved" | "suspended"
 }
 
 interface AuthContextType {
-  isLoaded: boolean;
-  isAuthenticated: boolean;
-  user: UserProfile | null;
-  logout: () => Promise<void>;
-  updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
-  uploadAvatar: (file: File) => Promise<string>;
+  isLoaded: boolean
+  isAuthenticated: boolean
+  user: UserProfile | null
+  /** API role "photographer": may load the studio's own data (bookings, photos...) */
+  isPhotographer: boolean
+  /** Signed in, not an admin, and our API says there is no photographer profile yet */
+  needsOnboarding: boolean
+  logout: () => Promise<void>
+  updateProfile: (updates: Partial<UserProfile>) => Promise<void>
+  uploadAvatar: (file: File) => Promise<string>
 }
 
 type AuthMetadata = {
-  avatarUrl?: string | null;
-  city?: string;
-  country?: string;
-  hasCompletedOnboarding?: boolean;
-  role?: 'pg' | 'admin';
-  approvalStatus?: 'pending' | 'approved';
-};
+  avatarUrl?: string | null
+  city?: string
+  country?: string
+  hasCompletedOnboarding?: boolean
+  role?: "pg" | "admin"
+  approvalStatus?: "pending" | "approved"
+}
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 const normalizeTextValue = (value: unknown) =>
-  typeof value === 'string' ? value.trim().toLowerCase() : undefined;
+  typeof value === "string" ? value.trim().toLowerCase() : undefined
 
-const normalizeRole = (value: unknown): AuthMetadata['role'] => {
-  const normalized = normalizeTextValue(value);
+const normalizeRole = (value: unknown): AuthMetadata["role"] => {
+  const normalized = normalizeTextValue(value)
 
-  if (normalized === 'admin') {
-    return 'admin';
+  if (normalized === "admin") {
+    return "admin"
   }
 
-  if (normalized === 'pg' || normalized === 'photographer') {
-    return 'pg';
+  if (normalized === "pg" || normalized === "photographer") {
+    return "pg"
   }
 
-  return undefined;
-};
+  return undefined
+}
 
 const normalizeApprovalStatus = (
-  value: unknown,
-): AuthMetadata['approvalStatus'] => {
-  const normalized = normalizeTextValue(value);
+  value: unknown
+): AuthMetadata["approvalStatus"] => {
+  const normalized = normalizeTextValue(value)
 
-  if (normalized === 'approved') {
-    return 'approved';
+  if (normalized === "approved") {
+    return "approved"
   }
 
-  if (normalized === 'pending') {
-    return 'pending';
+  if (normalized === "pending") {
+    return "pending"
   }
 
-  return undefined;
-};
+  return undefined
+}
 
 export const PROTOTYPE_USER = {
-  id: 'klara-fors',
-  displayName: 'Klara Fors',
-  country: 'Sweden',
-  city: 'Stockholm',
-  avatarUrl: '',
-  role: 'pg' as const,
-};
+  id: "klara-fors",
+  displayName: "Klara Fors",
+  country: "Sweden",
+  city: "Stockholm",
+  avatarUrl: "",
+  role: "pg" as const,
+}
 
 const slugify = (value: string) =>
   value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
 
 const normalizeIdentifier = (value: string) => {
-  const trimmed = value.trim();
-  const localPart = trimmed.includes('@') ? trimmed.split('@')[0] : trimmed;
-  return slugify(localPart);
-};
+  const trimmed = value.trim()
+  const localPart = trimmed.includes("@") ? trimmed.split("@")[0] : trimmed
+  return slugify(localPart)
+}
 
 const readMetadataObject = (metadata: unknown): AuthMetadata => {
-  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
-    return {};
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return {}
   }
 
-  const raw = metadata as Record<string, unknown>;
+  const raw = metadata as Record<string, unknown>
 
   return {
     avatarUrl:
-      typeof raw.avatarUrl === 'string' || raw.avatarUrl === null
+      typeof raw.avatarUrl === "string" || raw.avatarUrl === null
         ? raw.avatarUrl
         : undefined,
-    city: typeof raw.city === 'string' ? raw.city : undefined,
-    country: typeof raw.country === 'string' ? raw.country : undefined,
+    city: typeof raw.city === "string" ? raw.city : undefined,
+    country: typeof raw.country === "string" ? raw.country : undefined,
     hasCompletedOnboarding:
-      typeof raw.hasCompletedOnboarding === 'boolean'
+      typeof raw.hasCompletedOnboarding === "boolean"
         ? raw.hasCompletedOnboarding
         : undefined,
     role: normalizeRole(raw.role),
     approvalStatus: normalizeApprovalStatus(raw.approvalStatus),
-  };
-};
+  }
+}
 
 const readMetadata = (
   publicMetadata: unknown,
-  unsafeMetadata: unknown,
+  unsafeMetadata: unknown
 ): AuthMetadata => {
-  const unsafe = readMetadataObject(unsafeMetadata);
-  const publicData = readMetadataObject(publicMetadata);
+  const unsafe = readMetadataObject(unsafeMetadata)
+  const publicData = readMetadataObject(publicMetadata)
 
   return {
     ...publicData,
     ...unsafe,
     role:
-      publicData.role === 'admin' || unsafe.role === 'admin'
-        ? 'admin'
-        : unsafe.role ?? publicData.role,
+      publicData.role === "admin" || unsafe.role === "admin"
+        ? "admin"
+        : (unsafe.role ?? publicData.role),
     approvalStatus:
-      publicData.approvalStatus === 'approved' ||
-      unsafe.approvalStatus === 'approved'
-        ? 'approved'
-        : unsafe.approvalStatus ?? publicData.approvalStatus,
-  };
-};
+      publicData.approvalStatus === "approved" ||
+      unsafe.approvalStatus === "approved"
+        ? "approved"
+        : (unsafe.approvalStatus ?? publicData.approvalStatus),
+  }
+}
 
 const splitDisplayName = (displayName: string) => {
-  const parts = displayName.trim().split(/\s+/).filter(Boolean);
+  const parts = displayName.trim().split(/\s+/).filter(Boolean)
   if (parts.length === 0) {
-    return { firstName: '', lastName: '' };
+    return { firstName: "", lastName: "" }
   }
 
   return {
     firstName: parts[0],
-    lastName: parts.slice(1).join(' '),
-  };
-};
+    lastName: parts.slice(1).join(" "),
+  }
+}
 
 const resolveDisplayName = (values: Array<string | null | undefined>) =>
   values
-    .find(value => typeof value === 'string' && value.trim().length > 0)
-    ?.trim() ?? 'Photographer';
+    .find((value) => typeof value === "string" && value.trim().length > 0)
+    ?.trim() ?? "Photographer"
 
-const mapRole = (
-  apiUser: ApiUser | null,
-  metadata: AuthMetadata,
-  clerkIdentifiers: Array<string | null | undefined>,
-): UserProfile['role'] => {
-  if (apiUser?.role === 'admin' || metadata.role === 'admin') {
-    return 'admin';
-  }
-
-  if (
-    clerkIdentifiers.some(identifier => {
-      if (!identifier) {
-        return false;
-      }
-
-      const localPart = identifier.includes('@')
-        ? identifier.split('@')[0]
-        : identifier;
-      return localPart.trim().toLowerCase() === 'admin';
-    })
-  ) {
-    return 'admin';
-  }
-
-  return 'pg';
-};
+// Role and approval come only from our API (our database, set by admins). Clerk metadata
+// is not trusted for access: users can edit their own unsafeMetadata.
+const mapRole = (apiUser: ApiUser | null): UserProfile["role"] =>
+  apiUser?.role === "admin" ? "admin" : "pg"
 
 const mapApprovalStatus = (
-  photographer: ApiPhotographer | null,
-  metadata: AuthMetadata,
-): UserProfile['approvalStatus'] => {
-  if (
-    photographer?.status === 'approved' ||
-    metadata.approvalStatus === 'approved'
-  ) {
-    return 'approved';
-  }
-
-  return metadata.approvalStatus ?? 'pending';
-};
-
-const wait = (ms: number) =>
-  new Promise(resolve => {
-    window.setTimeout(resolve, ms);
-  });
+  photographer: ApiPhotographer | null
+): UserProfile["approvalStatus"] =>
+  photographer?.status === "approved" || photographer?.status === "suspended"
+    ? photographer.status
+    : "pending"
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const clerk = useClerk();
+  const clerk = useClerk()
   const {
     isLoaded: isClerkLoaded,
     isSignedIn,
-    getToken,
-  } = useClerkAuth();
-  const { user: clerkUser } = useUser();
-  const [apiUser, setApiUser] = useState<ApiUser | null>(null);
-  const [apiPhotographer, setApiPhotographer] =
-    useState<ApiPhotographer | null>(null);
-  const [isProfileLoaded, setIsProfileLoaded] = useState(false);
+    userId: clerkUserId,
+  } = useClerkAuth()
+  const { user: clerkUser } = useUser()
+  const queryClient = useQueryClient()
 
   const metadata = useMemo(
-    () =>
-      readMetadata(clerkUser?.publicMetadata, clerkUser?.unsafeMetadata),
-    [clerkUser?.publicMetadata, clerkUser?.unsafeMetadata],
-  );
+    () => readMetadata(clerkUser?.publicMetadata, clerkUser?.unsafeMetadata),
+    [clerkUser?.publicMetadata, clerkUser?.unsafeMetadata]
+  )
 
-  const getApiToken = useCallback(async () => {
-    for (let attempt = 0; attempt < 6; attempt += 1) {
-      const token = await getToken({ skipCache: attempt > 0 });
-      if (token) {
-        return token;
-      }
-      await wait(250);
-    }
-
-    return null;
-  }, [getToken]);
-
-  const loadApiProfile = useCallback(async () => {
-    if (!clerkUser) {
-      setApiUser(null);
-      setApiPhotographer(null);
-      setIsProfileLoaded(true);
-      return;
-    }
-
-    setIsProfileLoaded(false);
-    try {
-      const nextApiUser = await api.getMe(getApiToken);
-      setApiUser(nextApiUser);
-
-      try {
-        const nextPhotographer = await api.getMyPhotographer(getApiToken);
-        setApiPhotographer(nextPhotographer);
-      } catch (error) {
-        if (error instanceof ApiError && error.status === 404) {
-          setApiPhotographer(null);
-        } else {
-          throw error;
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load Gallopics API profile', error);
-      setApiUser(null);
-      setApiPhotographer(null);
-    } finally {
-      setIsProfileLoaded(true);
-    }
-  }, [clerkUser, getApiToken]);
+  const meQuery = useQuery({
+    ...meQueryOptions(),
+    enabled: isClerkLoaded && !!isSignedIn && !!clerkUser,
+  })
+  // Only this Clerk user's answer: right after an account switch the cache can
+  // still hold the previous user's until the reset below has run
+  const apiUser: ApiUser | null =
+    clerkUser && meQuery.data?.clerk_user_id === clerkUser.id
+      ? meQuery.data
+      : null
+  // After /me: the first request creates the user row, so they must not race
+  const photographerQuery = useQuery({
+    ...photographerProfileQueryOptions(),
+    enabled: !!apiUser,
+  })
+  const apiPhotographer: ApiPhotographer | null =
+    (apiUser && photographerQuery.data) || null
+  const isProfileLoaded =
+    !clerkUser ||
+    // By data, not status: a failed background refetch keeps the last answer
+    (apiUser ? !photographerQuery.isPending : meQuery.isError)
 
   useEffect(() => {
-    if (!isClerkLoaded) {
-      return;
+    if (meQuery.error || photographerQuery.error) {
+      console.error(
+        "Failed to load Gallopics API profile",
+        meQuery.error || photographerQuery.error
+      )
     }
+  }, [meQuery.error, photographerQuery.error])
 
-    void loadApiProfile();
-  }, [isClerkLoaded, loadApiProfile]);
+  // Sign-out or account switch: drop all cached data (the next user must not
+  // see the last one's); what is on screen is refetched
+  const lastClerkUserId = useRef(clerkUserId)
+  useEffect(() => {
+    if (lastClerkUserId.current && lastClerkUserId.current !== clerkUserId) {
+      void queryClient.resetQueries()
+    }
+    lastClerkUserId.current = clerkUserId
+  }, [clerkUserId, queryClient])
+
+  const saveProfile = useMutation({
+    mutationFn: (body: UpsertPhotographerProfile) =>
+      api.upsertMyPhotographer(body),
+    onSuccess: (profile) => {
+      queryClient.setQueryData<ApiPhotographer | null>(
+        photographerKeys.profile(),
+        profile
+      )
+      // Creating a profile makes the user a photographer
+      queryClient.setQueryData<ApiUser>(accountKeys.me, (current) =>
+        current ? { ...current, role: "photographer" as const } : current
+      )
+    },
+  })
+
+  const saveAvatar = useMutation({
+    mutationFn: (file: File) => api.uploadMyAvatar(file),
+    onSuccess: (profile) => {
+      queryClient.setQueryData<ApiPhotographer | null>(
+        photographerKeys.profile(),
+        profile
+      )
+    },
+  })
 
   const user: UserProfile | null = useMemo(() => {
     if (!clerkUser) {
-      return null;
+      return null
     }
 
     const displayName = resolveDisplayName([
       apiPhotographer?.display_name,
-      [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' '),
+      [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(" "),
       clerkUser.fullName,
       clerkUser.username,
-      clerkUser.primaryEmailAddress?.emailAddress?.split('@')[0],
-    ]);
+      clerkUser.primaryEmailAddress?.emailAddress?.split("@")[0],
+    ])
     const fallbackSlug = normalizeIdentifier(
       clerkUser.username ||
         clerkUser.primaryEmailAddress?.emailAddress ||
-        displayName,
-    );
+        displayName
+    )
 
     return {
       id: apiPhotographer?.slug || fallbackSlug,
       displayName,
-      city:
-        apiPhotographer?.city ||
-        metadata.city ||
-        '',
-      country:
-        apiPhotographer?.country ||
-        metadata.country ||
-        undefined,
+      city: apiPhotographer?.city || metadata.city || "",
+      country: apiPhotographer?.country || metadata.country || undefined,
       avatarUrl:
         resolveApiAssetUrl(apiPhotographer?.avatar_url) ??
         resolveApiAssetUrl(metadata.avatarUrl) ??
@@ -326,39 +304,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       phone: apiPhotographer?.phone ?? null,
       hasCompletedOnboarding:
         metadata.hasCompletedOnboarding ?? Boolean(apiPhotographer),
-      role: mapRole(apiUser, metadata, [
-        clerkUser.username,
-        clerkUser.primaryEmailAddress?.emailAddress,
-      ]),
-      approvalStatus: mapApprovalStatus(apiPhotographer, metadata),
-    };
-  }, [apiPhotographer, apiUser, clerkUser, metadata]);
+      role: mapRole(apiUser),
+      approvalStatus: mapApprovalStatus(apiPhotographer),
+    }
+  }, [apiPhotographer, apiUser, clerkUser, metadata])
 
   const updateProfile = async (updates: Partial<UserProfile>) => {
     if (!clerkUser) {
-      return;
+      return
     }
 
     const nextDisplayName =
-      updates.displayName ?? user?.displayName ?? 'Photographer';
-    const { firstName, lastName } = splitDisplayName(nextDisplayName);
-    const nextProfile = await api.upsertMyPhotographer(getApiToken, {
+      updates.displayName ?? user?.displayName ?? "Photographer"
+    const { firstName, lastName } = splitDisplayName(nextDisplayName)
+    await saveProfile.mutateAsync({
       slug: updates.id ?? user?.id,
       display_name: nextDisplayName,
       city: updates.city ?? user?.city ?? null,
       country: updates.country ?? user?.country ?? null,
       avatar_url:
         updates.avatarUrl === undefined
-          ? user?.avatarUrl ?? null
+          ? (user?.avatarUrl ?? null)
           : updates.avatarUrl,
-      phone: updates.phone === undefined ? user?.phone ?? null : updates.phone,
+      phone:
+        updates.phone === undefined ? (user?.phone ?? null) : updates.phone,
       is_available_to_hire: true,
-    });
-
-    setApiPhotographer(nextProfile);
-    setApiUser(current =>
-      current ? { ...current, role: 'photographer' } : current,
-    );
+    })
 
     await clerkUser.update({
       firstName: firstName || null,
@@ -375,22 +346,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           updates.hasCompletedOnboarding ??
           metadata.hasCompletedOnboarding ??
           false,
-        role: updates.role ?? metadata.role ?? 'pg',
+        role: updates.role ?? metadata.role ?? "pg",
         approvalStatus:
-          updates.approvalStatus ?? metadata.approvalStatus ?? 'pending',
+          updates.approvalStatus ?? metadata.approvalStatus ?? "pending",
       },
-    });
-  };
+    })
+  }
 
   const uploadAvatar = async (file: File) => {
-    const nextProfile = await api.uploadMyAvatar(getApiToken, file);
-    setApiPhotographer(nextProfile);
-    return nextProfile.avatar_url ?? '';
-  };
+    const nextProfile = await saveAvatar.mutateAsync(file)
+    return nextProfile.avatar_url ?? ""
+  }
 
   const logout = async () => {
-    await clerk.signOut();
-  };
+    await clerk.signOut()
+  }
 
   return (
     <AuthContext.Provider
@@ -398,6 +368,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         isLoaded: isClerkLoaded && isProfileLoaded,
         isAuthenticated: isClerkLoaded && !!isSignedIn,
         user,
+        isPhotographer: !!clerkUser && apiUser?.role === "photographer",
+        // null = the API answered "no profile" (a failed request is not that)
+        needsOnboarding:
+          !!apiUser &&
+          apiUser.role !== "admin" &&
+          photographerQuery.data === null,
         logout,
         updateProfile,
         uploadAvatar,
@@ -405,13 +381,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     >
       {children}
     </AuthContext.Provider>
-  );
-};
+  )
+}
 
 export const useAuth = () => {
-  const context = useContext(AuthContext);
+  const context = useContext(AuthContext)
   if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider")
   }
-  return context;
-};
+  return context
+}

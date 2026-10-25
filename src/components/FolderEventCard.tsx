@@ -1,170 +1,223 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import type { EventData } from '../data/mockEvents';
+import { useNavigate } from "react-router"
+
+import { cn } from "@/lib/utils"
+import type { EventData } from "@/data/mockEvents"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
 
 interface FolderEventCardProps {
-  event: EventData;
-  onClick: (id: string) => void;
-  forceDisabled?: boolean; // New prop to force disabled state
+  event: EventData
+  onClick: (id: string) => void
+  /** Force the disabled look regardless of event status */
+  forceDisabled?: boolean
 }
 
-export const FolderEventCard: React.FC<FolderEventCardProps> = ({
+/** True when today falls inside the event's dates. */
+function isEventLive(event: EventData) {
+  try {
+    if (event.startDate) {
+      const start = new Date(`${event.startDate}T00:00:00`)
+      const end = new Date(`${event.endDate || event.startDate}T00:00:00`)
+      const today = new Date()
+
+      today.setHours(0, 0, 0, 0)
+      start.setHours(0, 0, 0, 0)
+      end.setHours(23, 59, 59, 999)
+
+      return today >= start && today <= end
+    }
+
+    const today = new Date()
+    const currentYear = today.getFullYear()
+    const parts = event.period.split("–").map((s) => s.trim())
+
+    let start, end
+    if (parts.length === 2) {
+      let startStr = parts[0]
+      let endStr = parts[1]
+      if (!startStr.match(/\d{4}/)) startStr += ` ${currentYear}`
+      if (!endStr.match(/\d{4}/)) endStr += ` ${currentYear}`
+
+      start = new Date(startStr)
+      end = new Date(endStr)
+    } else {
+      let dateStr = parts[0]
+      if (!dateStr.match(/\d{4}/)) dateStr += ` ${currentYear}`
+      start = new Date(dateStr)
+      end = new Date(dateStr)
+    }
+
+    const TODAY = new Date(today)
+    TODAY.setHours(0, 0, 0, 0)
+    start.setHours(0, 0, 0, 0)
+    end.setHours(23, 59, 59, 999)
+
+    return (
+      TODAY.getTime() >= start.getTime() && TODAY.getTime() <= end.getTime()
+    )
+  } catch {
+    return false
+  }
+}
+
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase()
+
+export function FolderEventCard({
   event,
   onClick,
   forceDisabled,
-}) => {
-  const navigate = useNavigate();
+}: FolderEventCardProps) {
+  const navigate = useNavigate()
+  const isDisabled = forceDisabled || event.status === "disabled"
+  const isLive = isEventLive(event)
 
-  const isDisabled = forceDisabled || event.status === 'disabled';
-
-  // Live Logic: Check if today is within event.period
-  const isLive = (() => {
-    try {
-      if (event.startDate) {
-        const start = new Date(`${event.startDate}T00:00:00`);
-        const end = new Date(`${event.endDate || event.startDate}T00:00:00`);
-        const today = new Date();
-
-        today.setHours(0, 0, 0, 0);
-        start.setHours(0, 0, 0, 0);
-        end.setHours(23, 59, 59, 999);
-
-        return today >= start && today <= end;
-      }
-
-      const today = new Date();
-      const currentYear = today.getFullYear();
-      const parts = event.period.split('–').map(s => s.trim());
-
-      let start, end;
-      if (parts.length === 2) {
-        let startStr = parts[0];
-        let endStr = parts[1];
-        if (!startStr.match(/\d{4}/)) startStr += ` ${currentYear}`;
-        if (!endStr.match(/\d{4}/)) endStr += ` ${currentYear}`;
-
-        start = new Date(startStr);
-        end = new Date(endStr);
-      } else {
-        let dateStr = parts[0];
-        if (!dateStr.match(/\d{4}/)) dateStr += ` ${currentYear}`;
-        start = new Date(dateStr);
-        end = new Date(dateStr);
-      }
-
-      // Normalize times
-      const TODAY = new Date(today);
-      TODAY.setHours(0, 0, 0, 0);
-      start.setHours(0, 0, 0, 0);
-      end.setHours(23, 59, 59, 999);
-
-      return (
-        TODAY.getTime() >= start.getTime() && TODAY.getTime() <= end.getTime()
-      );
-    } catch {
-      return false;
-    }
-  })();
+  const open = () => {
+    if (!isDisabled) onClick(event.id)
+  }
 
   return (
     <div
-      className={`relative flex flex-col overflow-visible cursor-pointer mt-4 transition-[translate] duration-300 ease-[ease] before:content-[''] before:absolute before:top-[-12px] before:left-0 before:w-[120px] before:h-[12.5px] before:bg-[var(--brand-badge-bg)] before:rounded-[96px_144px_0_0] before:border before:border-[rgba(27,58,236,0.15)] before:border-b-0 before:z-0 before:transition-[background-color,border-color] before:duration-[600ms] before:ease-out hover:before:bg-[rgba(27,58,236,0.5)] hover:before:border-[rgba(27,58,236,0.5)] hover:-translate-y-1 max-md:hover:translate-y-0 group ${
-        isDisabled ? 'disabled opacity-60 cursor-not-allowed grayscale' : ''
-      }`}
-      onClick={() => !isDisabled && onClick(event.id)}
+      role="link"
       tabIndex={isDisabled ? -1 : 0}
-      title={isDisabled ? 'Not available' : ''}
+      aria-disabled={isDisabled}
+      title={isDisabled ? "Not available" : ""}
+      onClick={open}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault()
+          open()
+        }
+      }}
+      className={cn(
+        "group relative mt-4 flex cursor-pointer flex-col overflow-visible rounded-[0_24px_24px_24px] transition-[translate] duration-300 outline-none hover:-translate-y-1 focus-visible:ring-4 focus-visible:ring-ring/12 max-md:hover:translate-y-0",
+        // Folder tab above the card
+        "before:absolute before:-top-3 before:left-0 before:z-0 before:h-[12.5px] before:w-30 before:rounded-[96px_144px_0_0] before:border before:border-b-0 before:border-primary/15 before:bg-primary/12 before:transition-[background-color,border-color] before:duration-600 before:ease-out before:content-[''] hover:before:border-primary/50 hover:before:bg-primary/50",
+        isDisabled && "cursor-not-allowed opacity-60 grayscale"
+      )}
     >
-      <div className="bg-white rounded-[0_24px_24px_24px] overflow-hidden flex flex-col border border-black/[0.04] shadow-[0_4px_16px_rgba(0,0,0,0.06)] p-3 [transform:translate3d(0,0,0)] transition-[border-color,box-shadow] duration-[600ms] ease-out group-hover:shadow-[0_12px_32px_rgba(0,0,0,0.10)] group-hover:border-[rgba(27,58,236,0.2)]">
-        {/* Cover Area inside padding */}
+      <div className="flex [transform:translate3d(0,0,0)] flex-col overflow-hidden rounded-[0_24px_24px_24px] border border-black/4 bg-card p-3 shadow-[0_4px_16px_rgba(0,0,0,0.06)] transition-[border-color,box-shadow] duration-600 ease-out group-hover:border-primary/20 group-hover:shadow-[0_12px_32px_rgba(0,0,0,0.10)]">
         {!isDisabled && event.coverImage && (
-          <div className="w-full aspect-[16/9] overflow-hidden relative rounded-xl">
+          <div className="relative aspect-video w-full overflow-hidden rounded-xl">
             <img
               src={event.coverImage}
               alt={event.name}
-              className="w-full h-full object-cover transition-[scale] duration-[600ms] ease-[ease] group-hover:scale-[1.05]"
               loading="lazy"
+              className="size-full object-cover transition-[scale] duration-600 group-hover:scale-105"
             />
             {isLive && (
-              <span className="live-badge absolute top-[10px] right-[10px] bg-[#FF0000] text-white px-2 py-1 rounded-[4px] text-[10px] font-bold uppercase z-10">
+              <Badge className="absolute top-2.5 right-2.5 z-10 h-auto rounded-sm bg-[#FF0000] px-2 py-1 text-[10px] font-bold text-white uppercase">
                 Live
-              </span>
+              </Badge>
             )}
           </div>
         )}
 
-        {/* Info Panel */}
-        <div className={`flex flex-col gap-1 ${isDisabled ? 'pt-0' : 'pt-4'}`}>
-          {/* Header Block: Avatar + (Title/Period) */}
-          <div className="flex items-center gap-3 mb-1">
-            {event.logo ? (
-              <img
-                src={event.logo}
-                alt=""
-                className="w-[42px] h-[42px] rounded-xl object-contain bg-[var(--ui-bg-subtle)] flex-shrink-0 border border-[var(--color-border)] p-0.5"
-              />
-            ) : (
-              <div
-                aria-hidden="true"
-                className="w-[42px] h-[42px] rounded-xl bg-[var(--ui-bg-subtle)] flex-shrink-0 border border-[var(--color-border)] flex items-center justify-center text-[0.8125rem] font-semibold text-[var(--color-text-secondary)]"
-              >
+        <div className={cn("flex flex-col gap-1", !isDisabled && "pt-4")}>
+          <div className="mb-1 flex items-center gap-3">
+            <Avatar className="size-10.5 rounded-xl border bg-muted after:rounded-xl after:border-0">
+              {event.logo && (
+                <AvatarImage
+                  src={event.logo}
+                  alt=""
+                  className="rounded-xl object-contain p-0.5"
+                />
+              )}
+              <AvatarFallback className="rounded-xl text-[0.8125rem] font-semibold">
                 {event.name.trim().charAt(0).toUpperCase()}
-              </div>
-            )}
+              </AvatarFallback>
+            </Avatar>
 
             <div className="flex flex-col gap-0.5">
-              <h3 className="text-[0.8125rem] font-semibold text-[var(--color-text-primary)] leading-[1.25]">
+              <h3 className="text-[0.8125rem] leading-[1.25] font-semibold text-foreground">
                 {event.name}
               </h3>
-              <span className="text-[0.75rem] text-[var(--color-text-secondary)] mb-0 block">
+              <span className="block text-xs leading-normal text-muted-foreground">
                 {event.period}
               </span>
               {isDisabled && (
-                <span className="text-[10px] uppercase text-[var(--color-text-secondary)] block">
+                <span className="block text-[10px] text-muted-foreground uppercase">
                   Not available yet
                 </span>
               )}
             </div>
           </div>
 
-          {/* Bottom Row: Location + Count + Avatar */}
-          <div className="flex justify-between items-center border-t border-[var(--color-border)] pt-3 mt-2">
-            <div className="flex items-center gap-2 text-[0.75rem] text-[var(--color-text-primary)] font-medium">
-              <span className="flag">{event.flag}</span>
-              <span className="city">{event.city}</span>
+          <div className="mt-2 flex items-center justify-between border-t pt-3">
+            <div className="flex items-center gap-2 text-xs leading-normal font-medium text-foreground">
+              <span>{event.flag}</span>
+              <span>{event.city}</span>
             </div>
 
             <div className="flex items-center gap-2">
               {!isDisabled && event.photoCount && (
-                <span className="text-[0.75rem] text-[var(--color-text-secondary)]">
+                <span className="text-xs leading-normal text-muted-foreground">
                   {event.photoCount} photos
                 </span>
               )}
-              {/* Photographer Avatar */}
               {event.photographer && (
-                <img
-                  src={event.photographer.avatar}
-                  alt={event.photographer.name}
-                  className="w-7 h-7 rounded-full object-cover border border-white shadow-[0_1px_3px_rgba(0,0,0,0.1)] cursor-pointer"
+                <Avatar
                   title={`Photo: ${event.photographer.name}`}
-                  onClick={e => {
-                    if (!event.photographer) return;
-                    e.stopPropagation();
-                    navigate(`/photographer/${event.photographer.id}`);
+                  className="size-7 cursor-pointer border border-white shadow-[0_1px_3px_rgba(0,0,0,0.1)]"
+                  onClick={(e) => {
+                    if (!event.photographer) return
+                    e.stopPropagation()
+                    navigate(`/photographer/${event.photographer.id}`)
                   }}
-                  onError={e => {
-                    if (event.photographer) {
-                      (e.target as HTMLImageElement).src =
-                        'https://ui-avatars.com/api/?name=' +
-                        event.photographer.name;
-                    }
-                  }}
-                />
+                >
+                  <AvatarImage
+                    src={event.photographer.avatar}
+                    alt={event.photographer.name}
+                  />
+                  <AvatarFallback className="text-[10px]">
+                    {initials(event.photographer.name)}
+                  </AvatarFallback>
+                </Avatar>
               )}
             </div>
           </div>
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
+
+/** Loading placeholder shaped like a FolderEventCard */
+export function EventCardSkeleton() {
+  return (
+    <div
+      aria-hidden="true"
+      className="relative mt-4 flex flex-col rounded-[0_24px_24px_24px] before:absolute before:-top-3 before:left-0 before:h-[12.5px] before:w-30 before:rounded-[96px_144px_0_0] before:border before:border-b-0 before:border-primary/15 before:bg-primary/12 before:content-['']"
+    >
+      <div className="flex flex-col overflow-hidden rounded-[0_24px_24px_24px] border border-black/4 bg-card p-3 shadow-[0_4px_16px_rgba(0,0,0,0.06)]">
+        <Skeleton className="aspect-video w-full" />
+
+        <div className="flex flex-col gap-1 pt-4">
+          <div className="mb-1 flex items-center gap-3">
+            <Skeleton className="size-10.5" />
+            <div className="flex flex-1 flex-col gap-1.5">
+              <Skeleton className="h-3.5 w-[70%] rounded-sm bg-border" />
+              <Skeleton className="h-3 w-[40%] rounded-sm bg-border" />
+            </div>
+          </div>
+
+          {/* Place and photo count: inline bars keep the text line height */}
+          <div className="mt-2 flex items-center justify-between border-t pt-3 text-xs leading-normal">
+            <div className="w-[30%]">
+              <Skeleton className="inline-block h-[0.8em] w-full rounded-sm bg-border align-middle" />
+            </div>
+            <div className="w-[20%] text-right">
+              <Skeleton className="inline-block h-[0.8em] w-full rounded-sm bg-border align-middle" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

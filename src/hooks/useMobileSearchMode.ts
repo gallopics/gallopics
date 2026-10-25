@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type RefObject } from 'react';
+import { useCallback, useEffect, useState, type RefObject } from "react"
 
 /**
  * useMobileSearchMode - Enforces Google-like mobile search focus behavior
@@ -7,43 +7,43 @@ import { useState, useEffect, useCallback, type RefObject } from 'react';
  * @returns { isSearchMode, activateSearch, deactivateSearch }
  */
 export function useMobileSearchMode(containerRef: RefObject<HTMLElement>) {
-  const [isSearchMode, setIsSearchMode] = useState(false);
+  const [isSearchMode, setIsSearchMode] = useState(false)
 
   // Helper: Check if mobile
-  const isMobile = () => window.matchMedia('(max-width: 768px)').matches;
+  const isMobile = () => window.matchMedia("(max-width: 768px)").matches
 
   const activateSearch = useCallback(() => {
-    if (!isMobile()) return;
-    setIsSearchMode(true);
-    document.body.classList.add('isSearchMode');
+    if (!isMobile()) return
+    setIsSearchMode(true)
+    document.body.classList.add("isSearchMode")
 
     // Scroll to top with slight delay for keyboard trigger
     setTimeout(() => {
       if (containerRef.current) {
         containerRef.current.scrollIntoView({
-          block: 'start',
-          behavior: 'smooth',
-        });
+          block: "start",
+          behavior: "smooth",
+        })
       }
-    }, 300);
-  }, [containerRef]);
+    }, 300)
+  }, [containerRef])
 
   const deactivateSearch = useCallback(() => {
-    setIsSearchMode(false);
-    document.body.classList.remove('isSearchMode');
+    setIsSearchMode(false)
+    document.body.classList.remove("isSearchMode")
     // Restore focus to body or blur? optional
-  }, []);
+  }, [])
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      document.body.classList.remove('isSearchMode');
-    };
-  }, []);
+      document.body.classList.remove("isSearchMode")
+    }
+  }, [])
 
   return {
     isSearchMode,
     activateSearch,
     deactivateSearch,
-  };
+  }
 }

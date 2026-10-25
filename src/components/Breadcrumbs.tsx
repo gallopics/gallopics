@@ -1,66 +1,94 @@
-import React from 'react';
-import { ChevronLeft } from 'lucide-react';
+import { Fragment } from "react"
+import { ChevronLeft } from "lucide-react"
+
+import { cn } from "@/lib/utils"
+import {
+  Breadcrumb,
+  BreadcrumbItem as BreadcrumbItemUI,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb"
+import { Skeleton } from "@/components/ui/skeleton"
 
 export interface BreadcrumbItem {
-  label: string;
-  onClick?: () => void;
-  active?: boolean;
+  label: string
+  onClick?: () => void
+  active?: boolean
 }
 
 interface BreadcrumbsProps {
-  items: BreadcrumbItem[];
+  items: BreadcrumbItem[]
 }
 
-export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({ items }) => {
-  if (!items || items.length === 0) return null;
+export function Breadcrumbs({ items }: BreadcrumbsProps) {
+  if (!items || items.length === 0) return null
+
+  const lastIndex = items.length - 1
 
   return (
-    <section className="py-3 bg-[var(--color-surface)]">
+    <section className="bg-card py-3">
       <div className="container">
-        <nav
-          className="flex items-center gap-2 m-0 flex-wrap max-[768px]:flex-nowrap max-[768px]:overflow-hidden max-[768px]:w-full"
-          aria-label="Breadcrumb"
-        >
-          {items.map((item, index) => (
-            <React.Fragment key={index}>
-              <div
-                className={[
-                  'flex items-center gap-1',
-                  'text-[var(--color-text-secondary)] text-[0.8125rem] font-medium',
-                  'transition-all duration-200 ease-in-out',
-                  item.onClick
-                    ? 'cursor-pointer hover:text-[var(--color-text-primary)]'
-                    : '',
-                  item.active
-                    ? 'text-[var(--color-text-primary)] cursor-default'
-                    : '',
-                  // Mobile shrink behavior
-                  index === 0 ? 'max-[768px]:flex-shrink-0' : '',
-                  index > 0 && index < items.length - 1
-                    ? 'max-[768px]:flex-[2_2_0%] max-[768px]:min-w-0'
-                    : '',
-                  index === items.length - 1 && items.length > 1
-                    ? 'max-[768px]:flex-shrink max-[768px]:min-w-0'
-                    : '',
-                ].join(' ')}
-                onClick={item.onClick}
-              >
-                {index === 0 && (
-                  <ChevronLeft size={14} className="flex-shrink-0" />
-                )}
-                <span className="max-[768px]:overflow-hidden max-[768px]:text-ellipsis max-[768px]:whitespace-nowrap max-[768px]:min-w-0 max-[768px]:block">
-                  {item.label}
-                </span>
-              </div>
-              {index < items.length - 1 && (
-                <span className="text-[var(--color-border)] text-[0.75rem] font-normal max-[768px]:flex-shrink-0 max-[768px]:mx-1">
-                  /
-                </span>
-              )}
-            </React.Fragment>
-          ))}
-        </nav>
+        <Breadcrumb>
+          <BreadcrumbList className="max-md:flex-nowrap max-md:overflow-hidden">
+            {items.map((item, index) => {
+              const content = (
+                <>
+                  {index === 0 && <ChevronLeft className="size-3.5 shrink-0" />}
+                  <span className="max-md:truncate">{item.label}</span>
+                </>
+              )
+
+              return (
+                <Fragment key={index}>
+                  <BreadcrumbItemUI
+                    className={cn(
+                      // Mobile: keep the first item, let the rest truncate
+                      index === 0 && "max-md:shrink-0",
+                      index > 0 &&
+                        index < lastIndex &&
+                        "max-md:min-w-0 max-md:flex-[2_2_0%]",
+                      index === lastIndex &&
+                        index > 0 &&
+                        "max-md:min-w-0 max-md:shrink"
+                    )}
+                  >
+                    {item.active ? (
+                      <BreadcrumbPage className="flex min-w-0 items-center gap-1">
+                        {content}
+                      </BreadcrumbPage>
+                    ) : (
+                      <BreadcrumbLink
+                        render={<button type="button" onClick={item.onClick} />}
+                        className="flex min-w-0 items-center gap-1"
+                      >
+                        {content}
+                      </BreadcrumbLink>
+                    )}
+                  </BreadcrumbItemUI>
+                  {index < lastIndex && (
+                    <BreadcrumbSeparator className="max-md:mx-1 max-md:shrink-0" />
+                  )}
+                </Fragment>
+              )
+            })}
+          </BreadcrumbList>
+        </Breadcrumb>
       </div>
     </section>
-  );
-};
+  )
+}
+
+/** Loading placeholder shaped like Breadcrumbs (a back link and a page name) */
+export function BreadcrumbsSkeleton() {
+  return (
+    <section aria-hidden="true" className="bg-card py-3">
+      {/* Inline bars in a text line: the row keeps the real line height */}
+      <div className="container text-[0.8125rem]">
+        <Skeleton className="inline-block h-[0.8em] w-14 rounded-sm bg-border align-middle" />
+        <Skeleton className="ml-4 inline-block h-[0.8em] w-28 rounded-sm bg-border align-middle" />
+      </div>
+    </section>
+  )
+}

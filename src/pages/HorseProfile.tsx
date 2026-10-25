@@ -1,175 +1,166 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import type { Photo } from '../types';
-import { RotateCcw } from 'lucide-react';
-import { Header } from '../components/Header';
-import { TitleHeader } from '../components/TitleHeader';
-import { Breadcrumbs } from '../components/Breadcrumbs';
-import type { BreadcrumbItem } from '../components/Breadcrumbs';
-import { Footer } from '../components/Footer';
-import { MasonryGrid } from '../components/MasonryGrid';
-import { PhotoCard } from '../components/PhotoCard';
-import { getDefaultCartTier } from '../constants/qualityTiers';
-import { ModernDropdown } from '../components/ModernDropdown';
-import { InfoChip } from '../components/InfoChip';
-import { HORSES, RIDERS, COMPETITIONS } from '../data/mockData';
-import { RiderIcon } from '../components/icons/RiderIcon';
+import { useEffect, useMemo, useState } from "react"
+import { useNavigate, useParams, useSearchParams } from "react-router"
 
-import {
-  // ShareIconButton,
-  ActionSeparator,
-  ActionCluster,
-} from '../components/HeaderActions';
-import { useCart } from '../context/CartContext';
+import { getDefaultCartTier } from "@/constants/qualityTiers"
+import { useCart } from "@/context/CartContext"
+import { COMPETITIONS, HORSES, RIDERS } from "@/data/mockData"
+import type { Photo } from "@/types"
+import { toast } from "@/components/ui/toast"
+import { Breadcrumbs } from "@/components/Breadcrumbs"
+import type { BreadcrumbItem } from "@/components/Breadcrumbs"
+import { DotList } from "@/components/DotList"
+import { FilterBar, ResetFiltersButton } from "@/components/FilterBar"
+import { Footer } from "@/components/Footer"
+import { Header } from "@/components/Header"
+import { ActionCluster, ActionSeparator } from "@/components/HeaderActions"
+import { RiderIcon } from "@/components/icons/RiderIcon"
+import { InfoChip } from "@/components/InfoChip"
+import { MasonryGrid } from "@/components/MasonryGrid"
+import { ModernDropdown } from "@/components/ModernDropdown"
+import { PhotoCard, PhotoCardSkeleton } from "@/components/PhotoCard"
+import { TitleHeader } from "@/components/TitleHeader"
 
 export function HorseProfile() {
-  const { horseId = 'h1' } = useParams();
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const from = searchParams.get('from');
-  const photoId = searchParams.get('photoId');
-  const { cart, addToCart } = useCart();
-  const [toast, setToast] = useState<{ message: string } | null>(null);
-
-  // Auto-hide toast
-  useEffect(() => {
-    if (toast) {
-      const timer = setTimeout(() => setToast(null), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [toast]);
+  const { horseId = "h1" } = useParams()
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const from = searchParams.get("from")
+  const photoId = searchParams.get("photoId")
+  const { cart, addToCart } = useCart()
 
   // Data Loading
-  const [photos, setPhotos] = useState<Photo[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [photos, setPhotos] = useState<Photo[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
   const activeHorse = useMemo(() => {
-    return HORSES.find(h => h.id === horseId) || HORSES[0];
-  }, [horseId]);
+    return HORSES.find((h) => h.id === horseId) || HORSES[0]
+  }, [horseId])
 
   // Breadcrumb path construction
   const breadcrumbs = useMemo<BreadcrumbItem[]>(() => {
-    const items: BreadcrumbItem[] = [];
+    const items: BreadcrumbItem[] = []
 
-    if (from === 'photo' && photoId) {
+    if (from === "photo" && photoId) {
       items.push({
-        label: 'Back to photo',
+        label: "Back to photo",
         onClick: () => navigate(`/photo/${photoId}`),
-      });
+      })
     } else {
-      items.push({ label: 'Events', onClick: () => navigate('/') });
+      items.push({ label: "Events", onClick: () => navigate("/") })
     }
 
-    items.push({ label: activeHorse.name, active: true });
-    return items;
-  }, [navigate, activeHorse, from, photoId]);
+    items.push({ label: activeHorse.name, active: true })
+    return items
+  }, [navigate, activeHorse, from, photoId])
 
   // Filter states - Order: Events, Class, Riders, Photographer
-  const [selectedEventId, setSelectedEventId] = useState<string>('');
-  const [eventClass, setEventClass] = useState('All');
-  const [rider, setRider] = useState('All');
-  const [photographer, setPhotographer] = useState('All');
+  const [selectedEventId, setSelectedEventId] = useState<string>("")
+  const [eventClass, setEventClass] = useState("All")
+  const [rider, setRider] = useState("All")
+  const [photographer, setPhotographer] = useState("All")
 
+  // develop: mock photos removed; no API for rider/horse photos yet
   useEffect(() => {
-    setPhotos([]);
-    setIsLoading(false);
-  }, [activeHorse]);
+    setPhotos([])
+    setIsLoading(false)
+  }, [activeHorse])
 
   // Compute latest event once photos are loaded
   useEffect(() => {
     if (photos.length > 0 && !selectedEventId) {
-      const uniqueIds = Array.from(new Set(photos.map(p => p.eventId)));
-      const relevantEvents = COMPETITIONS.filter(c => uniqueIds.includes(c.id));
+      const uniqueIds = Array.from(new Set(photos.map((p) => p.eventId)))
+      const relevantEvents = COMPETITIONS.filter((c) =>
+        uniqueIds.includes(c.id)
+      )
       if (relevantEvents.length > 0) {
         relevantEvents.sort(
           (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-        );
-        setSelectedEventId(relevantEvents[0].id);
+        )
+        setSelectedEventId(relevantEvents[0].id)
       }
     }
-  }, [photos, selectedEventId]);
+  }, [photos, selectedEventId])
 
   const isResetDisabled =
     !selectedEventId &&
-    eventClass === 'All' &&
-    rider === 'All' &&
-    photographer === 'All';
+    eventClass === "All" &&
+    rider === "All" &&
+    photographer === "All"
 
   // Filters Inter-dependency
   const filteredPhotos = useMemo(() => {
-    return photos.filter(photo => {
-      const matchEvent = !selectedEventId || photo.eventId === selectedEventId;
-      const matchRider = rider === 'All' || photo.rider === rider;
+    return photos.filter((photo) => {
+      const matchEvent = !selectedEventId || photo.eventId === selectedEventId
+      const matchRider = rider === "All" || photo.rider === rider
       const matchClass =
-        eventClass === 'All' ||
-        ((photo as any).class || '1.30m') === eventClass;
+        eventClass === "All" || ((photo as any).class || "1.30m") === eventClass
       const matchPhotographer =
-        photographer === 'All' ||
-        ((photo as any).photographer || 'Unknown') === photographer;
+        photographer === "All" ||
+        ((photo as any).photographer || "Unknown") === photographer
 
-      return matchEvent && matchRider && matchClass && matchPhotographer;
-    });
-  }, [photos, selectedEventId, rider, eventClass, photographer]);
+      return matchEvent && matchRider && matchClass && matchPhotographer
+    })
+  }, [photos, selectedEventId, rider, eventClass, photographer])
 
   // Helpers for dynamic options
   const getAvailable = (scopingFilter: (p: Photo) => boolean) =>
-    photos.filter(scopingFilter);
+    photos.filter(scopingFilter)
 
   // 1. Events
   const eventOptions = useMemo(() => {
     const available = getAvailable(
-      p =>
-        (rider === 'All' || p.rider === rider) &&
-        (eventClass === 'All' ||
-          ((p as any).class || '1.30m') === eventClass) &&
-        (photographer === 'All' ||
-          ((p as any).photographer || 'Unknown') === photographer)
-    );
-    const uniqueIds = Array.from(new Set(available.map(p => p.eventId)));
-    const relevantEvents = COMPETITIONS.filter(c => uniqueIds.includes(c.id));
+      (p) =>
+        (rider === "All" || p.rider === rider) &&
+        (eventClass === "All" ||
+          ((p as any).class || "1.30m") === eventClass) &&
+        (photographer === "All" ||
+          ((p as any).photographer || "Unknown") === photographer)
+    )
+    const uniqueIds = Array.from(new Set(available.map((p) => p.eventId)))
+    const relevantEvents = COMPETITIONS.filter((c) => uniqueIds.includes(c.id))
     // Remove All Events option
-    return relevantEvents.map(e => ({ label: e.name, value: e.id }));
-  }, [photos, rider, eventClass, photographer]);
+    return relevantEvents.map((e) => ({ label: e.name, value: e.id }))
+  }, [photos, rider, eventClass, photographer])
 
   // 3. Class
   const classOptions = [
-    { label: 'All Classes', value: 'All' },
-    { label: '1.20m', value: '1.20m' },
-    { label: '1.30m', value: '1.30m' },
-  ];
+    { label: "All Classes", value: "All" },
+    { label: "1.20m", value: "1.20m" },
+    { label: "1.30m", value: "1.30m" },
+  ]
 
   // 4. Riders
   const riderOptions = useMemo(() => {
     const available = getAvailable(
-      p => !selectedEventId || p.eventId === selectedEventId
-    );
-    const unique = Array.from(new Set(available.map(p => p.rider))).sort();
+      (p) => !selectedEventId || p.eventId === selectedEventId
+    )
+    const unique = Array.from(new Set(available.map((p) => p.rider))).sort()
     return [
-      { label: 'All Riders', value: 'All' },
-      ...unique.map(r => ({ label: r, value: r })),
-    ];
-  }, [photos, selectedEventId]);
+      { label: "All Riders", value: "All" },
+      ...unique.map((r) => ({ label: r, value: r })),
+    ]
+  }, [photos, selectedEventId])
 
   // 5. Photographer
   const photographerOptions = useMemo(() => {
     const available = getAvailable(
-      p => !selectedEventId || p.eventId === selectedEventId
-    );
+      (p) => !selectedEventId || p.eventId === selectedEventId
+    )
     const unique = Array.from(
-      new Set(available.map(p => p.photographer).filter(Boolean))
-    ).sort();
+      new Set(available.map((p) => p.photographer).filter(Boolean))
+    ).sort()
     return [
-      { label: 'All Photographers', value: 'All' },
-      ...unique.map(ph => ({ label: ph as string, value: ph as string })),
-    ];
-  }, [photos, selectedEventId]);
+      { label: "All Photographers", value: "All" },
+      ...unique.map((ph) => ({ label: ph as string, value: ph as string })),
+    ]
+  }, [photos, selectedEventId])
 
   // Header Stats
-  const totalEvents = new Set(photos.map(p => p.eventId)).size;
-  const totalPhotosCount = photos.length;
+  const totalEvents = new Set(photos.map((p) => p.eventId)).size
+  const totalPhotosCount = photos.length
 
   return (
-    <div className="page-wrapper">
+    <div className="flex min-h-screen flex-col">
       <Header />
 
       <Breadcrumbs items={breadcrumbs} />
@@ -179,28 +170,28 @@ export function HorseProfile() {
         avatarVariant="horse"
         subtitle="Horse"
         stats={
-          <div className="event-stats-row">
-            <span className="meta-item">{totalEvents} events</span>
-            <span className="meta-item">{totalPhotosCount} photos</span>
-          </div>
+          <DotList className="text-[0.8125rem]">
+            <>{totalEvents} events</>
+            <>{totalPhotosCount} photos</>
+          </DotList>
         }
         rightContent={
           <ActionCluster>
             {(() => {
               // Find primary rider
-              if (photos.length === 0) return null;
-              const riderCounts: { [key: string]: number } = {};
-              photos.forEach(p => {
-                riderCounts[p.rider] = (riderCounts[p.rider] || 0) + 1;
-              });
+              if (photos.length === 0) return null
+              const riderCounts: { [key: string]: number } = {}
+              photos.forEach((p) => {
+                riderCounts[p.rider] = (riderCounts[p.rider] || 0) + 1
+              })
               const topRiderName = Object.keys(riderCounts).reduce((a, b) =>
                 riderCounts[a] > riderCounts[b] ? a : b
-              );
+              )
               const topRider = RIDERS.find(
-                r => `${r.firstName} ${r.lastName}` === topRiderName
-              );
+                (r) => `${r.firstName} ${r.lastName}` === topRiderName
+              )
 
-              if (!topRider) return null;
+              if (!topRider) return null
 
               return (
                 <>
@@ -217,19 +208,18 @@ export function HorseProfile() {
                   />
                   <ActionSeparator />
                 </>
-              );
+              )
             })()}
-            {/* <ShareIconButton /> */}
+            {/* develop: share button hidden */}
           </ActionCluster>
         }
       />
 
-      <section className="grid-section">
+      <section className="min-h-100 pt-6 pb-16">
         <div className="container">
-          <div className="filters-wrapper">
-            {/* New Shared Filter Structure */}
-            <div className="filter-container">
-              <div className="filter-group">
+          <FilterBar
+            filters={
+              <>
                 <ModernDropdown
                   value={selectedEventId}
                   options={eventOptions}
@@ -264,73 +254,59 @@ export function HorseProfile() {
                   placeholder="Photographer"
                   variant="pill"
                 />
-                <button
-                  className="filter-reset-btn"
+                <ResetFiltersButton
+                  disabled={isResetDisabled}
                   onClick={() => {
                     // Auto-reset to latest
                     const uniqueIds = Array.from(
-                      new Set(photos.map(p => p.eventId))
-                    );
-                    const relevantEvents = COMPETITIONS.filter(c =>
+                      new Set(photos.map((p) => p.eventId))
+                    )
+                    const relevantEvents = COMPETITIONS.filter((c) =>
                       uniqueIds.includes(c.id)
-                    );
+                    )
                     if (relevantEvents.length > 0) {
                       relevantEvents.sort(
                         (a, b) =>
                           new Date(b.date).getTime() -
                           new Date(a.date).getTime()
-                      );
-                      setSelectedEventId(relevantEvents[0].id);
+                      )
+                      setSelectedEventId(relevantEvents[0].id)
                     }
-                    setEventClass('All');
-                    setRider('All');
-                    setPhotographer('All');
+                    setEventClass("All")
+                    setRider("All")
+                    setPhotographer("All")
                   }}
-                  title="Reset filters"
-                  disabled={isResetDisabled}
-                >
-                  <RotateCcw size={18} />
-                </button>
-              </div>
-
-              <div className="filter-results-count">
-                Showing {filteredPhotos.length} photos
-              </div>
-            </div>
-          </div>
+                />
+              </>
+            }
+            meta={<>Showing {filteredPhotos.length} photos</>}
+          />
 
           <MasonryGrid
             isLoading={isLoading}
-            renderSkeleton={() => (
-              <div className="photo-card skeleton-card">
-                <div className="card-image-wrapper aspect-[3/4] bg-[var(--ui-bg-subtle)]"></div>
-                <div className="card-content">
-                  <div className="h-4 w-[70%] bg-[var(--color-border)] mb-1.5 rounded-[4px]"></div>
-                  <div className="h-3 w-[40%] bg-[var(--color-border)] rounded-[4px]"></div>
-                </div>
-              </div>
-            )}
+            renderSkeleton={() => <PhotoCardSkeleton />}
           >
-            {filteredPhotos.map(photo => (
+            {filteredPhotos.map((photo) => (
               <PhotoCard
                 key={photo.id}
                 photo={photo}
-                onClick={p =>
+                onClick={(p) =>
                   navigate(
                     `/photo/${p.id}?from=horse&horseId=${activeHorse.id}`
                   )
                 }
-                onAddToCart={p => {
-                  const tier = getDefaultCartTier();
+                onAddToCart={(p) => {
+                  // Check if in cart
+                  const tier = getDefaultCartTier()
                   const isInCart = cart.some(
-                    item => item.photoId === p.id && item.quality === tier.id
-                  );
+                    (item) => item.photoId === p.id && item.quality === tier.id
+                  )
                   if (isInCart) {
-                    setToast({ message: 'Already in cart' });
-                    return;
+                    toast.add({ title: "Already in cart", type: "info" })
+                    return
                   }
-                  addToCart(p, tier.id, tier.label, tier.price);
-                  setToast({ message: 'Added to cart' });
+                  addToCart(p, tier.id, tier.label, tier.price)
+                  toast.add({ title: "Added to cart", type: "success" })
                 }}
               />
             ))}
@@ -338,14 +314,7 @@ export function HorseProfile() {
         </div>
       </section>
 
-      {/* Toast Notification */}
-      {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[var(--color-text-primary)] text-white px-6 py-3 rounded-[99px] flex items-center gap-4 shadow-[0_4px_12px_rgba(0,0,0,0.15)] z-[1000]">
-          <span>{toast.message}</span>
-        </div>
-      )}
-
       <Footer minimal={true} />
     </div>
-  );
+  )
 }

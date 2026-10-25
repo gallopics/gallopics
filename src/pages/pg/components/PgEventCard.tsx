@@ -1,21 +1,27 @@
-import React from 'react';
-import { Image as ImageIcon } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import type { PgEvent } from '../../../context/PhotographerContext';
-import { useWorkspace } from '../../../context/WorkspaceContext';
+import { useNavigate } from "react-router"
+import { Image as ImageIcon } from "lucide-react"
+
+import { cn } from "@/lib/utils"
+import type { PgEvent } from "@/context/PhotographerContext"
+import { useWorkspace } from "@/context/WorkspaceContext"
+import { Button } from "@/components/ui/button"
+import { Separator } from "@/components/ui/separator"
+import { Skeleton } from "@/components/ui/skeleton"
+import { GlassButton } from "@/components/PhotoCard"
 
 interface PgEventCardProps {
-  event: PgEvent;
-  onCoverChange: (eventId: string) => void;
-  onEdit?: (event: PgEvent) => void;
-  onCancelBooking?: (event: PgEvent, e: React.MouseEvent) => void;
-  fromTab?: string;
-  eventProfilePath?: string;
-  eventProfileState?: unknown;
-  hideLogo?: boolean;
+  event: PgEvent
+  onCoverChange: (eventId: string) => void
+  onEdit?: (event: PgEvent) => void
+  onCancelBooking?: (event: PgEvent, e: React.MouseEvent) => void
+  fromTab?: string
+  eventProfilePath?: string
+  eventProfileState?: unknown
+  hideLogo?: boolean
 }
 
-export const PgEventCard: React.FC<PgEventCardProps> = ({
+/** Folder-style event card in the photographer's "My events" grid. */
+export function PgEventCard({
   event,
   onCoverChange,
   onCancelBooking,
@@ -23,185 +29,149 @@ export const PgEventCard: React.FC<PgEventCardProps> = ({
   eventProfilePath,
   eventProfileState,
   hideLogo = false,
-}) => {
-  const { basePath } = useWorkspace();
-  const navigate = useNavigate();
-  const hasCover = !!event.coverImage;
-  const eventTargetPath = eventProfilePath ?? `${basePath}/events/${event.id}`;
-  const eventTargetState = eventProfileState ?? { fromTab: fromTab ?? 'my' };
+}: PgEventCardProps) {
+  const { basePath } = useWorkspace()
+  const navigate = useNavigate()
+  const hasCover = !!event.coverImage
+  const eventTargetPath = eventProfilePath ?? `${basePath}/events/${event.id}`
+  const eventTargetState = eventProfileState ?? { fromTab: fromTab ?? "my" }
+
+  const open = () => navigate(eventTargetPath, { state: eventTargetState })
 
   return (
     <div
-      className="relative flex flex-col cursor-pointer transition-[translate,box-shadow] duration-300 ease-[cubic-bezier(0.2,0,0.2,1)] mt-4 hover:-translate-y-1 group"
-      onClick={() =>
-        navigate(eventTargetPath, {
-          state: eventTargetState,
-        })
-      }
+      role="link"
+      tabIndex={0}
+      onClick={open}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" && e.target === e.currentTarget) open()
+      }}
+      className="group relative mt-4 flex cursor-pointer flex-col rounded-[0_24px_24px_24px] transition-[translate,box-shadow] duration-300 ease-[cubic-bezier(0.2,0,0.2,1)] outline-none hover:-translate-y-1 focus-visible:ring-4 focus-visible:ring-ring/12"
     >
-      {/* Folder Tab pseudo-element simulation */}
-      <div className="absolute -top-3 left-0 w-[110px] h-[13px] bg-[var(--color-brand-tint)] rounded-[96px_144px_0_0] border border-black/[0.08] border-b-0 z-0 transition-all duration-300" />
+      {/* Folder tab */}
+      <div className="absolute -top-3 left-0 z-0 h-3.25 w-27.5 rounded-[96px_144px_0_0] border border-b-0 border-black/8 bg-primary/8 transition-all duration-300" />
 
-      <div className="bg-white rounded-[0_24px_24px_24px] overflow-hidden flex flex-col border border-black/[0.04] shadow-[0_4px_16px_rgba(0,0,0,0.06)] p-4 transition-all duration-300 group-hover:shadow-[0_12px_32px_rgba(0,0,0,0.10)]">
-        {/* 1. Cover Area */}
-        <div className="w-full aspect-video overflow-hidden relative rounded-xl bg-[var(--ui-bg-subtle)]">
+      <div className="flex flex-col overflow-hidden rounded-[0_24px_24px_24px] border border-black/4 bg-card p-4 shadow-[0_4px_16px_rgba(0,0,0,0.06)] transition-all duration-300 group-hover:shadow-[0_12px_32px_rgba(0,0,0,0.10)]">
+        <div className="relative aspect-video w-full overflow-hidden rounded-xl bg-muted">
+          {/* develop: no placeholder photo when the event has no cover */}
           {hasCover && (
             <img
               src={event.coverImage}
               alt={event.title}
-              className="w-full h-full object-cover will-change-transform transition-[scale] duration-500 ease-[cubic-bezier(0.2,0,0.2,1)] group-hover:scale-[1.04]"
+              className="size-full object-cover transition-[scale] duration-500 ease-[cubic-bezier(0.2,0,0.2,1)] will-change-transform group-hover:scale-[1.04]"
             />
           )}
 
           {!hasCover && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <span className="text-[0.8125rem] font-medium text-[var(--color-text-secondary)]">
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <span className="text-[0.8125rem] font-medium text-muted-foreground">
                 Add cover photo
               </span>
             </div>
           )}
 
-          {/* Edit Overlay (Top-Right Circle) */}
-          <div className="absolute top-3 right-3 z-30 opacity-0 -translate-y-1 transition-[translate,opacity] duration-[250ms] ease-in-out pointer-events-none group-hover:opacity-100 group-hover:translate-y-0">
-            <button
-              className={`w-9 h-9 rounded-full bg-white/95 text-[var(--color-text-primary)] flex items-center justify-center border-none cursor-pointer shadow-[0_1px_2px_rgba(0,0,0,0.05)] pointer-events-auto transition-[scale,background-color,box-shadow] duration-200 ease-in-out hover:scale-[1.05] hover:text-black hover:shadow-[0_4px_12px_rgba(0,0,0,0.1)] ${
-                !hasCover
-                  ? '!opacity-30 cursor-default bg-[rgba(243,244,246,0.8)] text-[var(--color-text-secondary)] !shadow-none hover:!scale-100'
-                  : ''
-              }`}
-              onClick={e => {
-                e.stopPropagation();
-                if (hasCover) onCoverChange(event.id);
-              }}
-              title={hasCover ? 'Change cover image' : 'No cover to edit'}
+          <div className="pointer-events-none absolute top-3 right-3 z-30 -translate-y-1 opacity-0 transition-[translate,opacity] duration-250 group-hover:translate-y-0 group-hover:opacity-100">
+            <GlassButton
+              title={hasCover ? "Change cover image" : "No cover to edit"}
+              aria-label="Change cover image"
               disabled={!hasCover}
+              onClick={(e) => {
+                e.stopPropagation()
+                if (hasCover) onCoverChange(event.id)
+              }}
+              className="pointer-events-auto text-foreground disabled:opacity-30 [&_svg:not([class*='size-'])]:size-4"
             >
-              <ImageIcon size={16} />
-            </button>
+              <ImageIcon />
+            </GlassButton>
           </div>
         </div>
 
-        {/* 2. Info Area (Avatar + Title/Date) */}
-        <div className="pt-4 flex flex-col">
-          <div className="flex items-center gap-4 mb-4">
+        <div className="flex flex-col pt-4">
+          <div className="mb-4 flex items-center gap-4">
             {!hideLogo && (
-              <div className="w-[52px] h-[52px] rounded-xl overflow-hidden bg-white border border-black/[0.06] flex-shrink-0">
+              <div className="size-13 shrink-0 overflow-hidden rounded-xl border border-black/6 bg-card">
                 <img
                   src={event.logo}
                   alt=""
-                  className="w-full h-full object-contain p-0.5"
+                  className="size-full object-contain p-0.5"
                 />
               </div>
             )}
-            <div className="flex flex-col justify-center flex-1">
-              <div className="flex items-center gap-1 mb-0.5">
-                <span className="text-[0.75rem] leading-none">🇸🇪</span>
-                <span className="text-[0.75rem] font-semibold text-[var(--color-text-secondary)] uppercase tracking-[0.02em] leading-[1.5]">
+            <div className="flex flex-1 flex-col justify-center">
+              <div className="mb-0.5 flex items-center gap-1">
+                <span className="text-xs leading-none">🇸🇪</span>
+                <span className="text-xs leading-normal font-semibold tracking-[0.02em] text-muted-foreground uppercase">
                   {event.city}
                 </span>
               </div>
-              <h3 className="text-[0.8125rem] font-bold text-[var(--color-text-primary)] my-1 leading-[1.5]">
+              <h3 className="my-1 text-[0.8125rem] leading-normal font-bold text-foreground">
                 {event.title}
               </h3>
-              <span className="text-[0.75rem] text-[var(--color-text-secondary)] mt-0.5 leading-[1.5]">
+              <span className="mt-0.5 text-xs leading-normal text-muted-foreground">
                 {event.dateRange}
               </span>
             </div>
-
-            {/* More Action with Separator */}
-            {/* <div className="relative flex items-center ml-auto">
-              <div className="w-px h-6 bg-[var(--dropdown-divider-color)] mx-3" />
-              <button
-                className={`w-8 h-8 flex items-center justify-center rounded-full border bg-white cursor-pointer transition-all duration-200 p-0 outline-none
-                                    ${
-                                      isMenuOpen
-                                        ? 'bg-[var(--dropdown-item-hover-bg)] text-[var(--color-text-primary)] border-[var(--color-border)]'
-                                        : 'border-[var(--color-border)] text-[var(--color-text-secondary)] hover:bg-[var(--dropdown-item-hover-bg)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border)]'
-                                    }`}
-                onClick={e => {
-                  e.stopPropagation();
-                  setIsMenuOpen(!isMenuOpen);
-                }}
-              >
-                <MoreHorizontal size={16} />
-              </button>
-
-              {isMenuOpen && (
-                <div
-                  className="dropdown-menu absolute top-[calc(100%+8px)] right-0 w-max min-w-[180px] z-[1000]"
-                  onClick={e => e.stopPropagation()}
-                >
-                  <button
-                    className="dropdown-item"
-                    onClick={() => {
-                      setIsMenuOpen(false);
-                      navigate(eventTargetPath, {
-                        state: eventTargetState,
-                      });
-                    }}
-                  >
-                    <ImageIcon size={14} />
-                    Manage photos
-                  </button>
-                  <button
-                    className="dropdown-item"
-                    onClick={() => {
-                      setIsMenuOpen(false);
-                      onEdit?.(event);
-                    }}
-                  >
-                    <Edit2 size={14} />
-                    Edit Event
-                  </button>
-                </div>
-              )}
-            </div> */}
           </div>
 
-          <div className="h-px bg-[var(--ui-bg-subtle)] w-full mb-4" />
+          <Separator className="mb-4 bg-muted" />
 
-          {/* 3. Footer row (Stats only) */}
-          <div className="flex justify-between items-center gap-3">
+          {/* Footer: stats are hidden in the old app too */}
+          <div className="flex items-center justify-between gap-3">
             {onCancelBooking && (
-              <button
-                className="px-3.5 py-1.5 rounded-lg border border-[var(--color-danger-border)] bg-[var(--color-danger-tint)] text-[var(--color-danger)] text-[0.75rem] font-semibold cursor-pointer transition-colors hover:bg-white"
-                onClick={e => onCancelBooking(event, e)}
+              <Button
+                size="xs"
+                onClick={(e) => onCancelBooking(event, e)}
+                className="h-auto rounded-lg border border-destructive/25 bg-destructive/8 px-3.5 py-1.5 text-xs text-destructive hover:bg-card"
               >
                 Cancel booking
-              </button>
+              </Button>
             )}
-            <div className="flex items-center gap-2">
-              {/* <div className="inline-flex flex-col items-start justify-center gap-0 px-3.5 py-1.5 rounded-lg bg-[var(--ui-bg-subtle)] text-[var(--color-text-secondary)] text-[0.75rem] font-semibold whitespace-nowrap text-left">
-                <span className="text-[0.625rem] font-semibold leading-[1.2] opacity-80">
-                  Published
-                </span>
-                <span className="text-[0.8125rem] font-bold leading-[1.2]">
-                  {event.publishedCount ?? 0}
-                </span>
-              </div> */}
-              {/* <div className="inline-flex flex-col items-start justify-center gap-0 px-3.5 py-1.5 rounded-lg bg-[var(--color-success-tint)] text-[var(--color-success)] text-[0.75rem] font-semibold whitespace-nowrap text-left">
-                <span className="text-[0.625rem] font-semibold leading-[1.2] opacity-80">
-                  Sales
-                </span>
-                <span className="text-[0.8125rem] font-bold leading-[1.2]">
-                  {event.soldCount ?? 0}/{event.photosCount ?? 40}
-                </span>
-              </div> */}
-              {/* <div className="inline-flex flex-col items-start justify-center gap-0 px-3.5 py-1.5 rounded-lg bg-[var(--color-revenue-bg)] text-[var(--color-revenue-text)] text-[0.75rem] font-semibold whitespace-nowrap text-left">
-                <span className="text-[0.625rem] font-semibold leading-[1.2] opacity-80">
-                  Earnngs
-                </span>
-                <span className="text-[0.8125rem] font-bold leading-[1.2] text-[var(--color-revenue-value)]">
-                  SEK{' '}
-                  {((event.soldCount ?? 0) * 450)
-                    .toLocaleString()
-                    .replace(/,/g, ' ')}
-                </span>
-              </div> */}
-            </div>
           </div>
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
+
+/** Loading placeholder shaped like a PgEventCard (booked event, with Cancel booking) */
+export function PgEventCardSkeleton({
+  hideLogo = false,
+}: {
+  hideLogo?: boolean
+}) {
+  // Bars sit inline in text lines, so each line keeps its real height
+  const bar = "inline-block h-[0.8em] rounded-sm bg-border align-middle"
+
+  return (
+    <div aria-hidden="true" className="relative mt-4 flex flex-col">
+      <div className="absolute -top-3 left-0 z-0 h-3.25 w-27.5 rounded-[96px_144px_0_0] border border-b-0 border-black/8 bg-primary/8" />
+
+      <div className="flex flex-col overflow-hidden rounded-[0_24px_24px_24px] border border-black/4 bg-card p-4 shadow-[0_4px_16px_rgba(0,0,0,0.06)]">
+        <Skeleton className="aspect-video w-full" />
+
+        <div className="flex flex-col pt-4">
+          <div className="mb-4 flex items-center gap-4">
+            {!hideLogo && <Skeleton className="size-13 shrink-0" />}
+            <div className="flex flex-1 flex-col justify-center">
+              <div className="mb-0.5 text-xs leading-normal">
+                <Skeleton className={cn(bar, "w-20")} />
+              </div>
+              <div className="my-1 text-[0.8125rem] leading-normal">
+                <Skeleton className={cn(bar, "w-[60%]")} />
+              </div>
+              <div className="mt-0.5 text-xs leading-normal">
+                <Skeleton className={cn(bar, "w-28")} />
+              </div>
+            </div>
+          </div>
+
+          <Separator className="mb-4 bg-muted" />
+
+          <div className="flex items-center justify-between gap-3">
+            <Skeleton className="h-7.5 w-30 rounded-lg" />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

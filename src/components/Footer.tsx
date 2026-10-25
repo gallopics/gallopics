@@ -1,83 +1,79 @@
-import React from 'react';
-import { CopyrightBar } from './CopyrightBar';
+import { assetUrl } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { CopyrightBar } from "@/components/CopyrightBar"
 
 interface FooterProps {
-  minimal?: boolean;
-  sidebar?: boolean;
-  isAdmin?: boolean;
-  noLinks?: boolean;
+  minimal?: boolean
+  sidebar?: boolean
+  isAdmin?: boolean
+  noLinks?: boolean
 }
 
-export const Footer: React.FC<FooterProps> = ({
+export function Footer({
   minimal = false,
   sidebar = false,
   isAdmin = false,
   noLinks = false,
-}) => {
+}: FooterProps) {
   if (minimal) {
     return (
       <CopyrightBar
-        minimal={true}
+        minimal
         sidebar={sidebar}
         isAdmin={isAdmin}
         noLinks={noLinks}
       />
-    );
+    )
   }
 
   return (
     <>
       <footer
-        className="mt-auto bg-[var(--footer-bg)] text-white py-7 md:py-7 lg:py-7"
+        className="mt-auto bg-[#1a1a1a] py-7 text-white"
         data-footer="guest-full"
       >
         <div className="container">
-          <div className="flex justify-between items-start gap-10 flex-nowrap max-md:flex-col max-md:items-center max-md:text-center max-md:gap-8 max-md:flex-wrap md:items-center">
-            {/* Left Column: Brand */}
-            <div className="flex flex-col gap-4 flex-1 max-w-[440px] max-md:items-center max-md:max-w-full">
+          <div className="flex items-center justify-between gap-10 max-md:flex-col max-md:gap-8 max-md:text-center">
+            <div className="flex max-w-110 flex-1 flex-col gap-4 max-md:max-w-full max-md:items-center">
               <img
-                src="/images/logo2.svg"
+                src={assetUrl("images/logo2.svg")}
                 alt="Gallopics"
-                className="h-8 w-auto object-contain [filter:brightness(0)_invert(1)] opacity-90 self-start m-0 max-md:self-center"
+                className="h-8 w-auto self-start object-contain opacity-90 brightness-0 invert max-md:self-center"
               />
-              <p className="text-[0.875rem] leading-relaxed text-[var(--color-text-secondary)] m-0">
+              <p className="text-sm leading-relaxed text-muted-foreground">
                 We capture horse competitions across Sweden. Search your event,
                 spot your photos, and purchase your favorites.
               </p>
             </div>
 
-            {/* Right Column: Compact Actions (Desktop: Row, Mobile: Stacked) */}
-            <div className="flex items-center gap-6 flex-none max-md:flex-col max-md:gap-6 max-md:w-full md:flex-row">
-              <div className="flex items-center gap-3 max-md:justify-center max-md:w-full md:pt-0">
+            <div className="flex flex-none items-center gap-6 max-md:w-full max-md:flex-col">
+              {/* Mobile: links hidden but the empty row keeps its 24px gap (as on the old site) */}
+              <div className="flex items-center gap-3 max-md:*:hidden">
                 <a
                   href="/faq"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[var(--color-text-secondary)] no-underline text-[0.875rem] font-medium transition-[color] duration-150 ease-in-out hover:text-white max-md:hidden"
+                  className="text-sm font-medium text-muted-foreground transition-colors hover:text-white"
                 >
                   FAQs
                 </a>
-                <span className="text-[0.4rem] text-[var(--color-text-primary)] max-md:hidden">
-                  •
-                </span>
+                <span className="text-[0.4rem] text-foreground">•</span>
               </div>
-              <div className="flex items-center">
-                <a
-                  href="#"
-                  className="bg-white text-black px-5 py-2 rounded-[99px] text-[0.875rem] font-semibold no-underline transition-all duration-200 ease-in-out inline-block hover:bg-[var(--color-border)] hover:-translate-y-0.5 max-md:px-4 max-md:py-1.5 max-md:text-[0.8125rem] whitespace-nowrap"
-                  onClick={e => {
-                    e.preventDefault();
-                    window.dispatchEvent(new Event('open-contact-support'));
-                  }}
-                >
-                  Contact support
-                </a>
-              </div>
+              <Button
+                size="sm"
+                // Old footer button: 20px/8px padding, 14px text (13px on mobile)
+                className="h-auto border-0 bg-white px-5 py-2 text-sm leading-normal text-black duration-200 hover:-translate-y-0.5 hover:bg-border max-md:px-4 max-md:py-1.5 max-md:text-[0.8125rem]"
+                onClick={() =>
+                  window.dispatchEvent(new Event("open-contact-support"))
+                }
+              >
+                Contact support
+              </Button>
             </div>
           </div>
         </div>
       </footer>
-      <CopyrightBar minimal={false} />
+      <CopyrightBar />
     </>
-  );
-};
+  )
+}

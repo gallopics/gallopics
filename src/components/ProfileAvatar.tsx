@@ -1,71 +1,58 @@
-import React from 'react';
-import { User, Camera } from 'lucide-react';
-import { RiderIcon } from './icons/RiderIcon';
-import { HorseIcon } from './icons/HorseIcon';
+import { Camera, User } from "lucide-react"
+
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { HorseIcon } from "@/components/icons/HorseIcon"
+import { RiderIcon } from "@/components/icons/RiderIcon"
 
 export interface ProfileAvatarProps {
-  variant?: 'rider' | 'horse' | 'photographer' | 'default';
-  url?: string;
-  name?: string;
-  size?: number;
-  className?: string;
+  variant?: "rider" | "horse" | "photographer" | "default"
+  url?: string
+  name?: string
+  size?: number
+  className?: string
 }
 
-const variantClasses: Record<string, string> = {
-  rider:
-    'text-[#7c3aed] bg-[rgba(124,58,237,0.15)] border-[rgba(124,58,237,0.2)]',
-  horse:
-    'text-[#ea580c] bg-[rgba(234,88,12,0.15)] border-[rgba(234,88,12,0.2)]',
-  photographer:
-    'text-[var(--color-text-secondary)] bg-[var(--ui-bg-subtle)] border-[rgba(0,0,0,0.04)]',
-  default:
-    'text-[var(--color-text-secondary)] bg-[var(--ui-bg-subtle)] border-[rgba(0,0,0,0.04)]',
-};
+const fallbackClasses: Record<string, string> = {
+  rider: "bg-[#7c3aed]/15 text-[#7c3aed]",
+  horse: "bg-[#ea580c]/15 text-[#ea580c]",
+  photographer: "bg-muted text-muted-foreground",
+  default: "bg-muted text-muted-foreground",
+}
 
-export const ProfileAvatar: React.FC<ProfileAvatarProps> = ({
-  variant = 'default',
+function FallbackIcon({
+  variant,
+  size,
+}: {
+  variant: ProfileAvatarProps["variant"]
+  size: number
+}) {
+  switch (variant) {
+    case "rider":
+      return <RiderIcon size={size * 0.65} />
+    case "horse":
+      return <HorseIcon size={size * 0.65} />
+    case "photographer":
+      return <Camera size={size * 0.6} />
+    default:
+      return <User size={size * 0.6} />
+  }
+}
+
+export function ProfileAvatar({
+  variant = "default",
   url,
   name,
   size = 40,
-  className = '',
-}) => {
-  const [imgError, setImgError] = React.useState(false);
-
-  const renderContent = () => {
-    if (url && !imgError) {
-      return (
-        <img
-          src={url}
-          alt={name || ''}
-          onError={() => setImgError(true)}
-          className="w-full h-full object-cover"
-        />
-      );
-    }
-
-    switch (variant) {
-      case 'rider':
-        return <RiderIcon size={size * 0.65} />;
-      case 'horse':
-        return <HorseIcon size={size * 0.65} />;
-      case 'photographer':
-        return <Camera size={size * 0.6} />;
-      default:
-        return <User size={size * 0.6} />;
-    }
-  };
-
+  className,
+}: ProfileAvatarProps) {
   return (
-    <div
-      className={[
-        'flex items-center justify-center rounded-full overflow-hidden',
-        'flex-shrink-0 border transition-all duration-200 ease-in-out',
-        variantClasses[variant] || variantClasses.default,
-        className,
-      ].join(' ')}
-      style={{ width: size, height: size }}
-    >
-      {renderContent()}
-    </div>
-  );
-};
+    <Avatar className={className} style={{ width: size, height: size }}>
+      {url && <AvatarImage src={url} alt={name ?? ""} />}
+      <AvatarFallback
+        className={fallbackClasses[variant] ?? fallbackClasses.default}
+      >
+        <FallbackIcon variant={variant} size={size} />
+      </AvatarFallback>
+    </Avatar>
+  )
+}

@@ -1,7 +1,7 @@
-import React from 'react';
+import React from "react"
 
 interface IconProps extends React.SVGProps<SVGSVGElement> {
-  size?: number | string;
+  size?: number | string
 }
 
 export const RiderIcon: React.FC<IconProps> = ({ size = 24, ...props }) => {
@@ -43,5 +43,5 @@ export const RiderIcon: React.FC<IconProps> = ({ size = 24, ...props }) => {
         fill="currentColor"
       />
     </svg>
-  );
-};
+  )
+}
