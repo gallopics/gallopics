@@ -2,24 +2,52 @@ import React from "react"
 import { Navigate, useLocation } from "react-router"
 
 import { useAuth } from "../context/AuthContext"
+import { PageState } from "./PageState"
 
 interface ProtectedRouteProps {
   children: React.ReactNode
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const { isLoaded, isAuthenticated, user, needsOnboarding } = useAuth()
+  const {
+    isLoaded,
+    isAuthenticated,
+    user,
+    needsOnboarding,
+    profileError,
+    isRefreshingProfile,
+    refreshProfile,
+  } = useAuth()
   const location = useLocation()
 
   // Approval comes from our API (set by admins), never from Clerk metadata
   const effectiveApprovalStatus = user?.approvalStatus
 
   if (!isLoaded) {
-    return null
+    return isAuthenticated ? (
+      <PageState
+        loading
+        title="Checking your account"
+        description="Please wait while we load your account."
+      />
+    ) : null
   }
 
   if (!isAuthenticated) {
     return <Navigate to="/" replace />
+  }
+
+  if (profileError) {
+    return (
+      <PageState
+        title="Account could not be loaded"
+        description="We couldn't verify your account access. Please try again."
+        onRetry={() => {
+          void refreshProfile()
+        }}
+        retrying={isRefreshingProfile}
+      />
+    )
   }
 
   // Role-based path protection

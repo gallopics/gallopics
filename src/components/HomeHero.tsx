@@ -286,39 +286,53 @@ function HeroSkeleton({ title, description, search }: HomeHeroProps) {
 }
 
 function SignedInHero({ title, description, search }: HomeHeroProps) {
-  const { user } = useAuth()
+  const { user, profileError, needsOnboarding } = useAuth()
 
   const isAdmin = user?.role === "admin"
   // Approval comes from our API (set by admins), never from Clerk metadata
   const effectiveApprovalStatus = user?.approvalStatus
   const isPendingPhotographer =
-    !isAdmin && effectiveApprovalStatus !== "approved"
+    !isAdmin &&
+    (effectiveApprovalStatus === "pending" ||
+      effectiveApprovalStatus === "suspended")
   // "suspended" = an admin rejected the sign-up
   const isRejectedPhotographer =
     !isAdmin && effectiveApprovalStatus === "suspended"
   const fullName = user?.displayName ?? "Photographer"
 
-  const consoleDescription = isAdmin
-    ? "Approve photographers, manage events, monitor platform activity, and keep everything running smoothly."
-    : isRejectedPhotographer
-      ? "Your photographer account was not approved. Please contact Gallopics if you think this is a mistake."
-      : isPendingPhotographer
-        ? "Your photographer account is waiting for approval. We will unlock studio access as soon as an admin approves it."
-        : "Manage your events, upload galleries, track your sales, and grow your photography business — all in one place."
-  const consoleHref = isAdmin
-    ? "/admin"
-    : isPendingPhotographer
-      ? "/pg/pending-approval"
-      : user?.id
-        ? `/photographer/${user.id}`
-        : "/pg"
-  const consoleLabel = isAdmin
-    ? "My Console"
-    : isRejectedPhotographer
-      ? "Not approved"
-      : isPendingPhotographer
-        ? "Approval pending"
-        : "My Studio"
+  const consoleDescription = profileError
+    ? "We couldn't load your account. Open your account to try again."
+    : needsOnboarding
+      ? "Complete your photographer profile to request studio access."
+      : isAdmin
+        ? "Approve photographers, manage events, monitor platform activity, and keep everything running smoothly."
+        : isRejectedPhotographer
+          ? "Your photographer account was not approved. Please contact Gallopics if you think this is a mistake."
+          : isPendingPhotographer
+            ? "Your photographer account is waiting for approval. We will unlock studio access as soon as an admin approves it."
+            : "Manage your events, upload galleries, track your sales, and grow your photography business — all in one place."
+  const consoleHref = profileError
+    ? "/pg"
+    : needsOnboarding
+      ? "/pg/onboarding/profile"
+      : isAdmin
+        ? "/admin"
+        : isPendingPhotographer
+          ? "/pg/pending-approval"
+          : user?.id
+            ? `/photographer/${user.id}`
+            : "/pg"
+  const consoleLabel = profileError
+    ? "My account"
+    : needsOnboarding
+      ? "Complete profile"
+      : isAdmin
+        ? "My Console"
+        : isRejectedPhotographer
+          ? "Not approved"
+          : isPendingPhotographer
+            ? "Approval pending"
+            : "My Studio"
 
   return (
     <div className="grid grid-cols-[1fr_280px] items-stretch gap-6 max-lg:grid-cols-[1fr_240px] max-md:grid-cols-1">

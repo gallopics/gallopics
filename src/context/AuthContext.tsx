@@ -43,6 +43,9 @@ interface AuthContextType {
   isPhotographer: boolean
   /** Signed in, not an admin, and our API says there is no photographer profile yet */
   needsOnboarding: boolean
+  profileError: Error | null
+  isRefreshingProfile: boolean
+  refreshProfile: () => Promise<void>
   logout: () => Promise<void>
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>
   uploadAvatar: (file: File) => Promise<string>
@@ -181,14 +184,11 @@ const resolveDisplayName = (values: Array<string | null | undefined>) =>
 // Role and approval come only from our API (our database, set by admins). Clerk metadata
 // is not trusted for access: users can edit their own unsafeMetadata.
 const mapRole = (apiUser: ApiUser | null): UserProfile["role"] =>
-  apiUser?.role === "admin" ? "admin" : "pg"
+  apiUser ? (apiUser.role === "admin" ? "admin" : "pg") : undefined
 
 const mapApprovalStatus = (
   photographer: ApiPhotographer | null
-): UserProfile["approvalStatus"] =>
-  photographer?.status === "approved" || photographer?.status === "suspended"
-    ? photographer.status
-    : "pending"
+): UserProfile["approvalStatus"] => photographer?.status
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -220,14 +220,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   // After /me: the first request creates the user row, so they must not race
   const photographerQuery = useQuery({
     ...photographerProfileQueryOptions(),
-    enabled: !!apiUser,
+    enabled: !!apiUser && apiUser.role !== "admin",
   })
   const apiPhotographer: ApiPhotographer | null =
-    (apiUser && photographerQuery.data) || null
+    apiUser && apiUser.role !== "admin"
+      ? (photographerQuery.data ?? null)
+      : null
+  // A failed background refetch keeps the last answer: only a missing answer is an error
+  const profileError = isSignedIn
+    ? ((!apiUser ? meQuery.error : null) ??
+      (apiUser &&
+      apiUser.role !== "admin" &&
+      photographerQuery.data === undefined
+        ? photographerQuery.error
+        : null))
+    : null
   const isProfileLoaded =
     !clerkUser ||
+    !!profileError ||
+    apiUser?.role === "admin" ||
     // By data, not status: a failed background refetch keeps the last answer
     (apiUser ? !photographerQuery.isPending : meQuery.isError)
+
+  const refreshProfile = async () => {
+    const account = await meQuery.refetch()
+    if (
+      account.error ||
+      account.data?.clerk_user_id !== clerk.user?.id ||
+      account.data?.role === "admin"
+    ) {
+      return
+    }
+    await photographerQuery.refetch()
+  }
 
   useEffect(() => {
     if (meQuery.error || photographerQuery.error) {
@@ -374,6 +399,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           !!apiUser &&
           apiUser.role !== "admin" &&
           photographerQuery.data === null,
+        profileError,
+        isRefreshingProfile:
+          meQuery.isFetching || (!!apiUser && photographerQuery.isFetching),
+        refreshProfile,
         logout,
         updateProfile,
         uploadAvatar,

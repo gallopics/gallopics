@@ -70,7 +70,14 @@ export function Header({
     useState(false)
 
   const { cart } = useCart()
-  const { isLoaded, isAuthenticated, user, logout } = useAuth()
+  const {
+    isLoaded,
+    isAuthenticated,
+    user,
+    logout,
+    profileError,
+    needsOnboarding,
+  } = useAuth()
 
   const navigate = useNavigate()
   const location = useLocation()
@@ -83,7 +90,9 @@ export function Header({
   const effectiveApprovalStatus = user?.approvalStatus
   const isAdmin = user?.role === "admin"
   const isPendingPhotographer =
-    !isAdmin && effectiveApprovalStatus !== "approved"
+    !isAdmin &&
+    (effectiveApprovalStatus === "pending" ||
+      effectiveApprovalStatus === "suspended")
   // "suspended" = an admin rejected the sign-up
   const isRejectedPhotographer =
     !isAdmin && effectiveApprovalStatus === "suspended"
@@ -92,13 +101,17 @@ export function Header({
     : isPendingPhotographer
       ? "/pg/pending-approval"
       : "/pg"
-  const accountShortcutLabel = isAdmin
-    ? "My Console"
-    : isRejectedPhotographer
-      ? "Not approved"
-      : isPendingPhotographer
-        ? "Approval pending"
-        : "My Studio"
+  const accountShortcutLabel = profileError
+    ? "My account"
+    : needsOnboarding
+      ? "Complete profile"
+      : isAdmin
+        ? "My Console"
+        : isRejectedPhotographer
+          ? "Not approved"
+          : isPendingPhotographer
+            ? "Approval pending"
+            : "My Studio"
 
   const openAuth = (tab: AuthTab, type: AccountType = "photographer") => {
     setAuthModalConfig({ tab, type })
@@ -248,7 +261,11 @@ export function Header({
                         <DropdownMenuItem
                           onClick={() =>
                             navigate(
-                              isAdmin || isPendingPhotographer || !user?.id
+                              profileError ||
+                                needsOnboarding ||
+                                isAdmin ||
+                                isPendingPhotographer ||
+                                !user?.id
                                 ? workspacePath
                                 : `/photographer/${user.id}`
                             )
@@ -257,13 +274,16 @@ export function Header({
                           {accountShortcutLabel}
                         </DropdownMenuItem>
                       )}
-                      {!isAdmin && !isPendingPhotographer && (
-                        <DropdownMenuItem
-                          onClick={() => navigate("/pg/events")}
-                        >
-                          Events
-                        </DropdownMenuItem>
-                      )}
+                      {!profileError &&
+                        !needsOnboarding &&
+                        !isAdmin &&
+                        !isPendingPhotographer && (
+                          <DropdownMenuItem
+                            onClick={() => navigate("/pg/events")}
+                          >
+                            Events
+                          </DropdownMenuItem>
+                        )}
                       <DropdownMenuItem
                         variant="destructive"
                         onClick={async () => {
