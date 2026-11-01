@@ -13,6 +13,7 @@ import { getPriceByTierId, QUALITY_TIERS } from "@/constants/qualityTiers"
 import { cn } from "@/lib/utils"
 import { useCart } from "@/context/CartContext"
 import {
+  ApiError,
   resolveApiAssetUrl,
   type ApiPhoto,
   type CheckoutItem,
@@ -35,6 +36,7 @@ import { Footer } from "@/components/Footer"
 import { Header } from "@/components/Header"
 import { InfoChip } from "@/components/InfoChip"
 import { ModernDropdown } from "@/components/ModernDropdown"
+import { PageState } from "@/components/PageState"
 import { WatermarkedPhotoPreview } from "@/components/WatermarkedPhotoPreview"
 
 /** One label/value row in the Details card */
@@ -91,29 +93,14 @@ const isUuid = (value: string) =>
 
 export function ImageProfile() {
   const { id } = useParams()
-  const navigate = useNavigate()
   const location = useLocation()
   const [searchParams] = useSearchParams()
-  const [selectedQuality, setSelectedQuality] = useState("web")
-  const { cart, addToCart, removeFromCartByPhotoId } = useCart()
-  const [showCheckout, setShowCheckout] = useState(false)
-  const [isFullScreen, setIsFullScreen] = useState(false)
-  const [isSupportModalOpen, setIsSupportModalOpen] = useState(false)
-
-  const from = searchParams.get("from")
-  const eventIdParam = searchParams.get("eventId")
   const routePhoto =
     typeof location.state === "object" &&
     location.state !== null &&
     "photo" in location.state
       ? (location.state.photo as Photo)
       : null
-  const eventReturnState =
-    typeof location.state === "object" &&
-    location.state !== null &&
-    "eventReturnState" in location.state
-      ? (location.state.eventReturnState as Record<string, unknown>)
-      : undefined
   const isOwnerProfilePhoto =
     searchParams.get("owner") === "1" ||
     (typeof location.state === "object" &&
@@ -125,35 +112,81 @@ export function ImageProfile() {
     enabled: !!id,
     select: toPagePhoto,
   })
-  const apiPhoto = photoQuery.data ?? null
-  // First load only; a photo passed from the previous page shows at once
-  const isLoadingPhoto = !!id && !routePhoto && photoQuery.isPending
+  const matchingRoutePhoto = routePhoto?.id === id ? routePhoto : null
+  // An owner's processing photo may not be available from the public API yet.
+  const hasOwnerPreview = isOwnerProfilePhoto && !!matchingRoutePhoto
+  const photo =
+    photoQuery.data ??
+    (photoQuery.isPending || hasOwnerPreview ? matchingRoutePhoto : null)
 
-  // develop: an empty placeholder instead of a mock photo when not found
-  const photo = useMemo<Photo>(
-    () =>
-      apiPhoto ||
-      routePhoto || {
-        id: id || "",
-        src: "",
-        rider: "Unassigned",
-        horse: "Uploaded photo",
-        event: "Event",
-        eventId: eventIdParam || "",
-        date: "",
-        width: 600,
-        height: 800,
-        className: "Uploaded",
-        time: "",
-        city: "",
-        arena: "",
-        countryCode: "se",
-        discipline: "",
-        photographer: "Gallopics",
-        photographerId: "",
-      },
-    [apiPhoto, eventIdParam, id, routePhoto]
+  const notFound =
+    photoQuery.error instanceof ApiError && photoQuery.error.status === 404
+  // A failed refetch keeps the loaded photo; a 404 still means it is gone
+  const hasPhotoError = photoQuery.isError && (!photoQuery.data || notFound)
+
+  if (
+    (hasPhotoError && !hasOwnerPreview) ||
+    (!photo && !photoQuery.isPending)
+  ) {
+    return (
+      <PageState
+        title={notFound ? "Photo not found" : "Photo could not be loaded"}
+        description={
+          notFound
+            ? "This photo is no longer available. Browse events to find another photo."
+            : "We couldn't load this photo. Please try again."
+        }
+        onRetry={
+          notFound
+            ? undefined
+            : () => {
+                void photoQuery.refetch()
+              }
+        }
+        retrying={photoQuery.isFetching}
+      />
+    )
+  }
+
+  if (!photo) {
+    return <ImageProfileSkeleton showPurchase={!isOwnerProfilePhoto} />
+  }
+
+  return (
+    <ImageProfileContent
+      key={id}
+      photo={photo}
+      isOwnerProfilePhoto={isOwnerProfilePhoto}
+      canPurchase={!!photoQuery.data}
+    />
   )
+}
+
+function ImageProfileContent({
+  photo,
+  isOwnerProfilePhoto,
+  canPurchase,
+}: {
+  photo: Photo
+  isOwnerProfilePhoto: boolean
+  canPurchase: boolean
+}) {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const [searchParams] = useSearchParams()
+  const [selectedQuality, setSelectedQuality] = useState("web")
+  const { cart, addToCart, removeFromCartByPhotoId } = useCart()
+  const [showCheckout, setShowCheckout] = useState(false)
+  const [isFullScreen, setIsFullScreen] = useState(false)
+  const [isSupportModalOpen, setIsSupportModalOpen] = useState(false)
+  const from = searchParams.get("from")
+  const eventIdParam = searchParams.get("eventId")
+  const eventReturnState =
+    typeof location.state === "object" &&
+    location.state !== null &&
+    "eventReturnState" in location.state
+      ? (location.state.eventReturnState as Record<string, unknown>)
+      : undefined
   const { data: apiPhotographer = null } = useQuery({
     ...publicPhotographerQueryOptions(photo.photographerId ?? ""),
     enabled: !!photo.photographerId && isUuid(photo.photographerId),
@@ -220,7 +253,7 @@ export function ImageProfile() {
 
   // Track recently viewed (real photos only)
   useEffect(() => {
-    if (!apiPhoto && !routePhoto) return
+    if (!canPurchase) return
     if (!photo.id) return
     const saved = localStorage.getItem("gallopics_recent")
     let recent: string[] = saved ? JSON.parse(saved) : []
@@ -228,7 +261,7 @@ export function ImageProfile() {
     // Move current to front, limit to 8
     recent = [photo.id, ...recent.filter((i) => i !== photo.id)].slice(0, 8)
     localStorage.setItem("gallopics_recent", JSON.stringify(recent))
-  }, [photo.id])
+  }, [photo.id, canPurchase])
 
   const breadcrumbs = useMemo<BreadcrumbItem[]>(() => {
     const items: BreadcrumbItem[] = []
@@ -261,7 +294,7 @@ export function ImageProfile() {
     }
 
     return items
-  }, [from, eventIdParam, photo, navigate, showCheckout])
+  }, [from, eventIdParam, photo, navigate, showCheckout, eventReturnState])
 
   // Quality Selector Options
   const qualityOptions = useMemo(() => {
@@ -281,9 +314,6 @@ export function ImageProfile() {
       description: tier.description,
     }))
   }, [detectedPortrait])
-
-  if (isLoadingPhoto)
-    return <ImageProfileSkeleton showPurchase={!isOwnerProfilePhoto} />
 
   return (
     <div className="flex min-h-screen flex-col overflow-x-hidden max-md:relative max-md:w-full max-md:max-w-[100vw]">
@@ -384,6 +414,7 @@ export function ImageProfile() {
                         <Button
                           size="lg"
                           className="h-13 w-full text-base font-bold"
+                          disabled={!canPurchase}
                           onClick={() => setShowCheckout(true)}
                         >
                           Buy now
@@ -391,6 +422,7 @@ export function ImageProfile() {
                         <Button
                           variant="outline"
                           size="lg"
+                          disabled={!canPurchase}
                           className={cn(
                             // 54px like the old bordered button (Buy now is 52px)
                             "h-13.5 w-full text-base font-bold hover:border-[#ccc] hover:bg-[#fafafa]",
