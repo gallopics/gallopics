@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { useNavigate, useParams, useSearchParams } from "react-router"
 
-import { getDefaultCartTier } from "@/constants/qualityTiers"
+import { getDefaultCartTier, getPhotoPrice } from "@/constants/qualityTiers"
 import { useCart } from "@/context/CartContext"
 import { COMPETITIONS, HORSES, RIDERS } from "@/data/mockData"
 import type { Photo } from "@/types"
@@ -300,7 +300,12 @@ export function RiderProfile() {
                     toast.add({ title: "Already in cart", type: "info" })
                     return
                   }
-                  addToCart(p, tier.id, tier.label, tier.price)
+                  addToCart(
+                    p,
+                    tier.id,
+                    tier.label,
+                    getPhotoPrice(p.prices, tier.id)
+                  )
                   toast.add({ title: "Added to cart", type: "success" })
                 }}
               />

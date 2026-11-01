@@ -15,6 +15,16 @@ import {
   X,
 } from "lucide-react"
 
+import {
+  DEFAULT_PRICES,
+  getPhotoPrice,
+  getPriceError,
+  MAX_PRICE_SEK,
+  MIN_PRICE_SEK,
+  QUALITY_TIERS,
+  type PhotoPrices,
+  type QualityTierId,
+} from "@/constants/qualityTiers"
 import { notify, type NotifyType } from "@/lib/notify"
 import { cn } from "@/lib/utils"
 import { useDeletePhotosWithUndo } from "@/hooks/useDeletePhotosWithUndo"
@@ -22,7 +32,11 @@ import type { Photo } from "@/context/PhotographerContext"
 import type { ApiClassSectionStart } from "@/data/eventsApi"
 import { HORSES, RIDERS } from "@/data/mockData"
 import { classStartsQueryOptions } from "@/data/queries/events"
-import { savePhotoDetailsMutationOptions } from "@/data/queries/photographer"
+import {
+  PhotoPricesSaveError,
+  savePhotoDetailsMutationOptions,
+  savePhotoPricesMutationOptions,
+} from "@/data/queries/photographer"
 import { salesQueryOptions } from "@/data/queries/sales"
 import { Button } from "@/components/ui/button"
 import {
@@ -73,11 +87,18 @@ const toClassStarts = (starts: ApiClassSectionStart[]) =>
 
 const BATCHES = ["Random", "Misc", "Uncategorised"]
 
-const BUNDLES = {
-  basic: { web: 499, high: 999, commercial: 1500, label: "Basic" },
-  standard: { web: 499, high: 999, commercial: 1500, label: "Standard" },
-  premium: { web: 499, high: 999, commercial: 1500, label: "Premium" },
-}
+/** Typed prices in SEK; "" when the selected photos' prices differ (multi) */
+type PriceFields = Record<QualityTierId, string>
+
+const toPriceFields = (photos: Photo[]): PriceFields =>
+  Object.fromEntries(
+    QUALITY_TIERS.map((tier) => {
+      const values = new Set(
+        photos.map((photo) => getPhotoPrice(photo.prices, tier.id))
+      )
+      return [tier.id, values.size === 1 ? String([...values][0]) : ""]
+    })
+  ) as PriceFields
 
 export function PgSelectionPanel({
   isOpen,
@@ -92,6 +113,7 @@ export function PgSelectionPanel({
   const savePhotoDetails = useMutation(savePhotoDetailsMutationOptions())
   const updatePhotoMetadata = (photoIds: string[], details: Partial<Photo>) =>
     savePhotoDetails.mutateAsync({ photoIds, details })
+  const savePhotoPrices = useMutation(savePhotoPricesMutationOptions())
 
   // Derived Selection
   const selectedPhotos = useMemo(() => {
@@ -113,12 +135,7 @@ export function PgSelectionPanel({
   const [editFromSummary, setEditFromSummary] = useState(false)
 
   // State for Edits (Price)
-  const [priceBundle, setPriceBundle] = useState<
-    "basic" | "standard" | "premium" | "custom"
-  >("standard")
-  const [customPriceWeb, setCustomPriceWeb] = useState<string>("")
-  const [customPriceHigh, setCustomPriceHigh] = useState<string>("")
-  const [customPriceCommercial, setCustomPriceCommercial] = useState<string>("")
+  const [prices, setPrices] = useState<PriceFields>(() => toPriceFields([]))
 
   // Panel Tab State
   const [panelTab, setPanelTab] = useState<"tags" | "price">("tags")
@@ -126,7 +143,7 @@ export function PgSelectionPanel({
   // Info Panel State
   const [isInfoOpen, setIsInfoOpen] = useState(false)
 
-  // Original State for dirty check (stores VALUES for price)
+  // Original State for dirty check
   const [originalState, setOriginalState] = useState<{
     rider: string
     horse: string
@@ -134,10 +151,7 @@ export function PgSelectionPanel({
     isGeneric: boolean
     title: string
     description: string
-    priceWeb: number
-    priceHigh: number
-    priceCommercial: number
-    priceBundle: string
+    prices: PriceFields
   } | null>(null)
 
   // Modal State
@@ -230,23 +244,16 @@ export function PgSelectionPanel({
     notify(msg, PANEL_TOAST_TYPES[type], undo)
   }
 
-  // Helper to get effective current price based on selection
-  const getEffectivePrice = () => {
-    if (priceBundle === "custom") {
-      return {
-        web: Number(customPriceWeb) || 0,
-        high: Number(customPriceHigh) || 0,
-        commercial: Number(customPriceCommercial) || 0,
-      }
-    } else {
-      const b = BUNDLES[priceBundle]
-      return {
-        web: b.web,
-        high: b.high,
-        commercial: b.commercial,
-      }
-    }
-  }
+  // An empty field with several photos keeps each photo's own price
+  const priceErrors = Object.fromEntries(
+    QUALITY_TIERS.map((tier) => [
+      tier.id,
+      !isSingle && prices[tier.id] === ""
+        ? null
+        : getPriceError(prices[tier.id]),
+    ])
+  ) as Record<QualityTierId, string | null>
+  const hasPriceError = QUALITY_TIERS.some((tier) => priceErrors[tier.id])
 
   // Sync State on Selection Change
   useEffect(() => {
@@ -265,30 +272,8 @@ export function PgSelectionPanel({
         ? ""
         : p.title || ""
 
-      // Price State (Multi: take first)
-      const pWeb = p.priceStandard || 499
-      const pHigh = p.priceHigh || 999
-      const pComm = p.priceCommercial || 1500
-
-      let bundle: "basic" | "standard" | "premium" | "custom" = "custom"
-      if (
-        pWeb === BUNDLES.basic.web &&
-        pHigh === BUNDLES.basic.high &&
-        pComm === BUNDLES.basic.commercial
-      )
-        bundle = "basic"
-      else if (
-        pWeb === BUNDLES.standard.web &&
-        pHigh === BUNDLES.standard.high &&
-        pComm === BUNDLES.standard.commercial
-      )
-        bundle = "standard"
-      else if (
-        pWeb === BUNDLES.premium.web &&
-        pHigh === BUNDLES.premium.high &&
-        pComm === BUNDLES.premium.commercial
-      )
-        bundle = "premium"
+      const priceFields = toPriceFields(selectedPhotos)
+      setPrices(priceFields)
 
       // Special case logic for Multi selection:
       if (selectedPhotos.length > 1) {
@@ -299,18 +284,6 @@ export function PgSelectionPanel({
         setTitle("")
         setDescription("")
 
-        setPriceBundle(bundle)
-        // If custom bundle, pre-fill custom inputs. If standard bundle, empty.
-        if (bundle === "custom") {
-          setCustomPriceWeb(pWeb.toString())
-          setCustomPriceHigh(pHigh.toString())
-          setCustomPriceCommercial(pComm.toString())
-        } else {
-          setCustomPriceWeb("")
-          setCustomPriceHigh("")
-          setCustomPriceCommercial("")
-        }
-
         setOriginalState({
           rider: "",
           horse: "",
@@ -318,10 +291,7 @@ export function PgSelectionPanel({
           isGeneric: false,
           title: "",
           description: "",
-          priceWeb: pWeb,
-          priceHigh: pHigh,
-          priceCommercial: pComm,
-          priceBundle: bundle,
+          prices: priceFields,
         })
         setViewMode("edit")
       } else {
@@ -333,17 +303,6 @@ export function PgSelectionPanel({
         setTitle(displayTitle)
         setDescription(p.description || "")
 
-        setPriceBundle(bundle)
-        if (bundle === "custom") {
-          setCustomPriceWeb(pWeb.toString())
-          setCustomPriceHigh(pHigh.toString())
-          setCustomPriceCommercial(pComm.toString())
-        } else {
-          setCustomPriceWeb("")
-          setCustomPriceHigh("")
-          setCustomPriceCommercial("")
-        }
-
         setOriginalState({
           rider: p.rider || (inMissingBucket ? "None" : ""),
           horse: p.horse || (inMissingBucket ? "None" : ""),
@@ -351,10 +310,7 @@ export function PgSelectionPanel({
           isGeneric: p.isGeneric || false,
           title: displayTitle,
           description: p.description || "",
-          priceWeb: pWeb,
-          priceHigh: pHigh,
-          priceCommercial: pComm,
-          priceBundle: bundle,
+          prices: priceFields,
         })
 
         if (p.isGeneric && (displayTitle || p.description)) {
@@ -369,16 +325,13 @@ export function PgSelectionPanel({
   // Computed Dirty
   const [touched, setTouched] = useState(false)
 
-  const isDirty = useMemo(() => {
-    if (!originalState) return false
+  const { detailsDirty, priceDirty } = useMemo(() => {
+    if (!originalState) return { detailsDirty: false, priceDirty: false }
 
     // Price check
-    const currentPrice = getEffectivePrice()
-    const priceDirty =
-      priceBundle !== originalState.priceBundle ||
-      currentPrice.web !== originalState.priceWeb ||
-      currentPrice.high !== originalState.priceHigh ||
-      currentPrice.commercial !== originalState.priceCommercial
+    const priceDirty = QUALITY_TIERS.some(
+      (tier) => prices[tier.id] !== originalState.prices[tier.id]
+    )
 
     // Tags and Mode check
     let tagsDirty = false
@@ -405,7 +358,7 @@ export function PgSelectionPanel({
       tagsDirty = touched && (!!rider || !!horse || !!cls || isGeneric)
     }
 
-    return tagsDirty || modeDirty || priceDirty
+    return { detailsDirty: tagsDirty || modeDirty, priceDirty }
   }, [
     rider,
     horse,
@@ -413,15 +366,25 @@ export function PgSelectionPanel({
     isGeneric,
     title,
     description,
-    priceBundle,
-    customPriceWeb,
-    customPriceHigh,
-    customPriceCommercial,
+    prices,
     originalState,
     isSingle,
     touched,
-    description,
   ])
+  const isDirty = detailsDirty || priceDirty
+
+  // Only the tiers whose price was changed (an empty multi field keeps them)
+  const changedPrices = useMemo(() => {
+    const changed: Partial<PhotoPrices> = {}
+    if (!originalState) return changed
+    QUALITY_TIERS.forEach((tier) => {
+      const value = prices[tier.id]
+      if (value !== "" && value !== originalState.prices[tier.id]) {
+        changed[tier.id] = Number(value)
+      }
+    })
+    return changed
+  }, [prices, originalState])
 
   // Handlers
   const handleChange = (field: string, value: string) => {
@@ -431,21 +394,30 @@ export function PgSelectionPanel({
     if (field === "cls") setCls(value)
     if (field === "title") setTitle(value)
     if (field === "description") setDescription(value)
-
-    if (field === "customPriceWeb") {
-      setCustomPriceWeb(value)
-      setCustomPriceHigh(value)
-      setCustomPriceCommercial(value)
-      setPriceBundle("custom")
-    }
   }
 
-  const handleBundleSelect = (
-    bundle: "basic" | "standard" | "premium" | "custom"
+  const handlePriceChange = (tierId: QualityTierId, value: string) => {
+    setPrices((prev) => ({ ...prev, [tierId]: value.trim() }))
+  }
+
+  const isDefaultPrices = QUALITY_TIERS.every(
+    (tier) => prices[tier.id] === String(DEFAULT_PRICES[tier.id])
+  )
+
+  /** Undo: each photo gets its old prices back (one request per set of prices) */
+  const restorePrices = (
+    previous: Array<{ id: string; prices: PhotoPrices }>
   ) => {
-    setTouched(true)
-    setPriceBundle(bundle)
-    // Do NOT overwrite custom inputs from bundle values
+    const idsByPrices = new Map<string, string[]>()
+    previous.forEach(({ id, prices: photoPrices }) => {
+      const key = JSON.stringify(photoPrices)
+      idsByPrices.set(key, [...(idsByPrices.get(key) ?? []), id])
+    })
+    idsByPrices.forEach((photoIds, key) => {
+      void savePhotoPrices
+        .mutateAsync({ photoIds, prices: JSON.parse(key) as PhotoPrices })
+        .catch(() => undefined)
+    })
   }
 
   const enterEditMode = () => {
@@ -468,6 +440,11 @@ export function PgSelectionPanel({
   }
 
   const handleSave = async () => {
+    // The errors show on the Price tab only
+    if (hasPriceError) {
+      setPanelTab("price")
+      return
+    }
     const ids = selectedPhotos.map((p) => p.id)
     const prevMetadata = selectedPhotos.map((p) => ({
       id: p.id,
@@ -477,10 +454,12 @@ export function PgSelectionPanel({
       isGeneric: p.isGeneric,
       title: p.title,
       description: (p as any).description,
-      priceStandard: p.priceStandard,
-      priceHigh: p.priceHigh,
-      priceCommercial: p.priceCommercial,
     }))
+    const previousPrices = selectedPhotos.map((p) => ({
+      id: p.id,
+      prices: p.prices ?? DEFAULT_PRICES,
+    }))
+    const hasPriceChanges = Object.keys(changedPrices).length > 0
 
     const updates: Partial<Photo> & {
       description?: string
@@ -509,13 +488,7 @@ export function PgSelectionPanel({
       }
     }
 
-    // Price Updates
-    const finalPrice = getEffectivePrice()
-    updates.priceStandard = finalPrice.web
-    updates.priceHigh = finalPrice.high
-    updates.priceCommercial = finalPrice.commercial
-
-    const restorePrevious = () => {
+    const restoreDetails = () => {
       prevMetadata.forEach((meta) => {
         void updatePhotoMetadata([meta.id], {
           rider: meta.rider,
@@ -524,18 +497,41 @@ export function PgSelectionPanel({
           isGeneric: meta.isGeneric,
           title: meta.title || "",
           description: meta.description || "",
-          priceStandard: meta.priceStandard,
-          priceHigh: meta.priceHigh,
-          priceCommercial: meta.priceCommercial,
         }).catch(() => undefined)
       })
     }
+    const restorePrevious = () => {
+      if (detailsDirty) restoreDetails()
+      if (hasPriceChanges) restorePrices(previousPrices)
+    }
 
+    // Prices first: the API saves all of them or none, so a refusal changes nothing
+    let pricesSaved = false
+    let detailsSent = false
     try {
-      await updatePhotoMetadata(ids, updates)
+      if (hasPriceChanges) {
+        await savePhotoPrices.mutateAsync({
+          photoIds: ids,
+          prices: changedPrices,
+        })
+        pricesSaved = true
+      }
+      if (detailsDirty) {
+        detailsSent = true
+        await updatePhotoMetadata(ids, updates)
+      }
       triggerToast("Changes saved", "success", "panel", restorePrevious)
-    } catch {
-      restorePrevious()
+    } catch (error) {
+      if (detailsSent) restoreDetails()
+      // Many photos are saved in several requests, so some may have new prices already
+      const savedIds = new Set(
+        pricesSaved
+          ? ids
+          : error instanceof PhotoPricesSaveError
+            ? error.savedPhotoIds
+            : []
+      )
+      restorePrices(previousPrices.filter((p) => savedIds.has(p.id)))
       triggerToast("Unable to save changes", "danger", "panel")
       return
     }
@@ -547,10 +543,7 @@ export function PgSelectionPanel({
       isGeneric,
       title,
       description,
-      priceWeb: finalPrice.web,
-      priceHigh: finalPrice.high,
-      priceCommercial: finalPrice.commercial,
-      priceBundle,
+      prices,
     })
     setTouched(false)
 
@@ -569,46 +562,7 @@ export function PgSelectionPanel({
       setTitle(originalState.title)
       setDescription(originalState.description)
 
-      // Re-calc bundle from original state
-      const pWeb = originalState.priceWeb
-      const pHigh = originalState.priceHigh
-      const pComm = originalState.priceCommercial
-
-      let bundle: "basic" | "standard" | "premium" | "custom" = "custom"
-      if (
-        pWeb === BUNDLES.basic.web &&
-        pHigh === BUNDLES.basic.high &&
-        pComm === BUNDLES.basic.commercial
-      )
-        bundle = "basic"
-      else if (
-        pWeb === BUNDLES.standard.web &&
-        pHigh === BUNDLES.standard.high &&
-        pComm === BUNDLES.standard.commercial
-      )
-        bundle = "standard"
-      else if (
-        pWeb === BUNDLES.premium.web &&
-        pHigh === BUNDLES.premium.high &&
-        pComm === BUNDLES.premium.commercial
-      )
-        bundle = "premium"
-
-      setPriceBundle(bundle)
-      if (bundle === "custom") {
-        setCustomPriceWeb(pWeb.toString())
-        setCustomPriceHigh(pHigh.toString())
-        setCustomPriceCommercial(pComm.toString())
-      } else {
-        setCustomPriceWeb("")
-        setCustomPriceHigh("")
-        setCustomPriceCommercial("")
-      }
-      // Ensure inputs are reset if we were in custom mode editing but then cancelled to a bundle?
-      // "If user typed custom values, switching away... preserve custom values internally... switching back restores".
-      // If I Cancel, I should restore the *Saved* state.
-      // My implementation clears custom inputs if restored state is Bundle. Correct.
-      // If restored state was Custom, it restores custom inputs. Correct.
+      setPrices(originalState.prices)
 
       setTouched(false)
       if (
@@ -915,7 +869,7 @@ export function PgSelectionPanel({
               {panelTab === "price" && (
                 <div>
                   <div className="mb-3 flex items-center justify-between">
-                    <SectionLabel>Pricing bundle</SectionLabel>
+                    <SectionLabel>Price per quality</SectionLabel>
                     <RoundIconButton
                       onClick={() => setIsInfoOpen(!isInfoOpen)}
                       title="Pricing Info"
@@ -925,121 +879,63 @@ export function PgSelectionPanel({
                     </RoundIconButton>
                   </div>
 
-                  <div
-                    role="radiogroup"
-                    aria-label="Pricing bundle"
-                    className="mb-6 flex flex-col gap-3"
-                  >
-                    {(Object.keys(BUNDLES) as Array<keyof typeof BUNDLES>).map(
-                      (key) => {
-                        const b = BUNDLES[key]
-                        const isSelected = priceBundle === key
-                        const info = {
-                          basic: {
-                            subtitle: "Web quality",
-                            support: "Best for social media and screen use.",
-                            primaryPrice: b.web,
-                          },
-                          standard: {
-                            subtitle: "High quality",
-                            support: "Best for printing and large displays.",
-                            primaryPrice: b.high,
-                          },
-                          premium: {
-                            subtitle: "Commercial use",
-                            support: "Best for printing and large displays.",
-                            primaryPrice: b.commercial,
-                          },
-                        }[key]
-
-                        return (
-                          <BundleOption
-                            key={key}
-                            selected={isSelected}
-                            onSelect={() => handleBundleSelect(key)}
-                            className={cn(
-                              "relative overflow-hidden py-3 pr-3 pl-4",
-                              isSelected && BUNDLE_COLORS[key].selected
-                            )}
-                          >
-                            {/* Left accent bar */}
-                            <div
-                              className={cn(
-                                "absolute inset-y-0 left-0 w-1",
-                                BUNDLE_COLORS[key].bar
-                              )}
-                            />
-                            <RadioDot selected={isSelected} />
-                            <div className="flex-1">
-                              <div className="mb-0.5 flex items-baseline justify-between">
-                                <div className="text-[0.8125rem] font-medium text-foreground">
-                                  {b.label}
-                                </div>
-                                <div className="text-[0.8125rem] text-muted-foreground">
-                                  {info.primaryPrice} SEK
-                                </div>
-                              </div>
-                              <div className="mb-0.5 text-xs text-muted-foreground">
-                                {info.subtitle}
-                              </div>
-                              <div className="text-xs leading-[1.4] text-muted-foreground">
-                                {info.support}
-                              </div>
-                            </div>
-                          </BundleOption>
-                        )
-                      }
-                    )}
-
-                    <BundleOption
-                      selected={priceBundle === "custom"}
-                      onSelect={() => handleBundleSelect("custom")}
-                      className={cn(
-                        "flex-col gap-0 p-3",
-                        priceBundle === "custom" &&
-                          "border-[#facc15] bg-[#fef9c3]"
-                      )}
-                    >
-                      <div className="flex w-full items-start gap-3">
-                        <RadioDot
-                          selected={priceBundle === "custom"}
-                          className={
-                            priceBundle === "custom"
-                              ? "border-[#facc15] *:bg-[#facc15]"
-                              : undefined
-                          }
-                        />
-                        <div className="flex-1">
-                          <div className="text-[0.8125rem] font-medium text-foreground">
-                            Custom
-                          </div>
-                          {priceBundle !== "custom" && (
-                            <div className="text-xs text-muted-foreground">
-                              Set your own price for all levels
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      {priceBundle === "custom" && (
-                        <div className="mt-3 ml-7">
-                          <div className="mb-1 text-xs text-muted-foreground">
-                            Price (SEK)
-                          </div>
+                  {QUALITY_TIERS.map((tier) => {
+                    const error = priceErrors[tier.id]
+                    return (
+                      <FormGroup key={tier.id} label={tier.label}>
+                        <div className="relative">
                           <Input
-                            className="h-10 w-1/2"
+                            className="h-10 pr-12"
                             type="text"
                             inputMode="numeric"
-                            value={customPriceWeb}
-                            onChange={(e) => {
-                              const val = e.target.value.replace(/[^0-9]/g, "")
-                              handleChange("customPriceWeb", val)
-                            }}
-                            placeholder="0"
+                            aria-label={`${tier.label} price (SEK)`}
+                            aria-invalid={!!error}
+                            value={prices[tier.id]}
+                            onChange={(e) =>
+                              handlePriceChange(tier.id, e.target.value)
+                            }
+                            placeholder={isSingle ? "" : "Mixed"}
                           />
+                          <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-sm text-muted-foreground">
+                            SEK
+                          </span>
                         </div>
-                      )}
-                    </BundleOption>
+                        <div
+                          className={cn(
+                            "mt-1 text-xs leading-[1.4]",
+                            error ? "text-destructive" : "text-muted-foreground"
+                          )}
+                        >
+                          {error ?? tier.description}
+                        </div>
+                      </FormGroup>
+                    )
+                  })}
+
+                  <div className="text-xs leading-normal text-muted-foreground/70">
+                    {!isSingle &&
+                      "Leave a field empty to keep each photo's own price. "}
+                    Whole SEK, {MIN_PRICE_SEK} to{" "}
+                    {MAX_PRICE_SEK.toLocaleString("sv-SE")} SEK.
                   </div>
+                  <Button
+                    variant="link"
+                    size="xs"
+                    className="mt-2 h-auto px-0"
+                    disabled={isDefaultPrices}
+                    onClick={() =>
+                      setPrices(
+                        Object.fromEntries(
+                          QUALITY_TIERS.map((tier) => [
+                            tier.id,
+                            String(tier.price),
+                          ])
+                        ) as PriceFields
+                      )
+                    }
+                  >
+                    Use default prices
+                  </Button>
                 </div>
               )}
             </div>
@@ -1063,7 +959,12 @@ export function PgSelectionPanel({
               >
                 <Slash /> Cancel
               </Button>
-              <Button size="md" className="min-w-25" onClick={handleSave}>
+              <Button
+                size="md"
+                className="min-w-25"
+                onClick={handleSave}
+                disabled={hasPriceError && panelTab === "price"}
+              >
                 <Save /> Save changes
               </Button>
             </>
@@ -1286,18 +1187,6 @@ export function PgSelectionPanel({
 
 const NEW_FOLDER = "__new__"
 
-const BUNDLE_COLORS: Record<
-  keyof typeof BUNDLES,
-  { bar: string; selected: string }
-> = {
-  basic: {
-    bar: "bg-muted-foreground",
-    selected: "border-muted-foreground bg-muted",
-  },
-  standard: { bar: "bg-[#f97316]", selected: "border-[#f97316] bg-[#ffedd5]" },
-  premium: { bar: "bg-[#a855f7]", selected: "border-[#a855f7] bg-[#f3e8ff]" },
-}
-
 // Old .pg-panel-btn.secondary: white, gray text, gray hover (no brand tint)
 const panelSecondary = "min-w-25 text-muted-foreground"
 
@@ -1391,59 +1280,5 @@ function RoundIconButton(props: React.ComponentProps<typeof Button>) {
       className="text-muted-foreground/70 [&_svg:not([class*='size-'])]:size-3.5"
       {...props}
     />
-  )
-}
-
-function BundleOption({
-  selected,
-  onSelect,
-  className,
-  children,
-}: {
-  selected: boolean
-  onSelect: () => void
-  className?: string
-  children: React.ReactNode
-}) {
-  return (
-    <div
-      role="radio"
-      aria-checked={selected}
-      tabIndex={0}
-      onClick={onSelect}
-      onKeyDown={(e) => {
-        if (e.target !== e.currentTarget) return
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault()
-          onSelect()
-        }
-      }}
-      className={cn(
-        "flex cursor-pointer items-start gap-3 rounded-lg border bg-card outline-none focus-visible:ring-4 focus-visible:ring-ring/12",
-        className
-      )}
-    >
-      {children}
-    </div>
-  )
-}
-
-function RadioDot({
-  selected,
-  className,
-}: {
-  selected: boolean
-  className?: string
-}) {
-  return (
-    <span
-      className={cn(
-        "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border bg-card",
-        selected && "border-primary",
-        className
-      )}
-    >
-      {selected && <span className="size-2 rounded-full bg-primary" />}
-    </span>
   )
 }

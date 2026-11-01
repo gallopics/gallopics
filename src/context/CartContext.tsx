@@ -1,5 +1,12 @@
-import React, { createContext, useContext, useEffect, useState } from "react"
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react"
 
+import { getPhotoPrice, type PhotoPrices } from "../constants/qualityTiers"
 import type { CartItem, Photo } from "../types"
 
 interface CartContextType {
@@ -13,6 +20,8 @@ interface CartContextType {
   removeFromCart: (cartId: string) => void
   removeFromCartByPhotoId: (photoId: string) => void
   clearCart: () => void
+  /** Use a photo's current prices (SEK) for its items */
+  updatePrices: (photoId: string, prices: PhotoPrices) => void
   total: number
   isInCart: (photoId: string) => boolean
 }
@@ -71,6 +80,20 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const clearCart = () => setCart([])
 
+  const updatePrices = useCallback((photoId: string, prices: PhotoPrices) => {
+    setCart((prev) => {
+      let changed = false
+      const next = prev.map((item) => {
+        if (item.photoId !== photoId) return item
+        const price = getPhotoPrice(prices, item.quality)
+        if (price === item.price) return item
+        changed = true
+        return { ...item, price, photo: { ...item.photo, prices } }
+      })
+      return changed ? next : prev
+    })
+  }, [])
+
   const total = cart.reduce((sum, item) => sum + item.price, 0)
 
   const isInCart = (photoId: string) =>
@@ -84,6 +107,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
         removeFromCart,
         removeFromCartByPhotoId,
         clearCart,
+        updatePrices,
         total,
         isInCart,
       }}

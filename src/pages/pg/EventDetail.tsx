@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react"
 
+import { hasCustomPrices } from "@/constants/qualityTiers"
 import { assetUrl, cn } from "@/lib/utils"
 import { useDeletePhotosWithUndo } from "@/hooks/useDeletePhotosWithUndo"
 import { useWorkspacePhotos } from "@/hooks/useWorkspaceData"
@@ -319,49 +320,16 @@ export function EventDetail() {
         filterFn: (p: Photo) => p.isGeneric,
       },
       {
-        id: "basic",
-        label: "Basic",
-        color: "var(--color-text-secondary)",
-        count: photos.filter(
-          (p) =>
-            p.priceStandard === 499 &&
-            p.priceHigh === 999 &&
-            p.priceCommercial === 1500
-        ).length,
-        filterFn: (p: Photo) =>
-          p.priceStandard === 499 &&
-          p.priceHigh === 999 &&
-          p.priceCommercial === 1500,
+        id: "default-prices",
+        label: "Default prices",
+        count: photos.filter((p) => !hasCustomPrices(p.prices)).length,
+        filterFn: (p: Photo) => !hasCustomPrices(p.prices),
       },
       {
-        id: "standard",
-        label: "Standard",
-        color: "#f97316",
-        count: photos.filter(
-          (p) =>
-            p.priceStandard === 499 &&
-            p.priceHigh === 999 &&
-            p.priceCommercial === 1500
-        ).length,
-        filterFn: (p: Photo) =>
-          p.priceStandard === 499 &&
-          p.priceHigh === 999 &&
-          p.priceCommercial === 1500,
-      },
-      {
-        id: "premium",
-        label: "Premium",
-        color: "#a855f7",
-        count: photos.filter(
-          (p) =>
-            p.priceStandard === 499 &&
-            p.priceHigh === 999 &&
-            p.priceCommercial === 1500
-        ).length,
-        filterFn: (p: Photo) =>
-          p.priceStandard === 499 &&
-          p.priceHigh === 999 &&
-          p.priceCommercial === 1500,
+        id: "own-prices",
+        label: "Own prices",
+        count: photos.filter((p) => hasCustomPrices(p.prices)).length,
+        filterFn: (p: Photo) => hasCustomPrices(p.prices),
       },
     ]
 
@@ -414,49 +382,16 @@ export function EventDetail() {
         filterFn: (p: Photo) => p.isGeneric,
       },
       {
-        id: "basic",
-        label: "Basic",
-        color: "var(--color-text-secondary)",
-        count: photos.filter(
-          (p) =>
-            p.priceStandard === 499 &&
-            p.priceHigh === 999 &&
-            p.priceCommercial === 1500
-        ).length,
-        filterFn: (p: Photo) =>
-          p.priceStandard === 499 &&
-          p.priceHigh === 999 &&
-          p.priceCommercial === 1500,
+        id: "default-prices",
+        label: "Default prices",
+        count: photos.filter((p) => !hasCustomPrices(p.prices)).length,
+        filterFn: (p: Photo) => !hasCustomPrices(p.prices),
       },
       {
-        id: "standard",
-        label: "Standard",
-        color: "#f97316",
-        count: photos.filter(
-          (p) =>
-            p.priceStandard === 499 &&
-            p.priceHigh === 999 &&
-            p.priceCommercial === 1500
-        ).length,
-        filterFn: (p: Photo) =>
-          p.priceStandard === 499 &&
-          p.priceHigh === 999 &&
-          p.priceCommercial === 1500,
-      },
-      {
-        id: "premium",
-        label: "Premium",
-        color: "#a855f7",
-        count: photos.filter(
-          (p) =>
-            p.priceStandard === 499 &&
-            p.priceHigh === 999 &&
-            p.priceCommercial === 1500
-        ).length,
-        filterFn: (p: Photo) =>
-          p.priceStandard === 499 &&
-          p.priceHigh === 999 &&
-          p.priceCommercial === 1500,
+        id: "own-prices",
+        label: "Own prices",
+        count: photos.filter((p) => hasCustomPrices(p.prices)).length,
+        filterFn: (p: Photo) => hasCustomPrices(p.prices),
       },
     ]
 
@@ -756,8 +691,7 @@ export function EventDetail() {
     isDuplicate: validDuplicateIds.has(photo.id),
     duplicateGroupId: photo.duplicateGroupId,
     photographer: event?.assignedPhotographers?.[0]?.name,
-    priceStandard: photo.priceStandard,
-    priceHigh: photo.priceHigh,
+    prices: photo.prices,
   })
 
   // Selection Helpers
@@ -1026,20 +960,25 @@ export function EventDetail() {
 
           {/* Right content column */}
           <div className="min-w-0 flex-1">
-            {showFilters && (
+            {/* The selection actions also show without the filter row */}
+            {(showFilters || selectedIds.size > 0) && (
               <div className="mb-3 flex items-center justify-between gap-6 py-3">
-                <div className="max-w-150 flex-1">
-                  <ScopedSearchBar
-                    placeholder="Search riders, horses, photo ID..."
-                    options={searchOptions}
-                    currentValue={searchTerm}
-                    onSelect={(val) => setSearchTerm(val === "All" ? "" : val)}
-                    onSearchChange={(val) => setSearchTerm(val)}
-                    variant="v2"
-                  />
-                </div>
+                {showFilters && (
+                  <div className="max-w-150 flex-1">
+                    <ScopedSearchBar
+                      placeholder="Search riders, horses, photo ID..."
+                      options={searchOptions}
+                      currentValue={searchTerm}
+                      onSelect={(val) =>
+                        setSearchTerm(val === "All" ? "" : val)
+                      }
+                      onSearchChange={(val) => setSearchTerm(val)}
+                      variant="v2"
+                    />
+                  </div>
+                )}
 
-                <div className="flex items-center">
+                <div className="ml-auto flex items-center">
                   {selectedIds.size > 0 ? (
                     <div className="flex items-center gap-2">
                       <span className="mr-4 text-[0.8125rem] font-semibold whitespace-nowrap text-foreground">
@@ -1235,12 +1174,7 @@ export function EventDetail() {
                           photoCode: photo.photoCode,
                           uploadDate: photo.uploadDate,
                           timestamp: photo.timestamp,
-                          priceStandard: isDuplicatesFolder
-                            ? undefined
-                            : photo.priceStandard,
-                          priceHigh: isDuplicatesFolder
-                            ? undefined
-                            : photo.priceHigh,
+                          prices: isDuplicatesFolder ? undefined : photo.prices,
                           storedLocation: photo.storedLocation,
                           soldCount:
                             activeTab === "published" || activeTab === "archive"

@@ -3,7 +3,6 @@ import { Link } from "react-router"
 import { useQuery } from "@tanstack/react-query"
 import { DollarSign, LayoutGrid, List } from "lucide-react"
 
-import { QUALITY_TIERS } from "@/constants/qualityTiers"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/context/AuthContext"
 import { useWorkspace } from "@/context/WorkspaceContext"
@@ -632,9 +631,6 @@ export function SoldPhotos() {
                   pgMeta={{
                     photoCode: photoCode(sale.photo_id),
                     soldCount: count,
-                    priceStandard: QUALITY_TIERS[0].price,
-                    priceHigh: QUALITY_TIERS[1].price,
-                    priceCommercial: QUALITY_TIERS[2].price,
                   }}
                 />
               ))}

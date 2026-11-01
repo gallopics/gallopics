@@ -1,7 +1,13 @@
 import { useState } from "react"
 import { Check, Pencil, Plus, RotateCcw, Share2, Trash2 } from "lucide-react"
 
-import { getDefaultCartTier } from "@/constants/qualityTiers"
+import {
+  getDefaultCartTier,
+  getPhotoPrice,
+  hasCustomPrices,
+  QUALITY_TIERS,
+  type PhotoPrices,
+} from "@/constants/qualityTiers"
 import { cn } from "@/lib/utils"
 import { useCart } from "@/context/CartContext"
 import type { Photo } from "@/types"
@@ -24,9 +30,8 @@ interface PhotoCardProps {
     photoCode?: string
     uploadDate?: string
     timestamp?: string
-    priceStandard?: number
-    priceHigh?: number
-    priceCommercial?: number
+    /** The photo's prices in SEK; shown as "from … SEK" (opens Edit price) */
+    prices?: PhotoPrices
     soldCount?: number
     totalBucketSales?: number
     /** pgDuplicate: other places this photo appears in */
@@ -106,7 +111,12 @@ export function PhotoCard({
       removeFromCartByPhotoId(photo.id)
     } else {
       const tier = getDefaultCartTier()
-      addToCart(photo, tier.id, tier.label, tier.price)
+      addToCart(
+        photo,
+        tier.id,
+        tier.label,
+        getPhotoPrice(photo.prices, tier.id)
+      )
       onAddToCart?.(photo)
     }
   }
@@ -318,21 +328,15 @@ function PhotoCardFooter({
     )
   }
 
-  // Uploads, published, archived: file name + sold count + price bundle dot
-  const web = pgMeta.priceStandard || 0
-  const high = pgMeta.priceHigh || 0
-  const commercial = pgMeta.priceCommercial || 0
+  // Uploads, published, archived: file name + sold count + lowest price
+  const { prices } = pgMeta
   const soldCount = pgMeta.soldCount || 0
   const totalBucketSales = pgMeta.totalBucketSales || 0
-
-  // Canonical tiers (499/999/1500) are purple, custom prices brand blue
-  const isCanonical = web === 499 && high === 999 && commercial === 1500
-  const bundleLabel = isCanonical ? "Canonical" : "Custom"
-  const bundleClass = isCanonical
-    ? "bg-[#a855f7]"
-    : web > 0 || high > 0
-      ? "bg-primary"
-      : "bg-muted-foreground"
+  const priceSummary =
+    prices &&
+    `${hasCustomPrices(prices) ? "Own prices" : "Default prices"}: ${QUALITY_TIERS.map(
+      (tier) => `${tier.label} ${prices[tier.id]} SEK`
+    ).join(" · ")}`
 
   return (
     <div className="flex w-full items-center justify-between bg-card p-3">
@@ -357,19 +361,21 @@ function PhotoCardFooter({
             {soldCount}
           </Badge>
         )}
-        <button
-          type="button"
-          aria-label="Edit price"
-          title={`${bundleLabel}: Web ${web} / High ${high} / Commercial ${commercial}`}
-          onClick={(e) => {
-            e.stopPropagation()
-            onEditPrice?.(photo)
-          }}
-          className={cn(
-            "size-2 rounded-full transition-transform duration-200 ease-[cubic-bezier(0.175,0.885,0.32,1.275)] hover:scale-130",
-            bundleClass
-          )}
-        />
+        {prices && (
+          <button
+            type="button"
+            aria-label={`Edit price. ${priceSummary}`}
+            title={priceSummary}
+            disabled={!onEditPrice}
+            onClick={(e) => {
+              e.stopPropagation()
+              onEditPrice?.(photo)
+            }}
+            className="rounded-sm bg-muted px-1.5 py-0.5 text-[0.6875rem] leading-none font-semibold whitespace-nowrap text-muted-foreground transition-colors outline-none hover:bg-border hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none"
+          >
+            from {Math.min(...Object.values(prices))} SEK
+          </button>
+        )}
       </div>
     </div>
   )

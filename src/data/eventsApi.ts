@@ -1,3 +1,4 @@
+import { toSekPrices } from "../constants/qualityTiers"
 import { formatLabel } from "../lib/utils"
 import type {
   ClassSection,
@@ -282,7 +283,7 @@ export function mapApiPhotoToPhoto(
       event.country === "Sweden" ? "se" : event.country.toLowerCase(),
     photographer: photo.photographer_display_name || "Gallopics",
     photographerId: photo.photographer_id,
-    price: photo.price,
+    prices: toSekPrices(photo.prices),
   }
 }
 

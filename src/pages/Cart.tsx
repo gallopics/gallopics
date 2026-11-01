@@ -1,11 +1,18 @@
-import { useMemo } from "react"
+import { useEffect, useMemo } from "react"
 import { useNavigate, useSearchParams } from "react-router"
+import { useQueries } from "@tanstack/react-query"
 import { ArrowLeft, Eye, ShoppingBag, Trash2 } from "lucide-react"
 
-import { getDefaultCartTier } from "@/constants/qualityTiers"
+import {
+  getDefaultCartTier,
+  getPhotoPrice,
+  toSekPrices,
+  type PhotoPrices,
+} from "@/constants/qualityTiers"
 import { useCart } from "@/context/CartContext"
-import type { CheckoutItem } from "@/data/apiClient"
+import type { ApiPhoto, CheckoutItem } from "@/data/apiClient"
 import { COMPETITIONS } from "@/data/mockData"
+import { photoQueryOptions } from "@/data/queries/photos"
 import type { Photo } from "@/types"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -53,9 +60,44 @@ function RecentlyViewed({
 }
 
 export function Cart() {
-  const { cart, addToCart, removeFromCart, total } = useCart()
+  const { cart, addToCart, removeFromCart, total, updatePrices } = useCart()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+
+  // A saved cart may be older than a price change: show the current prices
+  const cartPhotoIds = useMemo(
+    () => [...new Set(cart.map((item) => item.photoId))],
+    [cart]
+  )
+  const currentPrices = useQueries({
+    queries: cartPhotoIds.map((photoId) => ({
+      ...photoQueryOptions(photoId),
+      select: (photo: ApiPhoto) => toSekPrices(photo.prices),
+    })),
+  })
+  const currentPricesKey = JSON.stringify(
+    currentPrices.map((query) => query.data ?? null)
+  )
+  useEffect(() => {
+    const prices = JSON.parse(currentPricesKey) as Array<PhotoPrices | null>
+    let changed = false
+    prices.forEach((photoPrices, i) => {
+      if (!photoPrices) return
+      changed ||= cart.some(
+        (item) =>
+          item.photoId === cartPhotoIds[i] &&
+          item.price !== getPhotoPrice(photoPrices, item.quality)
+      )
+      updatePrices(cartPhotoIds[i], photoPrices)
+    })
+    if (changed) {
+      toast.add({
+        title: "A price in your cart has changed",
+        description: "The photographer updated it since you added the photo.",
+        type: "info",
+      })
+    }
+  }, [currentPricesKey, cartPhotoIds, cart, updatePrices])
 
   const handleAddToCart = (photo: Photo) => {
     // Default to high quality tier
@@ -67,7 +109,12 @@ export function Cart() {
     if (exists) {
       toast.add({ title: "Already in cart", type: "info" })
     } else {
-      addToCart(photo, tier.id, tier.label, tier.price)
+      addToCart(
+        photo,
+        tier.id,
+        tier.label,
+        getPhotoPrice(photo.prices, tier.id)
+      )
       toast.add({ title: "Added to cart", type: "success" })
     }
   }

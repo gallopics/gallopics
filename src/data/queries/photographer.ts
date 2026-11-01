@@ -4,13 +4,18 @@ import {
   type QueryClient,
 } from "@tanstack/react-query"
 
+import {
+  toApiPrices,
+  toSekPrices,
+  type PhotoPrices,
+} from "@/constants/qualityTiers"
 import { formatLabel } from "@/lib/utils"
 import type { PgEvent, Photo } from "@/context/PhotographerContext"
 
 import { api, resolveApiAssetUrl, type ApiPhoto } from "../apiClient"
 import { formatEventPeriod, type ApiEvent } from "../eventsApi"
 import { invalidateEventPhotos } from "./events"
-import { publicPhotographerKeys } from "./photos"
+import { photoKeys, publicPhotographerKeys } from "./photos"
 
 const PHOTOS_PAGE_SIZE = 100
 
@@ -56,9 +61,7 @@ function mapApiPhotoToPgPhoto(photo: ApiPhoto): Photo {
     className: getApiPhotoClassName(photo),
     isDuplicate: false,
     storedLocation: "Uncategorised",
-    priceStandard: 499,
-    priceHigh: 999,
-    priceCommercial: 1500,
+    prices: toSekPrices(photo.prices),
   }
 }
 
@@ -289,6 +292,65 @@ export const savePhotoDetailsMutationOptions = () =>
     },
     onSuccess: (eventIds, _variables, _result, { client }) => {
       invalidateEventPhotos(client, eventIds)
+    },
+  })
+
+/** Most photos the API takes in one price update */
+const PRICE_BATCH_SIZE = 1000
+
+/** A price update that failed after earlier batches were saved */
+export class PhotoPricesSaveError extends Error {
+  /** Photos whose new prices were saved before the failure */
+  readonly savedPhotoIds: string[]
+
+  constructor(savedPhotoIds: string[], cause: unknown) {
+    super("Unable to save all prices", { cause })
+    this.savedPhotoIds = savedPhotoIds
+  }
+}
+
+/** Set prices (SEK) for photos at once; tiers left out keep their price */
+export const savePhotoPricesMutationOptions = () =>
+  mutationOptions({
+    mutationKey: [...photographerKeys.photos(), "prices"],
+    mutationFn: async ({
+      photoIds,
+      prices,
+    }: {
+      photoIds: string[]
+      prices: Partial<PhotoPrices>
+    }) => {
+      const ids = photoIds.filter(isUuid)
+      const apiPrices = toApiPrices(prices)
+      const updated: ApiPhoto[] = []
+      for (let i = 0; i < ids.length; i += PRICE_BATCH_SIZE) {
+        const batch = ids.slice(i, i + PRICE_BATCH_SIZE)
+        try {
+          updated.push(...(await api.updatePhotoPrices(batch, apiPrices)))
+        } catch (error) {
+          throw new PhotoPricesSaveError(
+            updated.map((photo) => photo.id),
+            error
+          )
+        }
+      }
+      return updated
+    },
+    onSuccess: (updated, _variables, _result, { client }) => {
+      const pricesById = new Map(
+        updated.map((photo) => [photo.id, toSekPrices(photo.prices)])
+      )
+      updateCachedPhotos(client, (prev) =>
+        prev.map((p) =>
+          pricesById.has(p.id) ? { ...p, prices: pricesById.get(p.id) } : p
+        )
+      )
+      invalidateEventPhotos(
+        client,
+        updated.map((photo) => photo.event_id)
+      )
+      // The public photo page shows them too
+      void client.invalidateQueries({ queryKey: photoKeys.all })
     },
   })
 

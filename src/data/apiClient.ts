@@ -1,3 +1,5 @@
+import type { ApiPhotoPrices } from "@/constants/qualityTiers"
+
 const SERVER_API_BASE_URL = "http://82.96.43.103:8081"
 
 export function getApiBaseUrl() {
@@ -460,7 +462,6 @@ export const api = {
     photoId: string,
     data: {
       visibility?: string
-      price?: number
       tags?: Array<{ type: string; value: string }>
     }
   ) =>
@@ -468,6 +469,14 @@ export const api = {
       `/api/v1/photographer/photos/${encodeURIComponent(photoId)}`,
       { method: "PATCH", body: JSON.stringify(data), auth: true }
     ),
+
+  /** The same prices (öre) for several of the photographer's photos; tiers left out keep theirs */
+  updatePhotoPrices: (photoIds: string[], prices: Partial<ApiPhotoPrices>) =>
+    request<ApiPhoto[]>("/api/v1/photographer/photos/prices", {
+      method: "PATCH",
+      body: JSON.stringify({ photo_ids: photoIds, prices }),
+      auth: true,
+    }),
 
   deletePhoto: (photoId: string) =>
     request<void>(
@@ -592,7 +601,7 @@ export interface ApiPhoto {
   photographer_id: string
   photographer_display_name?: string | null
   photographer_avatar_url?: string | null
-  price: number
+  prices: ApiPhotoPrices
   currency: string
   status: "processing" | "ready" | "failed"
   visibility: "draft" | "published"

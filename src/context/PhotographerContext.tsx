@@ -13,6 +13,7 @@ import {
   type UploadSession,
 } from "@/lib/uploadSessions"
 
+import type { PhotoPrices } from "../constants/qualityTiers"
 import {
   getApiBaseUrl,
   getSessionToken,
@@ -101,9 +102,7 @@ export interface Photo {
   duplicateResolved?: boolean // True after "Keep" action resolves duplicates
   duplicateGroupId?: string // Identifies which duplicate group this instance belongs to
   storedLocation?: "Random" | "Misc" | "Uncategorised" | "Published" // Where this instance lives
-  priceStandard?: number // e.g. 499
-  priceHigh?: number // e.g. 999
-  priceCommercial?: number // e.g. 1500
+  prices?: PhotoPrices // in SEK
 }
 
 // Server data (booked events, photos, highlights) and its writes live in

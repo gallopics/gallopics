@@ -9,7 +9,11 @@ import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 import { useQuery } from "@tanstack/react-query"
 import { Check, ChevronLeft, ShoppingBag, X, Zap } from "lucide-react"
 
-import { getPriceByTierId, QUALITY_TIERS } from "@/constants/qualityTiers"
+import {
+  getPhotoPrice,
+  QUALITY_TIERS,
+  toSekPrices,
+} from "@/constants/qualityTiers"
 import { cn } from "@/lib/utils"
 import { useCart } from "@/context/CartContext"
 import {
@@ -56,8 +60,6 @@ function DetailRow({
   )
 }
 
-const getPrice = (quality: string) => getPriceByTierId(quality)
-
 /** A public photo as the photo page shows it */
 const toPagePhoto = (photo: ApiPhoto): Photo => ({
   id: photo.id,
@@ -84,7 +86,7 @@ const toPagePhoto = (photo: ApiPhoto): Photo => ({
   countryCode: "se",
   photographer: photo.photographer_display_name || "Gallopics",
   photographerId: photo.photographer_id,
-  price: photo.price,
+  prices: toSekPrices(photo.prices),
 })
 
 const isUuid = (value: string) =>
@@ -176,6 +178,7 @@ function ImageProfileContent({
   const location = useLocation()
   const [searchParams] = useSearchParams()
   const [selectedQuality, setSelectedQuality] = useState("web")
+  const price = getPhotoPrice(photo.prices, selectedQuality)
   const { cart, addToCart, removeFromCartByPhotoId } = useCart()
   const [showCheckout, setShowCheckout] = useState(false)
   const [isFullScreen, setIsFullScreen] = useState(false)
@@ -405,7 +408,7 @@ function ImageProfileContent({
                         #{photo.id.toUpperCase()}
                       </div>
                       <div className="mb-6 text-[2rem] leading-normal font-bold text-foreground">
-                        {getPrice(selectedQuality)} SEK
+                        {price} SEK
                       </div>
 
                       <Label className="mb-2 leading-normal">
@@ -450,7 +453,7 @@ function ImageProfileContent({
                                 photo,
                                 selectedQuality,
                                 selected.label,
-                                getPrice(selectedQuality)
+                                price
                               )
                             }
                           }}
@@ -506,7 +509,7 @@ function ImageProfileContent({
                         Back to selection
                       </Button>
                       <CheckoutPanel
-                        total={getPrice(selectedQuality)}
+                        total={price}
                         items={checkoutItems}
                         cancelPath={location.pathname + location.search}
                       />
