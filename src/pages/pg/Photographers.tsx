@@ -167,10 +167,10 @@ export function Photographers() {
               />
             }
             meta={
-              <>
+              <span className="block whitespace-normal">
                 Showing {filtered.length} photographers
                 {pendingCount > 0 && ` · ${pendingCount} waiting for approval`}
-              </>
+              </span>
             }
           />
 
