@@ -69,14 +69,22 @@ const getClerkErrorMessage = (error: unknown, fallback: string) => {
     return fallback
   }
 
-  const maybeErrors = (
-    error as { errors?: Array<{ longMessage?: string; message?: string }> }
-  ).errors
-  if (Array.isArray(maybeErrors) && maybeErrors.length > 0) {
-    return maybeErrors[0].longMessage ?? maybeErrors[0].message ?? fallback
+  const candidate = error as {
+    errors?: Array<{ longMessage?: string; message?: string }>
+    longMessage?: string
+    message?: string
   }
+  const firstError = Array.isArray(candidate.errors)
+    ? candidate.errors[0]
+    : null
 
-  return fallback
+  return (
+    firstError?.longMessage ||
+    firstError?.message ||
+    candidate.longMessage ||
+    candidate.message ||
+    fallback
+  )
 }
 
 const stringifyClerkDebug = (value: unknown) => {
