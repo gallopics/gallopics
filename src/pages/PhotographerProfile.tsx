@@ -19,7 +19,11 @@ import { cn } from "@/lib/utils"
 import { useWorkspaceEvents } from "@/hooks/useWorkspaceData"
 import { useAuth } from "@/context/AuthContext"
 import { usePhotographer } from "@/context/PhotographerContext"
-import { resolveApiAssetUrl, type ApiPhoto } from "@/data/apiClient"
+import {
+  getApiPhotoPreviewUrl,
+  resolveApiAssetUrl,
+  type ApiPhoto,
+} from "@/data/apiClient"
 import { getActivePhotographerProfile, PHOTOGRAPHERS } from "@/data/mockData"
 import { mockEvents } from "@/data/mockEvents"
 import {
@@ -237,10 +241,7 @@ export function PhotographerProfile() {
         const ev = contextEvents.find((e) => e.id === photo.event_id)
         return {
           id: photo.id,
-          src:
-            resolveApiAssetUrl(
-              `/api/v1/photographer/photos/${photo.id}/preview`
-            ) || "",
+          src: getApiPhotoPreviewUrl(photo),
           rider:
             photo.tags.find((tag) => tag.type === "rider")?.value || "Unknown",
           horse:

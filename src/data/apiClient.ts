@@ -32,6 +32,17 @@ export function resolveApiAssetUrl(path: string | null | undefined) {
   return new URL(path, getApiBaseUrl()).toString()
 }
 
+/** A photo's watermarked preview, also while an older API omits preview_url */
+export function getApiPhotoPreviewUrl(
+  photo: Pick<ApiPhoto, "id" | "preview_url">
+) {
+  return (
+    resolveApiAssetUrl(
+      photo.preview_url || `/api/v1/photographer/photos/${photo.id}/preview`
+    ) ?? ""
+  )
+}
+
 function resolveApiDownloadUrl(url: string) {
   const downloadUrl = new URL(url, getApiBaseUrl())
 
@@ -620,9 +631,11 @@ export interface ApiPhoto {
   match_confidence?: "high" | "medium" | "low" | "none" | string | null
   match_delta_seconds?: number | null
   match_source?: string | null
-  storage_key_original?: string | null
-  storage_key_thumbnail?: string | null
-  storage_key_preview?: string | null
+  /** Watermarked preview and small thumbnail; originals are never public */
+  preview_url: string
+  thumbnail_url: string
+  /** Only in the photographer's own photo lists */
+  file_name?: string | null
   created_at: string
   updated_at: string
 }

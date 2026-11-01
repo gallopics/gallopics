@@ -12,7 +12,7 @@ import {
 import { formatLabel } from "@/lib/utils"
 import type { PgEvent, Photo } from "@/context/PhotographerContext"
 
-import { api, resolveApiAssetUrl, type ApiPhoto } from "../apiClient"
+import { api, getApiPhotoPreviewUrl, type ApiPhoto } from "../apiClient"
 import { formatEventPeriod, type ApiEvent } from "../eventsApi"
 import { invalidateEventPhotos } from "./events"
 import { photoKeys, publicPhotographerKeys } from "./photos"
@@ -36,10 +36,7 @@ export const getApiPhotoClassName = (photo: ApiPhoto) =>
 function mapApiPhotoToPgPhoto(photo: ApiPhoto): Photo {
   return {
     id: photo.id,
-    // Always the preview URL: it falls back to the original if there is no preview
-    url:
-      resolveApiAssetUrl(`/api/v1/photographer/photos/${photo.id}/preview`) ||
-      "",
+    url: getApiPhotoPreviewUrl(photo),
     eventId: photo.event_id,
     status: photo.status === "ready" ? "uploadedUnpublished" : "processing",
     soldCount: 0,
@@ -53,7 +50,7 @@ function mapApiPhotoToPgPhoto(photo: ApiPhoto): Photo {
     }),
     width: 600,
     height: 800,
-    fileName: photo.storage_key_original?.split("/").pop(),
+    fileName: photo.file_name || undefined,
     photoCode: "",
     uploadDate: photo.created_at,
     batch: "",

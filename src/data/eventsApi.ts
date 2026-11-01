@@ -81,8 +81,6 @@ interface PaginatedApiResponse<T> {
 }
 
 type ApiPhotoWithUrls = ApiPhoto & {
-  preview_url?: string | null
-  thumbnail_url?: string | null
   url?: string | null
   width?: number | null
   height?: number | null

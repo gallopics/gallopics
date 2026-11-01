@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils"
 import { useCart } from "@/context/CartContext"
 import {
   ApiError,
+  getApiPhotoPreviewUrl,
   resolveApiAssetUrl,
   type ApiPhoto,
   type CheckoutItem,
@@ -63,8 +64,7 @@ function DetailRow({
 /** A public photo as the photo page shows it */
 const toPagePhoto = (photo: ApiPhoto): Photo => ({
   id: photo.id,
-  src:
-    resolveApiAssetUrl(`/api/v1/photographer/photos/${photo.id}/preview`) || "",
+  src: getApiPhotoPreviewUrl(photo),
   rider: photo.tags.find((tag) => tag.type === "rider")?.value || "Unassigned",
   horse:
     photo.tags.find((tag) => tag.type === "horse")?.value ||

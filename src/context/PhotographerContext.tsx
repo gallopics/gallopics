@@ -16,8 +16,8 @@ import {
 import type { PhotoPrices } from "../constants/qualityTiers"
 import {
   getApiBaseUrl,
+  getApiPhotoPreviewUrl,
   getSessionToken,
-  resolveApiAssetUrl,
   type ApiPhoto,
 } from "../data/apiClient"
 import { PHOTOGRAPHERS } from "../data/mockData"
@@ -499,12 +499,7 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
 
           return {
             id: p.id || queuedFile.id || `api-${Date.now()}-${photoIndex}`,
-            url:
-              p.status === "ready"
-                ? resolveApiAssetUrl(
-                    `/api/v1/photographer/photos/${p.id}/preview`
-                  ) || ""
-                : "",
+            url: p.status === "ready" ? getApiPhotoPreviewUrl(p) : "",
             eventId: p.event_id,
             status: p.status === "ready" ? "uploadedUnpublished" : "processing",
             soldCount: 0,
