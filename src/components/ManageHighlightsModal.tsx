@@ -112,9 +112,9 @@ function ManageHighlightsForm({
       </DialogHeader>
 
       <DialogBody>
-        <div className="mb-5 flex items-center gap-3">
+        <div className="mb-5 flex flex-col items-start gap-3 sm:flex-row sm:items-center">
           <Label className="whitespace-nowrap">Select from event:</Label>
-          <div className="min-w-65">
+          <div className="w-full min-w-0 sm:w-auto sm:min-w-65">
             <ModernDropdown
               value={activeEventId}
               options={eventOptions}
