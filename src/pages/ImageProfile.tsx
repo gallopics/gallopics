@@ -18,7 +18,8 @@ import {
   type ApiPhoto,
   type CheckoutItem,
 } from "@/data/apiClient"
-import { COMPETITIONS, HORSES, PHOTOGRAPHERS, RIDERS } from "@/data/mockData"
+import { HORSES, PHOTOGRAPHERS, RIDERS } from "@/data/mockData"
+import { eventQueryOptions } from "@/data/queries/events"
 import {
   photoQueryOptions,
   publicPhotographerQueryOptions,
@@ -191,10 +192,17 @@ function ImageProfileContent({
     ...publicPhotographerQueryOptions(photo.photographerId ?? ""),
     enabled: !!photo.photographerId && isUuid(photo.photographerId),
   })
-  const event = useMemo(
-    () => COMPETITIONS.find((c) => c.id === photo.eventId),
-    [photo.eventId]
-  )
+  // Same cache entry as the page query, without the page mapping
+  const { data: apiPhoto } = useQuery({
+    ...photoQueryOptions(photo.id),
+    enabled: canPurchase,
+  })
+  const eventQuery = useQuery({
+    ...eventQueryOptions(photo.eventId),
+    enabled: isUuid(photo.eventId),
+  })
+  const event = eventQuery.data
+  const takenAt = apiPhoto?.taken_at ? new Date(apiPhoto.taken_at) : null
   const photographer = useMemo(() => {
     const p =
       PHOTOGRAPHERS.find((pg) => pg.primaryEventId === photo.eventId) ||
@@ -517,18 +525,41 @@ function ImageProfileContent({
                       className="h-auto border-0 p-0 text-right text-sm leading-normal whitespace-normal underline"
                       onClick={() => navigate(`/event/${photo.eventId}`)}
                     >
-                      {photo.event}
+                      {event?.name ??
+                        (eventQuery.isPending && isUuid(photo.eventId) ? (
+                          <Skeleton className="inline-block h-[0.8em] w-32 align-middle" />
+                        ) : (
+                          photo.event
+                        ))}
                     </Button>
                   </DetailRow>
-                  {/* Placeholder values below are hard-coded in the old app too */}
-                  <DetailRow label="Club">Stockholms Ryttarförening</DetailRow>
                   <DetailRow label="Orientation">
                     {detectedPortrait ? "Portrait" : "Landscape"}
                   </DetailRow>
-                  <DetailRow label="Class">1.20m</DetailRow>
-                  <DetailRow label="Time">12 Jun 2026 • 14:24</DetailRow>
-                  <DetailRow label="City">🇸🇪 {event?.city}</DetailRow>
-                  <DetailRow label="Venue">Main Arena</DetailRow>
+                  {/* Rows without a real value are left out */}
+                  {apiPhoto?.class_name && (
+                    <DetailRow label="Class">{apiPhoto.class_name}</DetailRow>
+                  )}
+                  {takenAt && (
+                    <DetailRow label="Time">
+                      {takenAt.toLocaleDateString("en-GB", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                      {" • "}
+                      {takenAt.toLocaleTimeString("en-GB", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </DetailRow>
+                  )}
+                  {event?.city && (
+                    <DetailRow label="City">{event.city}</DetailRow>
+                  )}
+                  {event?.venue_name && (
+                    <DetailRow label="Venue">{event.venue_name}</DetailRow>
+                  )}
                 </div>
               </Card>
             </div>

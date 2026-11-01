@@ -23,6 +23,7 @@ import type { ApiClassSectionStart } from "@/data/eventsApi"
 import { HORSES, RIDERS } from "@/data/mockData"
 import { classStartsQueryOptions } from "@/data/queries/events"
 import { savePhotoDetailsMutationOptions } from "@/data/queries/photographer"
+import { salesQueryOptions } from "@/data/queries/sales"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -34,6 +35,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
@@ -165,6 +167,12 @@ export function PgSelectionPanel({
     enabled: isOpen && !!selectedClassId,
     select: toClassStarts,
   })
+  // The sales API returns the platform commission used for payouts
+  const salesQuery = useQuery({
+    ...salesQueryOptions(),
+    enabled: isOpen && isInfoOpen,
+  })
+  const commissionPercent = salesQuery.data?.commission_percent
   const classStarts =
     isOpen && selectedClassId && classStartsQuery.data
       ? classStartsQuery.data
@@ -1136,15 +1144,27 @@ export function PgSelectionPanel({
                   Earnings split
                 </div>
                 <div className="flex flex-col gap-2">
-                  {[
-                    ["Photographer", "75%"],
-                    ["Gallopics", "15%"],
-                    ["Organiser", "10%"],
-                  ].map(([name, share]) => (
+                  {(
+                    [
+                      [
+                        "Photographer",
+                        commissionPercent === undefined
+                          ? undefined
+                          : 100 - commissionPercent,
+                      ],
+                      ["Gallopics", commissionPercent],
+                    ] as const
+                  ).map(([name, share]) => (
                     <div key={name} className="flex justify-between text-sm">
                       <span className="text-muted-foreground">{name}</span>
                       <span className="font-semibold text-foreground">
-                        {share}
+                        {share !== undefined ? (
+                          `${share}%`
+                        ) : salesQuery.isError ? (
+                          "—"
+                        ) : (
+                          <Skeleton className="inline-block h-[0.8em] w-8 align-middle" />
+                        )}
                       </span>
                     </div>
                   ))}

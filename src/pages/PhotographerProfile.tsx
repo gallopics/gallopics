@@ -121,7 +121,6 @@ export function PhotographerProfile() {
   const eventId = searchParams.get("eventId")
   const sourceEvent = eventId ? mockEvents.find((e) => e.id === eventId) : null
 
-  const [photos, setPhotos] = useState<Photo[]>([])
   const [activeTab, setActiveTab] = useState<"highlights" | "photos">(
     "highlights"
   )
@@ -287,11 +286,6 @@ export function PhotographerProfile() {
     return items
   }, [from, sourceEvent, eventId, photographer, navigate])
 
-  // develop: mock photos removed
-  useEffect(() => {
-    setPhotos([])
-  }, [id])
-
   useEffect(() => {
     setGalleryEventId("")
     setGalleryClassKey("")
@@ -325,8 +319,9 @@ export function PhotographerProfile() {
       })
     }
 
-    return photos
-  }, [contextEvents, contextPhotos, isOwner, loggedInId, photographer, photos])
+    // No public photos endpoint yet: visitors only see highlights
+    return []
+  }, [contextEvents, contextPhotos, isOwner, loggedInId, photographer])
 
   const galleryEvents = useMemo(() => {
     const groups = new Map<
@@ -475,9 +470,12 @@ export function PhotographerProfile() {
       : highlightIds.length
     return (
       <PhotographerProfileSkeleton
-        // Visitors only see tabs when there are highlights
-        showTabs={isOwner || !apiPhotographer || highlightCount > 0}
-        tileCount={highlightCount || 8}
+        // Visitors only see the highlights, without tabs or counts
+        showTabs={isOwner}
+        showStats={isOwner}
+        tileCount={
+          isOwner || !apiPhotographer ? highlightCount || 8 : highlightCount
+        }
       />
     )
   }
@@ -499,8 +497,7 @@ export function PhotographerProfile() {
       "avatarUrl" in photographer ? photographer.avatarUrl : null
     ) ?? undefined
 
-  const showTabs = isOwner || displayHighlights.length > 0
-  const visibleTab = showTabs ? activeTab : "photos"
+  const visibleTab = isOwner ? activeTab : "highlights"
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -520,10 +517,13 @@ export function PhotographerProfile() {
           </DotList>
         }
         stats={
-          <DotList className="text-[0.8125rem]">
-            <>{totalEvents} events</>
-            <>{totalPhotosCount} photos</>
-          </DotList>
+          // Counts come from the owner's own photos only
+          isOwner && (
+            <DotList className="text-[0.8125rem]">
+              <>{totalEvents} events</>
+              <>{totalPhotosCount} photos</>
+            </DotList>
+          )
         }
         rightContent={
           <ActionCluster>
@@ -556,8 +556,8 @@ export function PhotographerProfile() {
         onSave={(ids) => saveHighlights.mutate(ids)}
       />
 
-      {/* Tabs only when the owner is viewing or there are highlights */}
-      {showTabs && (
+      {/* Tabs only for the owner: visitors have no Photos tab yet */}
+      {isOwner && (
         <div className="border-b bg-card">
           <div className="container">
             <Tabs
@@ -619,6 +619,8 @@ export function PhotographerProfile() {
                   Add photos
                 </Button>
               </div>
+            ) : displayHighlights.length === 0 ? (
+              <EmptyState icon={<Images />} title="No highlights yet" />
             ) : (
               <Highlights items={displayHighlights} />
             )}
@@ -740,9 +742,11 @@ export function PhotographerProfile() {
 /** First load: header, tabs and highlight tiles as placeholders */
 function PhotographerProfileSkeleton({
   showTabs,
+  showStats,
   tileCount,
 }: {
   showTabs: boolean
+  showStats: boolean
   tileCount: number
 }) {
   // Bars sit inline in text lines, so each line keeps its real height
@@ -782,9 +786,11 @@ function PhotographerProfileSkeleton({
             </div>
           }
           stats={
-            <div aria-hidden="true" className="text-[0.8125rem]">
-              <Skeleton className={cn(bar, "w-32")} />
-            </div>
+            showStats && (
+              <div aria-hidden="true" className="text-[0.8125rem]">
+                <Skeleton className={cn(bar, "w-32")} />
+              </div>
+            )
           }
           rightContent={
             <ActionCluster>
@@ -810,7 +816,7 @@ function PhotographerProfileSkeleton({
         )}
 
         <div className="min-h-[60vh] pt-6 max-md:pt-3">
-          {showTabs && (
+          {tileCount > 0 && (
             <div aria-hidden="true" className="container pb-20">
               {/* Same grid as Highlights */}
               <div className="mx-auto grid w-full max-w-233.75 grid-cols-3 gap-1 max-md:gap-0.5 md:grid-cols-4">
