@@ -319,6 +319,7 @@ export function ModernSearchBar({
   const overlayRef = useRef<HTMLDivElement>(null)
   const popupRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
 
   const { activateSearch, deactivateSearch } = useMobileSearchMode(
     wrapperRef as React.RefObject<HTMLElement>
@@ -356,17 +357,26 @@ export function ModernSearchBar({
   }, [showChip, query, isSmallPhone])
   const isMobileTriggerActive = isMobileTrigger && isMobile
 
-  const close = useCallback(() => {
-    setOpen(false)
-    deactivateSearch()
-    if (collapsible) setIsExpanded(false)
-  }, [collapsible, deactivateSearch])
+  const close = useCallback(
+    (restoreFocus = false) => {
+      setOpen(false)
+      deactivateSearch()
+      if (collapsible) {
+        setIsExpanded(false)
+        if (restoreFocus) {
+          requestAnimationFrame(() => triggerRef.current?.focus())
+        }
+      }
+    },
+    [collapsible, deactivateSearch]
+  )
 
   const clear = () => {
     setQuery("")
     onSearchChange?.("")
     setOpen(false)
-    inputRef.current?.focus()
+    if (collapsible && !isExpanded) triggerRef.current?.focus()
+    else inputRef.current?.focus()
   }
 
   // Collapse the header search on outside click
@@ -428,7 +438,7 @@ export function ModernSearchBar({
       placeholder={placeholder}
       disabled={collapsible && !isExpanded}
       onKeyDown={(e) => {
-        if (e.key === "Escape") close()
+        if (e.key === "Escape") close(true)
       }}
       onFocus={(e) => {
         if (isMobileTriggerActive) {
@@ -478,26 +488,18 @@ export function ModernSearchBar({
     </Button>
   )
 
-  const chip = (
-    <>
-      <span
-        title={query}
-        className="min-w-0 flex-1 truncate text-sm font-medium text-white min-[480px]:ml-2"
-      >
-        {query}
-      </span>
-      <button
-        type="button"
-        aria-label="Clear search"
-        onClick={(e) => {
-          e.stopPropagation()
-          clear()
-        }}
-        className="ml-1 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full bg-white/15 text-border transition-colors hover:bg-white/30 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:outline-none min-[480px]:ml-1.5 min-[480px]:size-8"
-      >
-        <X className="size-3.5" />
-      </button>
-    </>
+  const chipClearButton = (
+    <button
+      type="button"
+      aria-label="Clear search"
+      onClick={(e) => {
+        e.stopPropagation()
+        clear()
+      }}
+      className="ml-1 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-full bg-white/15 text-border transition-colors hover:bg-white/30 hover:text-white focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:outline-none min-[480px]:ml-1.5 min-[480px]:size-8"
+    >
+      <X className="size-3.5" />
+    </button>
   )
 
   const results = (
@@ -599,7 +601,7 @@ export function ModernSearchBar({
             : "size-11 cursor-pointer justify-center rounded-full shadow-[0_2px_8px_rgba(0,0,0,0.1)] hover:scale-105 hover:bg-[#333]"
       )
     : heroMode
-      ? "relative flex h-14 items-center rounded-full border border-black/10 bg-card pr-14 pl-5 shadow-[0_4px_12px_rgba(0,0,0,0.08)] transition-all focus-within:border-ring focus-within:ring-4 focus-within:ring-ring/12"
+      ? "flex h-14 items-center rounded-full border border-black/10 bg-card pr-2 pl-5 shadow-[0_4px_12px_rgba(0,0,0,0.08)] transition-all focus-within:border-ring focus-within:ring-4 focus-within:ring-ring/12"
       : cn(
           "flex h-10 items-center rounded-full px-3.5 transition-all",
           isDark
@@ -631,7 +633,7 @@ export function ModernSearchBar({
       open={open && query.length >= 2}
       onOpenChange={(next, details) => {
         setOpen(next)
-        if (!next && details.reason === "escape-key") close()
+        if (!next && details.reason === "escape-key") close(true)
       }}
     >
       <div
@@ -643,42 +645,64 @@ export function ModernSearchBar({
           ref={barRef}
           className={barClass}
           style={chipWidth ? { width: chipWidth } : undefined}
-          onClick={() => {
-            if (collapsible && !isExpanded) setIsExpanded(true)
-          }}
         >
-          <Search
-            size={20}
-            className={cn(
-              "shrink-0",
-              collapsible && !isExpanded
-                ? "text-white"
-                : "mr-2.5 text-muted-foreground",
-              // small phones: no room next to cart + account, the chip is just query + clear
-              showChip && "max-[479px]:hidden"
-            )}
-          />
-          {!useOverlay && input}
-          {!useOverlay && (showChip ? chip : clearButton)}
-          {theme === "light" && !collapsible && (
-            <Button
-              size="icon"
-              aria-label="Search"
-              onClick={(e) => {
-                e.stopPropagation()
-                if (query.length >= 2) setOpen(true)
-                inputRef.current?.focus()
-              }}
-              className={cn(
-                "shrink-0 hover:scale-105",
-                heroMode
-                  ? // keep the vertical centring on hover (no lift, like the old site)
-                    "absolute top-1/2 right-2 size-10 -translate-y-1/2 hover:-translate-y-1/2"
-                  : "ml-2 size-9 hover:translate-y-0"
+          {collapsible && !isExpanded ? (
+            <>
+              <button
+                ref={triggerRef}
+                type="button"
+                aria-label={showChip ? "Edit search" : "Open search"}
+                aria-expanded={false}
+                onClick={() => setIsExpanded(true)}
+                className={cn(
+                  "flex h-full min-w-0 flex-1 items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-inset",
+                  !showChip && "justify-center"
+                )}
+              >
+                <Search
+                  size={20}
+                  className={cn(
+                    "shrink-0 text-white",
+                    showChip && "max-[479px]:hidden"
+                  )}
+                />
+                {showChip && (
+                  <span
+                    title={query}
+                    className="min-w-0 flex-1 truncate text-left text-sm font-medium text-white min-[480px]:ml-2"
+                  >
+                    {query}
+                  </span>
+                )}
+              </button>
+              {showChip && chipClearButton}
+            </>
+          ) : (
+            <>
+              <Search
+                size={20}
+                className="mr-2.5 shrink-0 text-muted-foreground"
+              />
+              {!useOverlay && input}
+              {!useOverlay && clearButton}
+              {theme === "light" && !collapsible && (
+                <Button
+                  size="icon"
+                  aria-label="Search"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (query.length >= 2) setOpen(true)
+                    inputRef.current?.focus()
+                  }}
+                  className={cn(
+                    "ml-2 shrink-0 hover:translate-y-0 hover:scale-105",
+                    heroMode ? "size-10" : "size-9"
+                  )}
+                >
+                  <ArrowRight className="size-5" />
+                </Button>
               )}
-            >
-              <ArrowRight className="size-5" />
-            </Button>
+            </>
           )}
         </div>
       </div>
