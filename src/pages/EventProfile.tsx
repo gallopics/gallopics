@@ -48,6 +48,7 @@ import { Header } from "@/components/Header"
 import { ActionCluster, ActionSeparator } from "@/components/HeaderActions"
 import { InfoChip } from "@/components/InfoChip"
 import { ModernDropdown } from "@/components/ModernDropdown"
+import { PageState } from "@/components/PageState"
 import { PageTabs } from "@/components/PageTabs"
 import {
   GlassButton,
@@ -128,7 +129,8 @@ export function EventProfile() {
     !localEventDetail &&
     !!eventId &&
     (eventQuery.isPending || (!!eventQuery.data && scheduleQuery.isPending))
-  const eventLoadError = eventQuery.error?.message ?? null
+  const isEventNotFound =
+    eventQuery.error instanceof ApiError && eventQuery.error.status === 404
   const eventDetail = localEventDetail || apiEventDetail
   const eventPhotographer = useMemo(
     () => PHOTOGRAPHERS.find((p) => p.primaryEventId === eventId),
@@ -355,9 +357,24 @@ export function EventProfile() {
 
   if (!eventDetail)
     return (
-      <div className="container pt-[120px]">
-        {eventLoadError || "Event not found"}
-      </div>
+      <PageState
+        title={
+          isEventNotFound ? "Event not found" : "Event could not be loaded"
+        }
+        description={
+          isEventNotFound
+            ? "The event you're looking for isn't available."
+            : "We couldn't load this event. Please try again."
+        }
+        onRetry={
+          isEventNotFound
+            ? undefined
+            : () => {
+                void eventQuery.refetch()
+              }
+        }
+        retrying={eventQuery.isFetching}
+      />
     )
 
   const { meeting } = eventDetail

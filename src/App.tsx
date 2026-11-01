@@ -5,6 +5,7 @@ import { AuthProvider } from "@/context/AuthContext"
 import { CartProvider } from "@/context/CartContext"
 import { PhotographerProvider } from "@/context/PhotographerContext"
 import { WorkspaceProvider } from "@/context/WorkspaceContext"
+import { PageState } from "@/components/PageState"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
 import ScrollToTop from "@/components/ScrollToTop"
 // Shell for all workspace pages: kept eager so it appears immediately on auth
@@ -205,6 +206,15 @@ function App() {
                   <Route path="/faq" element={<FAQPage />} />
                   <Route path="/privacy" element={<PrivacyPage />} />
                   <Route path="/terms" element={<TermsPage />} />
+                  <Route
+                    path="*"
+                    element={
+                      <PageState
+                        title="Page not found"
+                        description="This page doesn't exist or may have moved."
+                      />
+                    }
+                  />
                 </Routes>
               </Suspense>
             </WorkspaceProvider>
