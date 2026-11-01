@@ -2,9 +2,16 @@ import React, {
   createContext,
   useContext,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
+
+import {
+  UploadSessionStore,
+  type UploadFile,
+  type UploadSession,
+} from "@/lib/uploadSessions"
 
 import {
   getApiBaseUrl,
@@ -22,6 +29,13 @@ import {
   updateCachedPhotos,
 } from "../data/queries/photographer"
 import { useAuth } from "./AuthContext"
+
+export {
+  isUploadInProgress,
+  isUploadSessionBusy,
+  type UploadFile,
+  type UploadSession,
+} from "@/lib/uploadSessions"
 
 // --- Types ---
 
@@ -92,26 +106,6 @@ export interface Photo {
   priceCommercial?: number // e.g. 1500
 }
 
-export interface UploadFile {
-  id: string
-  file: File
-  progress: number
-  status: "pending" | "uploading" | "completed" | "failed"
-  error?: string
-  uploadedPhotoIds?: string[]
-  takenAt?: string
-  matchedRider?: string
-  matchedHorse?: string
-  matchConfidence?: string
-}
-
-export interface UploadSession {
-  eventId: string
-  status: "uploading" | "completed"
-  files: UploadFile[]
-  startTime: number
-}
-
 // Server data (booked events, photos, highlights) and its writes live in
 // TanStack Query: see data/queries/photographer.ts and the hooks in
 // useWorkspaceData. This context keeps the studio's local state (uploads).
@@ -125,12 +119,12 @@ interface PhotographerContextType {
   clearUploadSession: (
     eventId: string,
     options?: { deleteUploaded?: boolean }
-  ) => Promise<void>
+  ) => Promise<boolean>
   removeUploadFile: (
     eventId: string,
     fileId: string,
     options?: { deleteUploaded?: boolean }
-  ) => Promise<void>
+  ) => Promise<boolean>
 
   // Profile
   availableToHire: boolean
@@ -347,10 +341,11 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
   const [currentUploadEventId, setCurrentUploadEventId] = useState<
     string | null
   >(null)
-  // Keyed by eventId
-  const [uploadSessions, setUploadSessions] = useState<
-    Record<string, UploadSession>
-  >({})
+  const [uploadStore] = useState(() => new UploadSessionStore())
+  const uploadSessions = useSyncExternalStore(
+    uploadStore.subscribe,
+    uploadStore.getSnapshot
+  )
 
   // Not stored by the API yet: the mock profile's value until changed here
   const [availableToHireOverride, setAvailableToHireOverride] = useState<
@@ -381,19 +376,10 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
     eventId: string,
     options?: { deleteUploaded?: boolean }
   ) => {
-    const uploadedPhotoIds =
-      uploadSessions[eventId]?.files.flatMap((f) => f.uploadedPhotoIds || []) ||
-      []
-
-    if (options?.deleteUploaded && uploadedPhotoIds.length > 0) {
-      await deletePhotos(uploadedPhotoIds)
-    }
-
-    setUploadSessions((prev) => {
-      const next = { ...prev }
-      delete next[eventId]
-      return next
-    })
+    return uploadStore.clear(
+      eventId,
+      options?.deleteUploaded ? deletePhotos : undefined
+    )
   }
 
   const removeUploadFile = async (
@@ -401,28 +387,11 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
     fileId: string,
     options?: { deleteUploaded?: boolean }
   ) => {
-    const uploadedPhotoIds =
-      uploadSessions[eventId]?.files.find((f) => f.id === fileId)
-        ?.uploadedPhotoIds || []
-
-    if (options?.deleteUploaded !== false && uploadedPhotoIds.length > 0) {
-      await deletePhotos(uploadedPhotoIds)
-    }
-
-    setUploadSessions((prev) => {
-      const session = prev[eventId]
-      if (!session) return prev
-
-      const updatedFiles = session.files.filter((f) => f.id !== fileId)
-
-      return {
-        ...prev,
-        [eventId]: {
-          ...session,
-          files: updatedFiles,
-        },
-      }
-    })
+    return uploadStore.remove(
+      eventId,
+      fileId,
+      options?.deleteUploaded === false ? undefined : deletePhotos
+    )
   }
 
   const startUpload = async (files: File[], metadata?: UploadMetadata) => {
@@ -432,40 +401,18 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
 
     // Create local tracking for each file
     const newFiles: UploadFile[] = files.map((f) => ({
-      id: Math.random().toString(36).substr(2, 9),
+      id:
+        globalThis.crypto?.randomUUID?.() ??
+        `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       file: f,
       progress: 0,
       status: "pending",
     }))
 
-    setUploadSessions((prev) => {
-      const existing = prev[eventId]
-      return {
-        ...prev,
-        [eventId]: {
-          eventId,
-          startTime: existing ? existing.startTime : Date.now(),
-          status: "uploading",
-          files: existing ? [...existing.files, ...newFiles] : newFiles,
-        },
-      }
-    })
+    if (!uploadStore.addFiles(eventId, newFiles)) return
 
     const updateQueuedFile = (fileId: string, updates: Partial<UploadFile>) => {
-      setUploadSessions((prev) => {
-        const session = prev[eventId]
-        if (!session) return prev
-        return {
-          ...prev,
-          [eventId]: {
-            ...session,
-            files: session.files.map((f) => ({
-              ...f,
-              ...(f.id === fileId ? updates : {}),
-            })),
-          },
-        }
-      })
+      uploadStore.updateFile(eventId, fileId, updates)
     }
 
     const getUploadToken = async (skipCache = false) => {

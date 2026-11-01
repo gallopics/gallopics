@@ -5,7 +5,11 @@ import { CheckCircle, Trash2, UploadCloud, X } from "lucide-react"
 import { notify } from "@/lib/notify"
 import { cn } from "@/lib/utils"
 import { useWorkspaceEvents } from "@/hooks/useWorkspaceData"
-import { usePhotographer } from "@/context/PhotographerContext"
+import {
+  isUploadInProgress,
+  isUploadSessionBusy,
+  usePhotographer,
+} from "@/context/PhotographerContext"
 import { useWorkspace } from "@/context/WorkspaceContext"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
@@ -45,9 +49,7 @@ export function UploadPage() {
   const selectedEventId = urlEventId || defaultEventId
   const [isDragActive, setIsDragActive] = useState(false)
   const [confirmClearOpen, setConfirmClearOpen] = useState(false)
-  const [isClearing, setIsClearing] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const previewUrlsRef = useRef<Record<string, string>>({})
 
   // Sync Context whenever selectedEventId changes
   useEffect(() => {
@@ -68,34 +70,10 @@ export function UploadPage() {
   const session = selectedEventId ? uploadSessions[selectedEventId] : null
   const files = session?.files || []
   const hasFiles = files.length > 0
-
-  const previewUrls = useMemo(() => {
-    const activeFileIds = new Set(files.map((file) => file.id))
-
-    Object.entries(previewUrlsRef.current).forEach(([fileId, url]) => {
-      if (!activeFileIds.has(fileId)) {
-        URL.revokeObjectURL(url)
-        delete previewUrlsRef.current[fileId]
-      }
-    })
-
-    files.forEach((file) => {
-      if (!previewUrlsRef.current[file.id]) {
-        previewUrlsRef.current[file.id] = URL.createObjectURL(file.file)
-      }
-    })
-
-    return previewUrlsRef.current
-  }, [files])
-
-  useEffect(() => {
-    return () => {
-      Object.values(previewUrlsRef.current).forEach((url) => {
-        URL.revokeObjectURL(url)
-      })
-      previewUrlsRef.current = {}
-    }
-  }, [])
+  const isUploading = files.some(isUploadInProgress)
+  const isClearing = !!session?.isClearing
+  const isRemoving = files.some((file) => file.isRemoving)
+  const isBusy = isUploadSessionBusy(session)
 
   const selectedEvent = events.find((event) => event.id === selectedEventId)
   const canUploadPhotos = selectedEvent?.canUploadPhotos !== false
@@ -137,14 +115,14 @@ export function UploadPage() {
     e.preventDefault()
     e.stopPropagation()
     setIsDragActive(false)
-    if (!canUploadPhotos) return
+    if (!canUploadPhotos || isClearing) return
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       handleFiles(Array.from(e.dataTransfer.files))
     }
   }
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!canUploadPhotos) return
+    if (!canUploadPhotos || isClearing) return
     if (e.target.files && e.target.files.length > 0) {
       handleFiles(Array.from(e.target.files))
     }
@@ -152,7 +130,7 @@ export function UploadPage() {
   }
 
   const handleFiles = (newFiles: File[]) => {
-    if (!canUploadPhotos) return
+    if (!canUploadPhotos || isClearing) return
     const validFiles = newFiles.filter((f) => f.type.startsWith("image/"))
 
     if (validFiles.length === 0) {
@@ -184,26 +162,41 @@ export function UploadPage() {
   }
 
   const handleClearAll = () => {
-    if (selectedEventId && hasFiles) {
+    if (selectedEventId && hasFiles && !isBusy) {
       setConfirmClearOpen(true)
     }
   }
 
   const handleConfirmClear = async () => {
-    if (!selectedEventId) return
+    if (!selectedEventId || isBusy) return
 
     try {
-      setIsClearing(true)
-      await clearUploadSession(selectedEventId, { deleteUploaded: true })
-      setConfirmClearOpen(false)
-    } finally {
-      setIsClearing(false)
+      const cleared = await clearUploadSession(selectedEventId, {
+        deleteUploaded: true,
+      })
+      if (cleared) setConfirmClearOpen(false)
+    } catch {
+      // The session keeps the visible error, including across page navigation.
     }
   }
 
-  const handleViewPhotos = () => {
+  const handleRemoveFile = async (fileId: string) => {
     if (!selectedEventId) return
-    void clearUploadSession(selectedEventId)
+    try {
+      await removeUploadFile(selectedEventId, fileId)
+    } catch (error) {
+      notify(
+        error instanceof Error
+          ? error.message
+          : "Unable to remove this photo. Please try again.",
+        "error"
+      )
+    }
+  }
+
+  const handleViewPhotos = async () => {
+    if (!selectedEventId || isBusy) return
+    if (!(await clearUploadSession(selectedEventId))) return
     const params = new URLSearchParams()
     if (urlClassSectionId) params.set("classSectionId", urlClassSectionId)
     if (urlEquipeClassSectionId) {
@@ -230,6 +223,16 @@ export function UploadPage() {
           <X className="size-5" />
         </Button>
       </header>
+
+      <input
+        type="file"
+        multiple
+        accept="image/*"
+        ref={fileInputRef}
+        className="hidden"
+        onChange={handleFileSelect}
+        disabled={!canUploadPhotos || isClearing}
+      />
 
       <div className="grid min-h-0 flex-1 grid-cols-[360px_1fr] max-[1000px]:grid-cols-1">
         {/* Sidebar: event context + drop zone */}
@@ -267,9 +270,9 @@ export function UploadPage() {
               onDragOver={handleDrag}
               onDrop={handleDrop}
               onClick={() => {
-                if (canUploadPhotos) fileInputRef.current?.click()
+                fileInputRef.current?.click()
               }}
-              aria-disabled={!canUploadPhotos}
+              disabled={!canUploadPhotos || isClearing}
             >
               <span className="mb-5 flex size-16 items-center justify-center rounded-[20px] bg-primary/8 text-primary transition-transform duration-300 group-hover/drop:scale-110 group-hover/drop:rotate-5">
                 <UploadCloud className="size-6" />
@@ -283,21 +286,50 @@ export function UploadPage() {
                   : "This event is read-only because the booking was cancelled."}
               </span>
             </button>
-            <input
-              type="file"
-              multiple
-              accept="image/*"
-              ref={fileInputRef}
-              className="hidden"
-              onChange={handleFileSelect}
-              disabled={!canUploadPhotos}
-            />
           </div>
         </aside>
 
         {/* Main stage: upload queue */}
-        <main className="relative min-h-0 overflow-hidden">
+        <main
+          className={cn(
+            "relative min-h-0 overflow-hidden",
+            isDragActive && "ring-2 ring-primary ring-inset"
+          )}
+          onDragEnter={handleDrag}
+          onDragLeave={handleDrag}
+          onDragOver={handleDrag}
+          onDrop={handleDrop}
+        >
           <div className="h-full overflow-y-auto px-15 py-10 max-md:px-4">
+            <div className="mb-6 hidden items-center justify-between gap-4 max-[1000px]:flex">
+              <div className="min-w-0">
+                <div className="truncate text-sm font-semibold">
+                  {selectedEventTitle}
+                </div>
+                {urlClassName && (
+                  <div className="truncate text-xs text-muted-foreground">
+                    {urlClassName}
+                  </div>
+                )}
+              </div>
+              <Button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={!canUploadPhotos || isClearing}
+              >
+                <UploadCloud />
+                {canUploadPhotos ? "Add photos" : "Uploads closed"}
+              </Button>
+            </div>
+            {(isClearing || isRemoving) && (
+              <p role="status" className="mb-4 text-sm text-muted-foreground">
+                Removing photos...
+              </p>
+            )}
+            {hasFiles && !confirmClearOpen && session?.clearError && (
+              <p role="alert" className="mb-4 text-sm text-destructive">
+                {session.clearError}
+              </p>
+            )}
             {hasFiles ? (
               <div className="mt-2 grid grid-cols-5 gap-5 pb-35 max-[1200px]:grid-cols-4 max-[1000px]:grid-cols-3">
                 {files.map((item) => (
@@ -305,11 +337,7 @@ export function UploadPage() {
                     key={item.id}
                     className="group/item relative aspect-square overflow-hidden rounded-md border border-black/5 bg-card shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md"
                   >
-                    <img
-                      src={previewUrls[item.id]}
-                      alt={item.file.name}
-                      className="size-full object-cover"
-                    />
+                    <UploadThumbnail file={item.file} />
                     <div className="pointer-events-none absolute inset-0 flex flex-col justify-end bg-linear-to-t from-black/60 via-black/20 via-40% to-transparent p-3">
                       <div className="mb-1.5 truncate text-xs font-semibold text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.5)]">
                         {item.file.name}
@@ -350,26 +378,34 @@ export function UploadPage() {
                         className="group/check absolute top-2.5 right-2.5 z-2 flex size-7 items-center justify-center rounded-full bg-white shadow-[0_4px_12px_rgba(0,0,0,0.1)] transition-all duration-200 hover:scale-105 hover:bg-destructive/15"
                         onClick={(e) => {
                           e.stopPropagation()
-                          if (selectedEventId) {
-                            void removeUploadFile(selectedEventId, item.id)
-                          }
+                          void handleRemoveFile(item.id)
                         }}
                         title="Remove uploaded photo"
                         aria-label="Remove uploaded photo"
+                        disabled={isClearing || item.isRemoving}
+                        aria-busy={item.isRemoving}
                       >
                         <CheckCircle className="size-5 text-primary group-hover/check:text-destructive" />
                       </button>
                     ) : (
                       <button
                         type="button"
-                        className="absolute top-2 right-2 z-10 flex size-8 scale-90 items-center justify-center rounded-full bg-white/95 text-destructive opacity-0 shadow-[0_2px_8px_rgba(0,0,0,0.15)] transition-all duration-200 group-hover/item:scale-100 group-hover/item:opacity-100 hover:scale-110! hover:bg-destructive/15 focus-visible:opacity-100"
+                        className="absolute top-2 right-2 z-10 flex size-8 scale-90 items-center justify-center rounded-full bg-white/95 text-destructive opacity-0 shadow-[0_2px_8px_rgba(0,0,0,0.15)] transition-all duration-200 group-hover/item:scale-100 group-hover/item:opacity-100 hover:scale-110! hover:bg-destructive/15 focus-visible:opacity-100 disabled:cursor-not-allowed disabled:text-muted-foreground"
                         onClick={(e) => {
                           e.stopPropagation()
-                          if (selectedEventId)
-                            void removeUploadFile(selectedEventId, item.id)
+                          void handleRemoveFile(item.id)
                         }}
-                        title="Remove photo"
+                        title={
+                          isUploadInProgress(item)
+                            ? "Wait for this upload to finish before removing it"
+                            : "Remove photo"
+                        }
                         aria-label="Remove photo"
+                        disabled={
+                          isUploadInProgress(item) ||
+                          isClearing ||
+                          item.isRemoving
+                        }
                       >
                         <Trash2 className="size-4" />
                       </button>
@@ -387,7 +423,7 @@ export function UploadPage() {
                 </h3>
                 <p className="max-w-80 text-sm leading-[1.6]">
                   {canUploadPhotos
-                    ? "Select an event, then drag photos into the sidebar to start uploading."
+                    ? "Choose photos or drag them here to start uploading."
                     : "This event is read-only because the booking was cancelled."}
                 </p>
               </div>
@@ -399,7 +435,7 @@ export function UploadPage() {
       {/* Floating action pill */}
       {hasFiles && (
         <div className="pointer-events-none fixed inset-x-4 bottom-4 z-50 flex justify-center">
-          <div className="pointer-events-auto flex items-center gap-10 rounded-full border border-black/8 bg-card/90 py-2 pr-2 pl-6 shadow-[0_12px_32px_rgba(0,0,0,0.12),0_2px_8px_rgba(0,0,0,0.04)] backdrop-blur-lg">
+          <div className="pointer-events-auto flex max-w-full items-center gap-4 rounded-full border border-black/8 bg-card/90 py-2 pr-2 pl-4 shadow-[0_12px_32px_rgba(0,0,0,0.12),0_2px_8px_rgba(0,0,0,0.04)] backdrop-blur-lg sm:gap-10 sm:pl-6">
             <span className="text-[0.8125rem] font-semibold tracking-[0.05em] text-foreground uppercase">
               {files.length} Item{files.length === 1 ? "" : "s"}
             </span>
@@ -408,10 +444,16 @@ export function UploadPage() {
                 variant="link"
                 className="h-auto p-0 font-medium text-muted-foreground hover:text-foreground hover:no-underline"
                 onClick={handleClearAll}
+                disabled={isBusy}
               >
                 Clear all
               </Button>
-              <Button className="px-9 font-bold" onClick={handleViewPhotos}>
+              <Button
+                className="px-9 font-bold"
+                onClick={handleViewPhotos}
+                disabled={isBusy}
+                aria-busy={isBusy}
+              >
                 Done
               </Button>
             </div>
@@ -424,11 +466,39 @@ export function UploadPage() {
         onCancel={() => setConfirmClearOpen(false)}
         onConfirm={handleConfirmClear}
         busy={isClearing}
+        confirmDisabled={isUploading || isRemoving}
         title="Clear all items?"
-        description="This will remove all photos from the current queue. This action cannot be undone."
+        description={
+          <>
+            This will remove all photos from the current queue. This action
+            cannot be undone.
+            {session?.clearError && (
+              <span role="alert" className="mt-3 block text-destructive">
+                {session.clearError}
+              </span>
+            )}
+          </>
+        }
         confirmLabel={isClearing ? "Clearing..." : "Clear All"}
       />
     </div>
+  )
+}
+
+function UploadThumbnail({ file }: { file: File }) {
+  const imageRef = useRef<HTMLImageElement>(null)
+
+  useEffect(() => {
+    const image = imageRef.current
+    if (!image) return
+
+    const url = URL.createObjectURL(file)
+    image.src = url
+    return () => URL.revokeObjectURL(url)
+  }, [file])
+
+  return (
+    <img ref={imageRef} alt={file.name} className="size-full object-cover" />
   )
 }
 
