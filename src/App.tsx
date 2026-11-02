@@ -23,16 +23,10 @@ const EventsPage = lazy(() =>
 const EventProfile = lazy(() =>
   import("@/pages/EventProfile").then((m) => ({ default: m.EventProfile }))
 )
-const HorseProfile = lazy(() =>
-  import("@/pages/HorseProfile").then((m) => ({ default: m.HorseProfile }))
-)
 const PhotographerProfile = lazy(() =>
   import("@/pages/PhotographerProfile").then((m) => ({
     default: m.PhotographerProfile,
   }))
-)
-const RiderProfile = lazy(() =>
-  import("@/pages/RiderProfile").then((m) => ({ default: m.RiderProfile }))
 )
 const Cart = lazy(() =>
   import("@/pages/Cart").then((m) => ({ default: m.Cart }))
@@ -130,12 +124,6 @@ function App() {
                   <Route path="/event/:eventId" element={<EventProfile />} />
                   <Route
                     path="/photographer/:id"
-                    element={<PhotographerProfile />}
-                  />
-                  <Route path="/rider/:riderId" element={<RiderProfile />} />
-                  <Route path="/horse/:horseId" element={<HorseProfile />} />
-                  <Route
-                    path="/photographerprofile"
                     element={<PhotographerProfile />}
                   />
                   <Route path="/photo/:id" element={<ImageProfile />} />

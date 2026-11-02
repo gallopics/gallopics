@@ -95,15 +95,6 @@ const normalizeApprovalStatus = (
   return undefined
 }
 
-export const PROTOTYPE_USER = {
-  id: "klara-fors",
-  displayName: "Klara Fors",
-  country: "Sweden",
-  city: "Stockholm",
-  avatarUrl: "",
-  role: "pg" as const,
-}
-
 const slugify = (value: string) =>
   value
     .normalize("NFD")

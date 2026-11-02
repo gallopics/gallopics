@@ -23,7 +23,6 @@ import {
   type ApiPhoto,
   type CheckoutItem,
 } from "@/data/apiClient"
-import { HORSES, PHOTOGRAPHERS, RIDERS } from "@/data/mockData"
 import { eventQueryOptions } from "@/data/queries/events"
 import {
   photoQueryOptions,
@@ -206,36 +205,11 @@ function ImageProfileContent({
   })
   const event = eventQuery.data
   const takenAt = apiPhoto?.taken_at ? new Date(apiPhoto.taken_at) : null
-  const photographer = useMemo(() => {
-    const p =
-      PHOTOGRAPHERS.find((pg) => pg.primaryEventId === photo.eventId) ||
-      PHOTOGRAPHERS[0]
-    return p
-  }, [photo.eventId])
-  const displayedPhotographer = useMemo(() => {
-    const hasMockPhotographer = Boolean(
-      !isUuid(photo.photographerId || "") &&
-      photo.photographer &&
-      photo.photographer !== "Gallopics"
-    )
-    const fallbackName: string =
-      hasMockPhotographer && photo.photographer
-        ? photo.photographer
-        : photo.photographer || "Gallopics"
-    // develop: no local avatar images any more
-    const fallbackAvatarUrl = undefined
-
-    return {
-      id:
-        apiPhotographer?.slug ||
-        apiPhotographer?.id ||
-        photo.photographerId ||
-        photographer.id,
-      name: apiPhotographer?.display_name || fallbackName,
-      avatarUrl:
-        resolveApiAssetUrl(apiPhotographer?.avatar_url) || fallbackAvatarUrl,
-    }
-  }, [apiPhotographer, photo.photographer, photo.photographerId, photographer])
+  const displayedPhotographer = {
+    id: apiPhotographer?.slug || apiPhotographer?.id || photo.photographerId,
+    name: apiPhotographer?.display_name || photo.photographer || "Gallopics",
+    avatarUrl: resolveApiAssetUrl(apiPhotographer?.avatar_url) || undefined,
+  }
 
   // The loaded image's real orientation; until then the photo's stated size
   const orientationKey = `${photo.id}:${photo.width}x${photo.height}`
@@ -356,39 +330,29 @@ function ImageProfileContent({
 
                 <div className="flex w-full items-start justify-between gap-3 border-t border-black/5 px-6 py-4 max-md:px-4">
                   <div className="flex min-w-0 flex-1 flex-wrap items-start gap-2">
+                    {/* No rider / horse pages yet: plain names */}
                     <InfoChip
                       label="Rider"
                       name={photo.rider}
                       variant="rider"
-                      onClick={() => {
-                        const riderData = RIDERS.find(
-                          (r) => `${r.firstName} ${r.lastName}` === photo.rider
-                        )
-                        const rId = riderData ? riderData.id : "r1"
-                        navigate(`/rider/${rId}?from=photo&photoId=${photo.id}`)
-                      }}
                     />
                     <InfoChip
                       label="Horse"
                       name={photo.horse}
                       variant="horse"
-                      onClick={() => {
-                        const horseData = HORSES.find(
-                          (h) => h.name === photo.horse
-                        )
-                        const hId = horseData ? horseData.id : "h1"
-                        navigate(`/horse/${hId}?from=photo&photoId=${photo.id}`)
-                      }}
                     />
                     <InfoChip
                       label="Photographer"
                       name={displayedPhotographer.name}
                       variant="photographer"
                       avatarUrl={displayedPhotographer.avatarUrl}
-                      onClick={() =>
-                        navigate(
-                          `/photographer/${displayedPhotographer.id}?from=ipro&eventId=${photo.eventId}`
-                        )
+                      onClick={
+                        displayedPhotographer.id
+                          ? () =>
+                              navigate(
+                                `/photographer/${displayedPhotographer.id}?from=ipro&eventId=${photo.eventId}`
+                              )
+                          : undefined
                       }
                     />
                   </div>

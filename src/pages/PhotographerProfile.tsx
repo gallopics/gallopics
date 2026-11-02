@@ -6,14 +6,7 @@ import {
   useQuery,
   type UseQueryResult,
 } from "@tanstack/react-query"
-import {
-  CalendarDays,
-  ChevronLeft,
-  Images,
-  Music2,
-  Pencil,
-  Search,
-} from "lucide-react"
+import { CalendarDays, ChevronLeft, Images, Pencil, Search } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { useWorkspaceEvents } from "@/hooks/useWorkspaceData"
@@ -24,8 +17,7 @@ import {
   resolveApiAssetUrl,
   type ApiPhoto,
 } from "@/data/apiClient"
-import { getActivePhotographerProfile, PHOTOGRAPHERS } from "@/data/mockData"
-import { mockEvents } from "@/data/mockEvents"
+import { eventQueryOptions } from "@/data/queries/events"
 import {
   highlightsQueryOptions,
   myPhotosQueryOptions,
@@ -45,13 +37,8 @@ import { DotList } from "@/components/DotList"
 import { EmptyState } from "@/components/EmptyState"
 import { Footer } from "@/components/Footer"
 import { Header } from "@/components/Header"
-import {
-  ActionCluster,
-  ActionIconButton,
-  ActionSeparator,
-} from "@/components/HeaderActions"
+import { ActionCluster, ActionSeparator } from "@/components/HeaderActions"
 import { Highlights } from "@/components/Highlights"
-import { InstagramIcon } from "@/components/icons/InstagramIcon"
 import { ManageHighlightsModal } from "@/components/ManageHighlightsModal"
 import { MasonryGrid } from "@/components/MasonryGrid"
 import { PhotoCard } from "@/components/PhotoCard"
@@ -115,7 +102,7 @@ function GalleryCard({
 }
 
 export function PhotographerProfile() {
-  const { id = "hanna-bjork" } = useParams()
+  const { id = "" } = useParams()
   const navigate = useNavigate()
   const { user: authUser, isLoaded: isAuthLoaded, isPhotographer } = useAuth()
 
@@ -123,7 +110,12 @@ export function PhotographerProfile() {
   const [searchParams] = useSearchParams()
   const from = searchParams.get("from")
   const eventId = searchParams.get("eventId")
-  const sourceEvent = eventId ? mockEvents.find((e) => e.id === eventId) : null
+  // Coming from an event or photo: the event's name for the breadcrumb
+  const sourceEventQuery = useQuery({
+    ...eventQueryOptions(eventId ?? ""),
+    enabled: !!eventId && (from === "event" || from === "ipro"),
+  })
+  const sourceEventName = sourceEventQuery.data?.name
 
   const [activeTab, setActiveTab] = useState<"highlights" | "photos">(
     "highlights"
@@ -132,7 +124,7 @@ export function PhotographerProfile() {
   const [galleryClassKey, setGalleryClassKey] = useState("")
 
   // Breadcrumbs
-  const { photographerId: loggedInId, availableToHire } = usePhotographer()
+  const { photographerId: loggedInId } = usePhotographer()
   const saveHighlights = useMutation(saveHighlightsMutationOptions())
   const isOwner = id === loggedInId
   const [isHighlightsModalOpen, setIsHighlightsModalOpen] = useState(false)
@@ -157,73 +149,24 @@ export function PhotographerProfile() {
   const apiPhotographer = apiPhotographerQuery.data ?? null
   const isLoadingApiPhotographer = apiPhotographerQuery.isPending
 
-  const activeProfile = useMemo(() => {
-    const isKnownMockPhotographer = PHOTOGRAPHERS.some((p) => p.id === id)
-    // Visitors only see real profiles (the API hides pending/rejected ones); the owner sees their own
-    if (
-      !apiPhotographer &&
-      !isKnownMockPhotographer &&
-      (isLoadingApiPhotographer || !isOwner)
-    ) {
-      return null
-    }
-
-    const baseProfile = getActivePhotographerProfile(id)
+  const photographer = useMemo(() => {
     if (apiPhotographer) {
-      const [firstName = apiPhotographer.display_name, ...lastNameParts] =
-        apiPhotographer.display_name.split(" ")
-
       return {
-        ...baseProfile,
-        photographer: {
-          ...baseProfile.photographer,
-          id: apiPhotographer.slug,
-          firstName,
-          lastName: lastNameParts.join(" "),
-          city: apiPhotographer.city || "",
-          countryCode:
-            apiPhotographer.country || baseProfile.photographer.countryCode,
-          avatarUrl: apiPhotographer.avatar_url,
-          highlights: apiPhotographer.highlights || [],
-          isAvailableToHire: apiPhotographer.is_available_to_hire,
-        },
-        dummyEvents: [],
+        name: apiPhotographer.display_name,
+        city: apiPhotographer.city || "",
+        avatarUrl: apiPhotographer.avatar_url,
       }
     }
-
-    const isKnownPhotographer = baseProfile.photographer.id === id
-
-    if (isKnownPhotographer || !isOwner || !authUser) {
-      return baseProfile
-    }
-
-    const [firstName = authUser.displayName, ...lastNameParts] =
-      authUser.displayName.split(" ")
-
-    return {
-      ...baseProfile,
-      photographer: {
-        ...baseProfile.photographer,
-        id,
-        firstName,
-        lastName: lastNameParts.join(" "),
+    // Visitors only see real profiles (the API hides pending/rejected ones); the owner sees their own
+    if (isOwner && authUser) {
+      return {
+        name: authUser.displayName,
         city: authUser.city,
-        countryCode: authUser.country || baseProfile.photographer.countryCode,
         avatarUrl: authUser.avatarUrl || null,
-        highlights: [],
-        isAvailableToHire: availableToHire,
-      },
-      dummyEvents: [],
+      }
     }
-  }, [
-    id,
-    apiPhotographer,
-    isLoadingApiPhotographer,
-    isOwner,
-    authUser,
-    availableToHire,
-  ])
-  const photographer = activeProfile?.photographer
+    return null
+  }, [apiPhotographer, isOwner, authUser])
 
   // Visitors see the highlights saved on the public profile
   const highlightIds =
@@ -272,20 +215,20 @@ export function PhotographerProfile() {
     const items: BreadcrumbItem[] = [
       { label: "Events", onClick: () => navigate("/") },
     ]
-    if ((from === "event" || from === "ipro") && sourceEvent) {
+    if ((from === "event" || from === "ipro") && sourceEventName) {
       items.push({
-        label: sourceEvent.name,
+        label: sourceEventName,
         onClick: () => navigate(`/event/${eventId}`),
       })
     }
     if (photographer) {
       items.push({
-        label: `${photographer.firstName} ${photographer.lastName}`,
+        label: photographer.name,
         active: true,
       })
     }
     return items
-  }, [from, sourceEvent, eventId, photographer, navigate])
+  }, [from, sourceEventName, eventId, photographer, navigate])
 
   useEffect(() => {
     setGalleryEventId("")
@@ -312,9 +255,7 @@ export function PhotographerProfile() {
           arena: ev?.venueName || "Main Arena",
           countryCode: "SE",
           discipline: ev?.disciplines?.[0] || "Showjumping",
-          photographer: photographer
-            ? `${photographer.firstName} ${photographer.lastName}`.trim()
-            : undefined,
+          photographer: photographer?.name,
           photographerId: loggedInId,
         }
       })
@@ -339,7 +280,6 @@ export function PhotographerProfile() {
 
     profilePhotos.forEach((photo) => {
       const event = contextEvents.find((e) => e.id === photo.eventId)
-      const fallbackEvent = mockEvents.find((e) => e.id === photo.eventId)
       const existing = groups.get(photo.eventId)
 
       if (existing) {
@@ -349,13 +289,9 @@ export function PhotographerProfile() {
 
       groups.set(photo.eventId, {
         id: photo.eventId,
-        title: event?.title || fallbackEvent?.name || photo.event || "Event",
-        date:
-          event?.dateRange ||
-          event?.date ||
-          fallbackEvent?.period ||
-          photo.date,
-        city: event?.city || fallbackEvent?.city || photo.city,
+        title: event?.title || photo.event || "Event",
+        date: event?.dateRange || event?.date || photo.date,
+        city: event?.city || photo.city,
         cover: photo.src,
         photos: [photo],
       })
@@ -447,7 +383,6 @@ export function PhotographerProfile() {
     isOwner,
     contextHighlights,
     contextPhotos,
-    photographer?.highlights,
     contextEvents,
   ])
 
@@ -464,7 +399,7 @@ export function PhotographerProfile() {
     isLoadingApiPhotographer ||
     isLoadingHighlights ||
     // A hidden (pending/rejected) profile may be the signed-in user's own
-    (!activeProfile && !isAuthLoaded)
+    (!photographer && !isAuthLoaded)
   ) {
     const highlightCount = isOwner
       ? contextHighlights.length
@@ -481,7 +416,7 @@ export function PhotographerProfile() {
     )
   }
 
-  if (!activeProfile || !photographer) {
+  if (!photographer) {
     return (
       <div className="flex min-h-screen flex-col">
         <Header />
@@ -494,9 +429,7 @@ export function PhotographerProfile() {
   }
 
   const photographerAvatar =
-    resolveApiAssetUrl(
-      "avatarUrl" in photographer ? photographer.avatarUrl : null
-    ) ?? undefined
+    resolveApiAssetUrl(photographer.avatarUrl) ?? undefined
 
   const visibleTab = isOwner ? activeTab : "highlights"
 
@@ -508,7 +441,7 @@ export function PhotographerProfile() {
 
       <TitleHeader
         className="border-b-0"
-        title={`${photographer.firstName} ${photographer.lastName}`}
+        title={photographer.name}
         avatar={photographerAvatar}
         avatarVariant="photographer"
         subtitle={
@@ -526,28 +459,7 @@ export function PhotographerProfile() {
             </DotList>
           )
         }
-        rightContent={
-          <ActionCluster>
-            {/* "Available to hire" toggle and "Hire me" button are disabled in the old app too */}
-            <ActionSeparator />
-            <ActionIconButton
-              aria-label="Instagram"
-              title="Instagram"
-              onClick={(e) => e.preventDefault()}
-            >
-              <InstagramIcon size={20} />
-            </ActionIconButton>
-            <ActionIconButton
-              aria-label="TikTok"
-              title="TikTok"
-              onClick={(e) => e.preventDefault()}
-            >
-              <Music2 className="size-5" />
-            </ActionIconButton>
-            <ActionSeparator />
-            {/* develop: share button hidden */}
-          </ActionCluster>
-        }
+        // develop: "Hire me", Instagram / TikTok (no links in the API yet) and share hidden
       />
 
       <ManageHighlightsModal

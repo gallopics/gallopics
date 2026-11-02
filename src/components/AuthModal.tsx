@@ -5,7 +5,6 @@ import { Check, Link, Monitor } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { useMediaQuery } from "@/hooks/useMediaQuery"
-import { PROTOTYPE_USER } from "@/context/AuthContext"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -149,10 +148,6 @@ const getPostSignUpUrl = () => buildAbsoluteUrl("/pg/onboarding/profile")
 
 const getPostSignInRoute = (identifier: string) => {
   const normalized = identifier.trim().toLowerCase()
-
-  if (normalized === "member") {
-    return `/photographer/${PROTOTYPE_USER.id}`
-  }
 
   if (normalized === "admin" || normalized.startsWith("admin@")) {
     return "/admin/events"

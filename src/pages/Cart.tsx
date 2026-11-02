@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react"
 import { useNavigate, useSearchParams } from "react-router"
-import { useQueries } from "@tanstack/react-query"
+import { useQueries, useQuery } from "@tanstack/react-query"
 import { ArrowLeft, Eye, ShoppingBag, Trash2 } from "lucide-react"
 
 import {
@@ -11,7 +11,7 @@ import {
 } from "@/constants/qualityTiers"
 import { useCart } from "@/context/CartContext"
 import type { ApiPhoto, CheckoutItem } from "@/data/apiClient"
-import { COMPETITIONS } from "@/data/mockData"
+import { eventQueryOptions } from "@/data/queries/events"
 import { photoQueryOptions } from "@/data/queries/photos"
 import type { Photo } from "@/types"
 import { Badge } from "@/components/ui/badge"
@@ -121,6 +121,16 @@ export function Cart() {
 
   const fromPath = searchParams.get("from")
 
+  // Coming from an event page: its name (usually already loaded there)
+  const fromEventId = fromPath
+    ? decodeURIComponent(fromPath).split("/event/")[1]?.split("?")[0]
+    : undefined
+  const fromEventQuery = useQuery({
+    ...eventQueryOptions(fromEventId ?? ""),
+    enabled: !!fromEventId,
+  })
+  const fromEventName = fromEventQuery.data?.name
+
   const breadcrumbs = useMemo<BreadcrumbItem[]>(() => {
     const items: BreadcrumbItem[] = []
 
@@ -128,10 +138,8 @@ export function Cart() {
       const decoded = decodeURIComponent(fromPath)
       // Handle /event/:id
       if (decoded.includes("/event/")) {
-        const eventId = decoded.split("/event/")[1]?.split("?")[0]
-        const event = COMPETITIONS.find((c) => c.id === eventId)
-        if (event) {
-          items.push({ label: event.name, onClick: () => navigate(decoded) })
+        if (fromEventName) {
+          items.push({ label: fromEventName, onClick: () => navigate(decoded) })
         } else {
           items.push({ label: "Events", onClick: () => navigate("/") })
         }
@@ -155,7 +163,7 @@ export function Cart() {
 
     items.push({ label: "Cart", active: true })
     return items
-  }, [fromPath, navigate])
+  }, [fromPath, fromEventName, navigate])
 
   const checkoutItems = useMemo<CheckoutItem[]>(
     () =>

@@ -37,7 +37,12 @@ export function InfoChip({
         <span className="text-[9px] leading-[1.2] font-medium tracking-[0.5px] text-muted-foreground uppercase">
           {label}
         </span>
-        <span className="text-sm leading-[1.2] font-semibold text-foreground group-hover/info-chip:underline">
+        <span
+          className={cn(
+            "text-sm leading-[1.2] font-semibold text-foreground",
+            onClick && "group-hover/info-chip:underline"
+          )}
+        >
           {name}
         </span>
       </div>

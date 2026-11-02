@@ -24,9 +24,6 @@ import {
   mapApiPhotoToPhoto,
   mapApiScheduleToDailySchedule,
 } from "@/data/eventsApi"
-import { PHOTOGRAPHERS } from "@/data/mockData"
-import { eventDetails } from "@/data/mockEventDetails"
-import type { EventData } from "@/data/mockEvents"
 import {
   eventGalleryQueryOptions,
   eventQueryOptions,
@@ -36,7 +33,12 @@ import {
   deletePhotosMutationOptions,
   myPhotosQueryOptions,
 } from "@/data/queries/photographer"
-import type { ClassSection, EventDetail, Photo as EventPhoto } from "@/types"
+import type {
+  ClassSection,
+  EventData,
+  EventDetail,
+  Photo as EventPhoto,
+} from "@/types"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Breadcrumbs, BreadcrumbsSkeleton } from "@/components/Breadcrumbs"
@@ -103,10 +105,9 @@ export function EventProfile() {
     navigate(fromPath, fromTab ? { state: { tab: fromTab } } : undefined)
   }
 
-  const localEventDetail = eventDetails.find((e) => e.meetingId === eventId)
   const eventQuery = useQuery({
     ...eventQueryOptions(eventId ?? ""),
-    enabled: !!eventId && !localEventDetail,
+    enabled: !!eventId,
   })
   const apiEvent = eventQuery.data
   // Optional: without a schedule the event gets a placeholder one
@@ -114,7 +115,7 @@ export function EventProfile() {
     ...eventScheduleQueryOptions(apiEvent?.id ?? ""),
     enabled: !!apiEvent,
   })
-  const apiEventDetail = useMemo<EventDetail | null>(
+  const eventDetail = useMemo<EventDetail | null>(
     () =>
       apiEvent
         ? buildApiEventDetail(
@@ -126,16 +127,12 @@ export function EventProfile() {
     [apiEvent, scheduleQuery.data]
   )
   const isLoadingEvent =
-    !localEventDetail &&
     !!eventId &&
     (eventQuery.isPending || (!!eventQuery.data && scheduleQuery.isPending))
+  // 422: the ID isn't a valid event ID at all (e.g. an old mock link)
   const isEventNotFound =
-    eventQuery.error instanceof ApiError && eventQuery.error.status === 404
-  const eventDetail = localEventDetail || apiEventDetail
-  const eventPhotographer = useMemo(
-    () => PHOTOGRAPHERS.find((p) => p.primaryEventId === eventId),
-    [eventId]
-  )
+    eventQuery.error instanceof ApiError &&
+    (eventQuery.error.status === 404 || eventQuery.error.status === 422)
 
   const [searchQuery, setSearchQuery] = useState("")
   const [eventClass, setEventClass] = useState("All")
@@ -155,8 +152,7 @@ export function EventProfile() {
   )
 
   // Public photos, unless the photographer manages their own event here
-  const showsPublicPhotos =
-    !!eventDetail && !isPhotographerMyEventView && !localEventDetail
+  const showsPublicPhotos = !!eventDetail && !isPhotographerMyEventView
   const toPublicPhotos = useCallback(
     (page: PaginatedResponse<ApiPhoto>) => {
       if (!eventDetail) return []
@@ -434,16 +430,16 @@ export function EventProfile() {
         }
         rightContent={
           <ActionCluster>
-            {eventPhotographer && (
+            {meeting.photographer && (
               <>
                 <InfoChip
                   label="Photographer"
-                  name={`${eventPhotographer.firstName} ${eventPhotographer.lastName}`}
+                  name={meeting.photographer.name}
                   variant="photographer"
-                  avatarUrl={undefined}
+                  avatarUrl={meeting.photographer.avatar || undefined}
                   onClick={() =>
                     navigate(
-                      `/photographer/${eventPhotographer.id}?from=event&eventId=${eventId}`
+                      `/photographer/${meeting.photographer?.id}?from=event&eventId=${eventId}`
                     )
                   }
                 />
