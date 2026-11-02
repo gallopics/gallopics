@@ -26,12 +26,24 @@ import {
   type QualityTierId,
 } from "@/constants/qualityTiers"
 import { notify, type NotifyType } from "@/lib/notify"
+import {
+  FOLDER_NAME_MAX_LENGTH,
+  getFolderErrorMessage,
+  getFolderNameError,
+  getFolderValue,
+  UNCATEGORISED,
+  UNCATEGORISED_LABEL,
+} from "@/lib/photoFolders"
 import { cn } from "@/lib/utils"
 import { useDeletePhotosWithUndo } from "@/hooks/useDeletePhotosWithUndo"
 import type { Photo } from "@/context/PhotographerContext"
+import type { ApiPhotoFolder } from "@/data/apiClient"
 import type { ApiClassSectionStart } from "@/data/eventsApi"
 import { classStartsQueryOptions } from "@/data/queries/events"
 import {
+  createFolderMutationOptions,
+  foldersQueryOptions,
+  movePhotosToFolderMutationOptions,
   PhotoPricesSaveError,
   savePhotoDetailsMutationOptions,
   savePhotoPricesMutationOptions,
@@ -71,6 +83,8 @@ interface PgSelectionPanelProps {
   activeTab?: "tags" | "price"
   currentTab?: "uploads" | "published" | "archive"
   onShowToast?: (msg: string, type: PanelToastType, onUndo?: () => void) => void
+  /** After photos moved to another folder */
+  onMoved?: () => void
 }
 
 const NO_STARTS: Array<{
@@ -84,7 +98,7 @@ const toClassStarts = (starts: ApiClassSectionStart[]) =>
     horseName: start.horse_name,
   }))
 
-const BATCHES = ["Random", "Misc", "Uncategorised"]
+const NO_FOLDERS: ApiPhotoFolder[] = []
 
 /** Typed prices in SEK; "" when the selected photos' prices differ (multi) */
 type PriceFields = Record<QualityTierId, string>
@@ -107,6 +121,7 @@ export function PgSelectionPanel({
   activeTab: activeTabProp,
   currentTab,
   onShowToast,
+  onMoved,
 }: PgSelectionPanelProps) {
   const deletePhotosWithUndo = useDeletePhotosWithUndo()
   const savePhotoDetails = useMutation(savePhotoDetailsMutationOptions())
@@ -155,9 +170,18 @@ export function PgSelectionPanel({
 
   // Modal State
   const [isMoveModalOpen, setIsMoveModalOpen] = useState(false)
-  const [targetBatch, setTargetBatch] = useState<string>("")
-  const [isCreatingBatch, setIsCreatingBatch] = useState(false)
-  const [newBatchName, setNewBatchName] = useState("")
+  const [targetFolder, setTargetFolder] = useState<string>("")
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false)
+  const [newFolderName, setNewFolderName] = useState("")
+
+  // The photographer's folders in this event (all selected photos share it)
+  const foldersQuery = useQuery({
+    ...foldersQueryOptions(firstPhoto?.eventId ?? ""),
+    enabled: isOpen && !!firstPhoto?.eventId,
+  })
+  const folders = foldersQuery.data ?? NO_FOLDERS
+  const createFolder = useMutation(createFolderMutationOptions())
+  const movePhotos = useMutation(movePhotosToFolderMutationOptions())
 
   // Confirmation Modals State
   const [confirmModal, setConfirmModal] = useState<{
@@ -254,7 +278,6 @@ export function PgSelectionPanel({
   useEffect(() => {
     if (selectedPhotos.length > 0) {
       const p = selectedPhotos[0]
-      const inMissingBucket = !p.batch || p.batch === "Uncategorised"
 
       // Metadata State
       const displayTitle = /^Photo \d+$/.test(p.title || "")
@@ -285,17 +308,17 @@ export function PgSelectionPanel({
         setViewMode("edit")
       } else {
         // Single
-        setRider(p.rider || (inMissingBucket ? "None" : ""))
-        setHorse(p.horse || (inMissingBucket ? "None" : ""))
-        setCls(p.className || (inMissingBucket ? "None" : ""))
+        setRider(p.rider || "None")
+        setHorse(p.horse || "None")
+        setCls(p.className || "None")
         setIsGeneric(p.isGeneric || false)
         setTitle(displayTitle)
         setDescription(p.description || "")
 
         setOriginalState({
-          rider: p.rider || (inMissingBucket ? "None" : ""),
-          horse: p.horse || (inMissingBucket ? "None" : ""),
-          cls: p.className || (inMissingBucket ? "None" : ""),
+          rider: p.rider || "None",
+          horse: p.horse || "None",
+          cls: p.className || "None",
           isGeneric: p.isGeneric || false,
           title: displayTitle,
           description: p.description || "",
@@ -584,64 +607,100 @@ export function PgSelectionPanel({
 
   const handleMoveInit = () => {
     setIsMoveModalOpen(true)
-    setTargetBatch("")
-    setIsCreatingBatch(false)
+    setTargetFolder("")
+    setIsCreatingFolder(false)
+    setNewFolderName("")
   }
 
-  const handleMoveConfirm = () => {
-    const finalBatch = isCreatingBatch ? newBatchName : targetBatch
-    if (!finalBatch) return
+  const handleMoveConfirm = async () => {
+    if (!firstPhoto) return
+    const photos = selectedPhotos
 
-    const ids = selectedPhotos.map((p) => p.id)
-    const prevMetadata = selectedPhotos.map((p) => ({
-      id: p.id,
-      batch: p.batch || "Uncategorised",
-      storedLocation: p.storedLocation,
-    }))
-
-    updatePhotoMetadata(ids, {
-      batch: finalBatch,
-      storedLocation: (["Random", "Misc", "Uncategorised"].includes(finalBatch)
-        ? finalBatch
-        : "Misc") as any,
-    })
-
-    const undoAction = () => {
-      const batches = new Set(prevMetadata.map((p) => p.batch))
-      batches.forEach((b) => {
-        const idsForBatch = prevMetadata
-          .filter((p) => p.batch === b)
-          .map((p) => p.id)
-        const loc = (
-          ["Random", "Misc", "Uncategorised"].includes(b) ? b : "Misc"
-        ) as any
-        updatePhotoMetadata(idsForBatch, {
-          batch: b === "Uncategorised" ? "" : b,
-          storedLocation: loc,
+    let target: { id: string | null; name: string } | undefined
+    if (isCreatingFolder) {
+      try {
+        const folder = await createFolder.mutateAsync({
+          eventId: firstPhoto.eventId,
+          name: newFolderName.trim(),
         })
+        target = { id: folder.id, name: folder.name }
+      } catch (error) {
+        triggerToast(
+          getFolderErrorMessage(error, "Unable to create the folder"),
+          "danger",
+          "panel"
+        )
+        return
+      }
+    } else if (targetFolder === UNCATEGORISED) {
+      target = { id: null, name: UNCATEGORISED_LABEL }
+    } else {
+      target = folders.find((f) => f.id === targetFolder)
+    }
+    if (!target) return
+
+    setIsMoveModalOpen(false)
+    propsOnClose()
+
+    try {
+      await movePhotos.mutateAsync({
+        photoIds: photos.map((p) => p.id),
+        folderId: target.id,
       })
-      triggerToast("Move undone", "moved", "global")
+    } catch {
+      triggerToast("Unable to move the photos", "danger", "global")
+      return
+    }
+    onMoved?.()
+
+    // Each photo goes back to the folder it came from
+    const undoAction = () => {
+      const byFolder = new Map<string, string[]>()
+      photos.forEach((p) => {
+        const value = getFolderValue(p)
+        byFolder.set(value, [...(byFolder.get(value) ?? []), p.id])
+      })
+      Promise.all(
+        Array.from(byFolder, ([value, photoIds]) =>
+          movePhotos.mutateAsync({
+            photoIds,
+            folderId: value === UNCATEGORISED ? null : value,
+          })
+        )
+      )
+        .then(() => triggerToast("Move undone", "moved", "global"))
+        .catch(() =>
+          triggerToast("Unable to undo the move", "danger", "global")
+        )
     }
 
     triggerToast(
-      `Moved ${isSingle ? "photo" : `${count} photos`} to ${finalBatch}`,
+      `Moved ${photos.length === 1 ? "photo" : `${photos.length} photos`} to ${target.name}`,
       "moved",
       "global",
       undoAction
     )
-
-    setIsMoveModalOpen(false)
-    propsOnClose()
   }
 
-  const currentBatch = useMemo(() => {
+  // The folder all selected photos are in (null when they differ)
+  const currentFolder = useMemo(() => {
     if (selectedPhotos.length === 0) return null
-    const first = selectedPhotos[0].batch || "Uncategorised"
-    const allMatch = selectedPhotos.every(
-      (p) => (p.batch || "Uncategorised") === first
-    )
-    return allMatch ? first : null
+    const first = getFolderValue(selectedPhotos[0])
+    return selectedPhotos.every((p) => getFolderValue(p) === first)
+      ? first
+      : null
   }, [selectedPhotos])
+
+  const newFolderError = newFolderName
+    ? getFolderNameError(newFolderName, folders)
+    : null
+  const folderOptions = [
+    { value: UNCATEGORISED, label: UNCATEGORISED_LABEL },
+    ...folders.map((f) => ({ value: f.id, label: f.name })),
+  ]
+  const canConfirmMove = isCreatingFolder
+    ? !!newFolderName && !newFolderError && !createFolder.isPending
+    : !!targetFolder
 
   const confirmCopy = {
     delete: {
@@ -1098,25 +1157,26 @@ export function PgSelectionPanel({
             <DialogTitle>Move to other folder</DialogTitle>
           </DialogHeader>
           <DialogBody>
-            {!isCreatingBatch ? (
+            {!isCreatingFolder ? (
               <FormGroup label="Select Folder" className="mb-0">
                 <ModernDropdown
-                  value={targetBatch}
+                  value={targetFolder}
                   onChange={(val) => {
                     if (val === NEW_FOLDER) {
-                      setIsCreatingBatch(true)
-                      setTargetBatch("")
+                      setIsCreatingFolder(true)
+                      setTargetFolder("")
                     } else {
-                      setTargetBatch(val)
+                      setTargetFolder(val)
                     }
                   }}
                   options={[
-                    ...BATCHES.map((b) => ({
-                      label: b,
-                      value: b,
-                      disabled: b === currentBatch,
+                    ...folderOptions.map((option) => ({
+                      ...option,
+                      disabled: option.value === currentFolder,
                       subtext:
-                        b === currentBatch ? "Current folder" : undefined,
+                        option.value === currentFolder
+                          ? "Current folder"
+                          : undefined,
                     })),
                     {
                       label: "Create new folder...",
@@ -1132,8 +1192,16 @@ export function PgSelectionPanel({
                 <div className="flex gap-2">
                   <Input
                     placeholder="Enter name..."
-                    value={newBatchName}
-                    onChange={(e) => setNewBatchName(e.target.value)}
+                    value={newFolderName}
+                    maxLength={FOLDER_NAME_MAX_LENGTH}
+                    aria-invalid={!!newFolderError || undefined}
+                    onChange={(e) => setNewFolderName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && canConfirmMove) {
+                        e.preventDefault()
+                        void handleMoveConfirm()
+                      }
+                    }}
                     autoFocus
                   />
                   <Button
@@ -1141,19 +1209,24 @@ export function PgSelectionPanel({
                     size="icon"
                     className={cn(panelSecondary, "min-w-0")}
                     aria-label="Back to folder list"
-                    onClick={() => setIsCreatingBatch(false)}
+                    onClick={() => setIsCreatingFolder(false)}
                   >
                     <X />
                   </Button>
                 </div>
+                {newFolderError && (
+                  <p className="mt-1.5 text-xs text-destructive">
+                    {newFolderError}
+                  </p>
+                )}
               </FormGroup>
             )}
           </DialogBody>
           <DialogFooter>
             <DialogCancel />
             <Button
-              onClick={handleMoveConfirm}
-              disabled={!isCreatingBatch ? !targetBatch : !newBatchName}
+              onClick={() => void handleMoveConfirm()}
+              disabled={!canConfirmMove}
             >
               Confirm
             </Button>
