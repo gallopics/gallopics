@@ -14,18 +14,14 @@ import { notify } from "@/lib/notify"
 import { cn } from "@/lib/utils"
 import { useWorkspaceEvents } from "@/hooks/useWorkspaceData"
 import { useAuth } from "@/context/AuthContext"
-import {
-  ApiError,
-  type ApiPhoto,
-  type PaginatedResponse,
-} from "@/data/apiClient"
+import { ApiError, type ApiPhoto } from "@/data/apiClient"
 import {
   buildApiEventDetail,
   mapApiPhotoToPhoto,
   mapApiScheduleToDailySchedule,
 } from "@/data/eventsApi"
 import {
-  eventGalleryQueryOptions,
+  eventAllPhotosQueryOptions,
   eventQueryOptions,
   eventScheduleQueryOptions,
 } from "@/data/queries/events"
@@ -154,7 +150,7 @@ export function EventProfile() {
   // Public photos, unless the photographer manages their own event here
   const showsPublicPhotos = !!eventDetail && !isPhotographerMyEventView
   const toPublicPhotos = useCallback(
-    (page: PaginatedResponse<ApiPhoto>) => {
+    (apiPhotos: ApiPhoto[]) => {
       if (!eventDetail) return []
       const eventForPhotos: EventData = {
         id: eventDetail.meetingId,
@@ -172,14 +168,12 @@ export function EventProfile() {
         photographer: eventDetail.meeting.photographer || null,
         status: "active",
       }
-      return page.items.map((photo) =>
-        mapApiPhotoToPhoto(photo, eventForPhotos)
-      )
+      return apiPhotos.map((photo) => mapApiPhotoToPhoto(photo, eventForPhotos))
     },
     [eventDetail]
   )
   const publicPhotosQuery = useQuery({
-    ...eventGalleryQueryOptions(eventDetail?.meetingId ?? "", 100),
+    ...eventAllPhotosQueryOptions(eventDetail?.meetingId ?? ""),
     enabled: showsPublicPhotos,
     select: toPublicPhotos,
   })
