@@ -1,99 +1,81 @@
-import React, { useState, useEffect } from 'react';
-import { X, Monitor, Link, Check } from 'lucide-react';
+import { useState } from "react"
+import { Check, Link, Monitor } from "lucide-react"
+
+import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 
 interface DesktopRecommendationModalProps {
-  isOpen: boolean;
-  onClose: () => void;
+  isOpen: boolean
+  onClose: () => void
 }
 
-export const DesktopRecommendationModal: React.FC<
-  DesktopRecommendationModalProps
-> = ({ isOpen, onClose }) => {
-  const [copied, setCopied] = useState(false);
+export function DesktopRecommendationModal({
+  isOpen,
+  onClose,
+}: DesktopRecommendationModalProps) {
+  return (
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onClose()
+      }}
+    >
+      <DialogContent className="sm:max-w-120">
+        <RecommendationContent onClose={onClose} />
+      </DialogContent>
+    </Dialog>
+  )
+}
 
-  useEffect(() => {
-    const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    if (isOpen) {
-      window.addEventListener('keydown', handleEsc);
-      document.body.style.overflow = 'hidden';
-      setCopied(false);
-    }
-    return () => {
-      window.removeEventListener('keydown', handleEsc);
-      document.body.style.overflow = 'unset';
-    };
-  }, [isOpen, onClose]);
+function RecommendationContent({ onClose }: { onClose: () => void }) {
+  const [copied, setCopied] = useState(false)
 
   const handleCopyLink = () => {
-    navigator.clipboard.writeText(window.location.href);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  if (!isOpen) return null;
+    navigator.clipboard.writeText(window.location.href)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
 
   return (
-    <div className="auth-modal-overlay" onClick={onClose}>
-      <div
-        className="auth-modal-container recommendation-modal flex flex-col"
-        onClick={e => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-      >
-        {/* Header */}
-        <div className="modal-header-standard">
-          <h2 className="modal-title">Use desktop for photographer tools</h2>
-          <button
-            className="modal-close"
-            onClick={onClose}
-            aria-label="Close modal"
-          >
-            <X size={20} />
-          </button>
-        </div>
+    <>
+      <DialogHeader>
+        <DialogTitle>Use desktop for photographer tools</DialogTitle>
+      </DialogHeader>
 
-        {/* Body */}
-        <div className="modal-body-standard text-center">
-          <div className="auth-desktop-icon flex items-center justify-center mx-auto text-[var(--color-brand-primary)]">
-            <Monitor size={32} />
-          </div>
-          <p className="text-[var(--color-text-secondary)] leading-relaxed text-[0.875rem]">
-            For the best experience, please open Gallopics on a desktop or
-            laptop to upload and manage photos.
-          </p>
+      <DialogBody className="text-center">
+        <div className="mx-auto mb-6 flex size-14 items-center justify-center rounded-lg bg-primary/8 text-primary">
+          <Monitor size={32} />
         </div>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          For the best experience, please open Gallopics on a desktop or laptop
+          to upload and manage photos.
+        </p>
+      </DialogBody>
 
-        {/* Footer — stacked buttons */}
-        <div className="modal-footer-actions flex-col items-stretch gap-3">
-          <button className="modal-btn-save w-full" onClick={onClose}>
-            Got it
-          </button>
-          <button
-            className="modal-btn-cancel w-full flex items-center justify-center gap-2"
-            onClick={handleCopyLink}
-            style={
-              copied
-                ? {
-                    color: 'var(--color-success)',
-                    background: 'var(--color-success-tint)',
-                  }
-                : undefined
-            }
-          >
-            {copied ? (
-              <>
-                <Check size={16} /> Copied!
-              </>
-            ) : (
-              <>
-                <Link size={16} /> Copy link
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
+      <DialogFooter className="flex-col items-stretch gap-3 sm:flex-col">
+        <Button className="w-full" onClick={onClose}>
+          Got it
+        </Button>
+        <Button
+          variant="secondary"
+          className={cn(
+            "w-full",
+            copied && "bg-success/10 text-success hover:bg-success/10"
+          )}
+          onClick={handleCopyLink}
+        >
+          {copied ? <Check /> : <Link />}
+          {copied ? "Copied!" : "Copy link"}
+        </Button>
+      </DialogFooter>
+    </>
+  )
+}

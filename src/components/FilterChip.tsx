@@ -1,121 +1,79 @@
-import React from 'react';
+import { cn } from "@/lib/utils"
+import { Badge } from "@/components/ui/badge"
+import { Toggle } from "@/components/ui/toggle"
 
 interface FilterChipProps {
-  label: string | React.ReactNode;
-  isActive?: boolean;
-  onClick: () => void;
-  badge?: number;
-  className?: string;
-  /** New: variant for PG Uploads filter chips with count badge */
-  variant?: 'default' | 'filterCount';
-  /** Count to display as badge (used with filterCount variant) */
-  count?: number;
-  /** Whether chip is disabled (used when count is 0) */
-  disabled?: boolean;
-  /** New: accent color for the chip */
-  accent?: 'red';
+  label: string | React.ReactNode
+  isActive?: boolean
+  onClick: () => void
+  badge?: number
+  className?: string
+  /** `filterCount`: PG uploads filter chip with a count badge, brand when active */
+  variant?: "default" | "filterCount"
+  /** Count shown in the badge (filterCount variant) */
+  count?: number
+  /** Disabled chip (filterCount variant also disables itself when count is 0) */
+  disabled?: boolean
+  accent?: "red"
 }
 
-export const FilterChip: React.FC<FilterChipProps> = ({
+export function FilterChip({
   label,
   isActive = false,
   onClick,
   badge,
-  className = '',
-  variant = 'default',
+  className,
+  variant = "default",
   count,
   disabled = false,
   accent,
-}) => {
-  // For filterCount variant, disable if count is 0
-  const isDisabled = disabled || (variant === 'filterCount' && count === 0);
-
-  const handleClick = () => {
-    if (!isDisabled) {
-      onClick();
-    }
-  };
-
-  if (variant === 'filterCount') {
-    // Determine badge classes
-    const badgeClasses = [
-      'inline-flex items-center justify-center min-w-[20px] h-5 px-[6px] rounded-[10px]',
-      'text-[0.6875rem] font-semibold transition-all duration-200 ease-in-out',
-      'border border-[var(--color-border)]',
-      isActive
-        ? 'bg-[rgba(255,255,255,0.2)] text-white border-[rgba(255,255,255,0.3)]'
-        : accent === 'red'
-          ? 'bg-[var(--color-danger)] text-white border-[var(--color-danger)]'
-          : 'bg-[var(--ui-bg-subtle)] text-[var(--color-text-secondary)] border-[var(--color-border)]',
-    ].join(' ');
-
-    // Chip classes for filterCount
-    const chipClasses = [
-      'inline-flex items-center gap-[6px] px-[14px] py-[6px] pr-[10px]',
-      'rounded-[999px] border cursor-pointer transition-all duration-200 ease-in-out whitespace-nowrap',
-      // Active state
-      isActive
-        ? 'bg-[var(--color-brand-primary)] border-[var(--color-brand-primary)]'
-        : accent === 'red'
-          ? 'border-[var(--color-danger-tint)] bg-[var(--color-danger-tint)]'
-          : 'bg-white border-[var(--color-border)]',
-      // Disabled
-      isDisabled ? 'cursor-not-allowed opacity-50 pointer-events-none' : '',
-      className,
-    ].join(' ');
-
-    const labelClasses = [
-      'text-[0.8125rem] font-medium',
-      isActive
-        ? 'text-white'
-        : isDisabled
-          ? 'text-[var(--color-text-secondary)]'
-          : accent === 'red'
-            ? 'text-[var(--color-danger)]'
-            : 'text-[var(--color-text-secondary)]',
-    ].join(' ');
+}: FilterChipProps) {
+  if (variant === "filterCount") {
+    const isDisabled = disabled || count === 0
+    const isRed = accent === "red" && !isActive
 
     return (
-      <button
-        className={chipClasses}
-        onClick={handleClick}
-        type="button"
+      <Toggle
+        variant="outline"
+        pressed={isActive}
+        onPressedChange={() => onClick()}
         disabled={isDisabled}
+        className={cn(
+          "gap-1.5 pr-2.5 pl-3.5 text-[0.8125rem]",
+          "aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary/90",
+          isRed &&
+            "border-destructive/10 bg-destructive/10 text-destructive hover:bg-destructive/15",
+          className
+        )}
       >
-        <span className={labelClasses}>{label}</span>
-        <span className={badgeClasses}>{count ?? 0}</span>
-      </button>
-    );
+        {label}
+        <Badge
+          variant="secondary"
+          className={cn(
+            "h-5 min-w-5 border-border px-1.5 text-[0.6875rem]",
+            isActive && "border-white/30 bg-white/20 text-primary-foreground",
+            isRed && "border-destructive bg-destructive text-white"
+          )}
+        >
+          {count ?? 0}
+        </Badge>
+      </Toggle>
+    )
   }
 
-  // Default variant
-  const defaultChipClasses = [
-    'inline-flex items-center gap-2 px-4 py-2 rounded-[999px]',
-    'border border-[var(--color-border)] cursor-pointer transition-all duration-200 ease-in-out whitespace-nowrap',
-    'text-[0.875rem] font-medium',
-    isActive
-      ? 'bg-[var(--color-text-primary)] text-white border-[var(--color-text-primary)]'
-      : [
-          'bg-[var(--color-surface)] text-[var(--color-text-secondary)]',
-          'hover:bg-[var(--ui-bg-subtle)] hover:border-[var(--color-border)] hover:text-[var(--color-text-primary)]',
-        ].join(' '),
-    className,
-  ].join(' ');
-
   return (
-    <button className={defaultChipClasses} onClick={onClick} type="button">
+    <Toggle
+      variant="outline"
+      pressed={isActive}
+      onPressedChange={() => onClick()}
+      className={cn("gap-2 px-4", className)}
+    >
       {label}
       {badge !== undefined && badge > 0 && (
-        <span
-          className={[
-            'flex items-center justify-center px-[6px] h-[18px] rounded-[9px]',
-            'text-[0.75rem] font-semibold leading-none',
-            'bg-[var(--color-danger)] text-white',
-          ].join(' ')}
-        >
+        <Badge className="h-4.5 bg-destructive px-1.5 text-white">
           {badge}
-        </span>
+        </Badge>
       )}
-    </button>
-  );
-};
+    </Toggle>
+  )
+}

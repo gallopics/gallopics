@@ -1,172 +1,136 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Header } from '../components/Header';
-import { TitleHeader } from '../components/TitleHeader';
-import { Footer } from '../components/Footer';
-import { FolderEventCard } from '../components/FolderEventCard';
-import type { EventData } from '../data/mockEvents';
-import {
-  fetchEventsFromApi,
-  fetchEventsWithPhotosFromApi,
-  fetchLatestPublicEventPhotoUrl,
-} from '../data/eventsApi';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import { useMemo, useState } from "react"
+import { useNavigate } from "react-router"
+import { useQueries, type UseQueryResult } from "@tanstack/react-query"
 
-import './guestHome.mobile.css';
-import './mobileSearchFix.css';
+import { useEventSearch } from "@/hooks/useEventSearch"
+import type { ApiPhoto, PaginatedResponse } from "@/data/apiClient"
+import { pickLatestPhotoUrl } from "@/data/eventsApi"
+import { eventGalleryQueryOptions } from "@/data/queries/events"
+import { EmptyState } from "@/components/EmptyState"
+import {
+  EventCardSkeleton,
+  FolderEventCard,
+} from "@/components/FolderEventCard"
+import { Footer } from "@/components/Footer"
+import { Header } from "@/components/Header"
+import { HomeHero } from "@/components/HomeHero"
+import type { EventSearchProps } from "@/components/ModernSearchBar"
+
+/** The events grid; the loading skeleton uses the same one */
+const eventGridClass =
+  "grid w-full grid-cols-4 gap-6 max-[1200px]:grid-cols-3 max-[1200px]:gap-5 max-[900px]:grid-cols-2 max-[900px]:gap-4 max-[600px]:grid-cols-1"
+
+const selectLatestPhotoUrl = (page: PaginatedResponse<ApiPhoto>) =>
+  pickLatestPhotoUrl(page.items)
+
+const combineCoverUrls = (results: UseQueryResult<string | null>[]) =>
+  results.map((result) => result.data ?? null)
 
 export function EventsPage() {
-  const navigate = useNavigate();
-  const { isLoaded, isAuthenticated, user } = useAuth();
+  const navigate = useNavigate()
 
-  const [events, setEvents] = useState<EventData[]>([]);
-  const [latestPhotoCoverUrls, setLatestPhotoCoverUrls] = useState<
-    Record<string, string | null>
-  >({});
-  const [isLoadingEvents, setIsLoadingEvents] = useState(true);
-  const [eventsError, setEventsError] = useState<string | null>(null);
-  const shouldShowPhotoBackedEvents = !isAuthenticated || user?.role === 'pg';
+  const [searchQuery, setSearchQuery] = useState("")
+  const trimmedQuery = searchQuery.trim()
+  const {
+    isLoadingEvents,
+    eventsError,
+    filteredEvents,
+    eventSearchIndex,
+    eventMatchLabels,
+    isSearchingPhotoMetadata,
+  } = useEventSearch(searchQuery)
 
-  useEffect(() => {
-    if (!isLoaded) return;
-
-    let isMounted = true;
-
-    async function loadEvents() {
-      try {
-        setIsLoadingEvents(true);
-        setEventsError(null);
-        const nextEvents = shouldShowPhotoBackedEvents
-          ? await fetchEventsWithPhotosFromApi()
-          : await fetchEventsFromApi();
-
-        if (isMounted) setEvents(nextEvents);
-      } catch (error) {
-        if (isMounted) {
-          setEventsError(
-            error instanceof Error ? error.message : 'Failed to load events'
-          );
-        }
-      } finally {
-        if (isMounted) setIsLoadingEvents(false);
-      }
-    }
-
-    void loadEvents();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [isLoaded, shouldShowPhotoBackedEvents]);
-
-  const filteredEvents = events;
-
-  useEffect(() => {
-    const eventsMissingCovers = filteredEvents.filter(
-      event =>
-        !event.coverImage &&
-        event.photoCount !== 0 &&
-        !Object.prototype.hasOwnProperty.call(latestPhotoCoverUrls, event.id)
-    );
-
-    if (eventsMissingCovers.length === 0) return;
-
-    let isMounted = true;
-
-    async function loadLatestPhotoCovers() {
-      const coverEntries = await Promise.all(
-        eventsMissingCovers.map(async event => {
-          try {
-            const url = await fetchLatestPublicEventPhotoUrl(event.id);
-            return [event.id, url] as const;
-          } catch (error) {
-            console.warn(
-              `Failed to load fallback cover for event ${event.id}`,
-              error
-            );
-            return [event.id, null] as const;
-          }
-        })
-      );
-
-      if (!isMounted) return;
-
-      setLatestPhotoCoverUrls(prev => {
-        const next = { ...prev };
-        coverEntries.forEach(([eventId, url]) => {
-          next[eventId] = url;
-        });
-        return next;
-      });
-    }
-
-    void loadLatestPhotoCovers();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [filteredEvents, latestPhotoCoverUrls]);
-
-  const displayEvents = useMemo(
+  // Events without a cover image fall back to their latest public photo
+  const eventsMissingCovers = useMemo(
     () =>
-      filteredEvents.map(event => {
-        const latestPhotoCoverUrl = latestPhotoCoverUrls[event.id];
+      filteredEvents.filter(
+        (event) => !event.coverImage && event.photoCount !== 0
+      ),
+    [filteredEvents]
+  )
+  const latestPhotoCoverUrls = useQueries({
+    queries: eventsMissingCovers.map((event) => ({
+      ...eventGalleryQueryOptions(event.id, 20),
+      select: selectLatestPhotoUrl,
+    })),
+    combine: combineCoverUrls,
+  })
 
-        if (event.coverImage || !latestPhotoCoverUrl) {
-          return event;
-        }
+  const displayEvents = useMemo(() => {
+    const coverByEventId = new Map(
+      eventsMissingCovers.map((event, index) => [
+        event.id,
+        latestPhotoCoverUrls[index],
+      ])
+    )
+    return filteredEvents.map((event) => {
+      const latestPhotoCoverUrl = coverByEventId.get(event.id)
+      if (event.coverImage || !latestPhotoCoverUrl) return event
+      return { ...event, coverImage: latestPhotoCoverUrl }
+    })
+  }, [eventsMissingCovers, filteredEvents, latestPhotoCoverUrls])
 
-        return {
-          ...event,
-          coverImage: latestPhotoCoverUrl,
-        };
-      }),
-    [filteredEvents, latestPhotoCoverUrls]
-  );
+  const search: EventSearchProps = {
+    searchEvents: displayEvents,
+    eventSearchIndex,
+    eventMatchLabels,
+    isSearching: isSearchingPhotoMetadata,
+    onSearchChange: setSearchQuery,
+  }
 
   return (
-    <div className="page-wrapper ehome-page guestHome">
-      <Header />
+    <div className="flex min-h-screen flex-col bg-[linear-gradient(180deg,#e2e5eb_0%,var(--background)_40%)]">
+      <Header {...search} />
 
-      <div className="ehome-intro-inner">
-        <TitleHeader
-          title="Your best moments, captured"
-          description="We capture horse competitions across Sweden. Search your event, spot your photos, and purchase your favorites."
-          variant="ehome"
-        />
-      </div>
+      <HomeHero
+        title="Your best moments, captured"
+        description="We capture horse competitions across Sweden. Search your event, spot your photos, and purchase your favorites."
+        search={search}
+      />
 
-      <section className="grid-section">
+      <section className="min-h-100 pt-6 pb-16">
         <div className="container">
-          <h2 className="section-title">Browse events</h2>
+          <h2 className="mb-6 font-heading text-2xl leading-[1.2] font-semibold tracking-[-0.02em] text-foreground">
+            Browse events
+          </h2>
 
           {isLoadingEvents ? (
-            <div className="pg-empty-state">
-              <h3>Loading events...</h3>
+            <div aria-busy="true" className={eventGridClass}>
+              <span className="sr-only">Loading events…</span>
+              {Array.from({ length: 8 }).map((_, index) => (
+                <EventCardSkeleton key={index} />
+              ))}
             </div>
           ) : eventsError ? (
-            <div className="pg-empty-state">
-              <h3>Events could not be loaded</h3>
-              <p>{eventsError}</p>
-            </div>
+            <EmptyState
+              title="Events could not be loaded"
+              description={eventsError}
+            />
           ) : displayEvents.length > 0 ? (
-            <div className="events-folders-grid">
-              {displayEvents.map(event => (
+            <div className={eventGridClass}>
+              {displayEvents.map((event) => (
                 <FolderEventCard
                   key={event.id}
                   event={event}
-                  onClick={id => navigate(`/event/${id}`)}
+                  onClick={(id) => navigate(`/event/${id}`)}
                 />
               ))}
             </div>
           ) : (
-            <div className="pg-empty-state">
-              <h3>No events available – yet</h3>
-            </div>
+            <EmptyState
+              title={
+                isSearchingPhotoMetadata
+                  ? "Searching photos..."
+                  : trimmedQuery
+                    ? `No events match "${trimmedQuery}"`
+                    : "No events available – yet"
+              }
+            />
           )}
         </div>
       </section>
-      <Footer minimal={false} />
+
+      <Footer />
     </div>
-  );
+  )
 }

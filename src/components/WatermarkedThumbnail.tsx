@@ -1,38 +1,24 @@
-import React from 'react';
+import { cn } from "@/lib/utils"
 
-interface WatermarkedThumbnailProps extends React.ImgHTMLAttributes<HTMLImageElement> {
-  photographer?: string;
-}
+type WatermarkedThumbnailProps = React.ImgHTMLAttributes<HTMLImageElement>
 
 const PREVIEW_WATERMARK_TEXT =
-  'This image is a preview and may not be used or published without purchase';
+  "This image is a preview and may not be used or published without purchase"
 
-export const WatermarkedThumbnail: React.FC<WatermarkedThumbnailProps> = ({
+/** Photo thumbnail with the "preview" watermark line at the bottom. */
+export function WatermarkedThumbnail({
   className,
   alt,
   ...props
-}) => {
+}: WatermarkedThumbnailProps) {
   return (
-    <div
-      className={`relative w-full h-full overflow-hidden ${className || ''}`}
-    >
-      <img className="w-full h-full object-cover block" alt={alt} {...props} />
-      <div
-        className={[
-          'absolute bottom-3 left-1/2 -translate-x-1/2',
-          'flex flex-col items-center justify-center',
-          'pointer-events-none z-[2] opacity-40 w-full',
-        ].join(' ')}
-      >
-        <span
-          className={[
-            'max-w-[82%] text-white text-[0.7rem] font-semibold leading-[1.25] text-center',
-            'shadow-[0_1px_2px_rgba(0,0,0,0.65)] tracking-[0.02em]',
-          ].join(' ')}
-        >
+    <div className={cn("relative size-full overflow-hidden", className)}>
+      <img className="block size-full object-cover" alt={alt} {...props} />
+      <div className="pointer-events-none absolute bottom-3 left-1/2 z-2 flex w-full -translate-x-1/2 flex-col items-center justify-center opacity-40">
+        <span className="max-w-[82%] text-center text-[0.7rem] leading-[1.25] font-semibold tracking-[0.02em] text-white shadow-[0_1px_2px_rgba(0,0,0,0.65)]">
           {PREVIEW_WATERMARK_TEXT}
         </span>
       </div>
     </div>
-  );
-};
+  )
+}

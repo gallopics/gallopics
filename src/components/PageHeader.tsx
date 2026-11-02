@@ -1,41 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import { assetUrl, cn } from "@/lib/utils"
+import { useScrolled } from "@/hooks/useScrolled"
 
-export const PageHeader: React.FC = () => {
-  const [scrolled, setScrolled] = useState(false);
-
-  useEffect(() => {
-    let ticking = false;
-    const handleScroll = () => {
-      if (!ticking) {
-        window.requestAnimationFrame(() => {
-          setScrolled(window.scrollY > 20);
-          ticking = false;
-        });
-        ticking = true;
-      }
-    };
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
+/** Logo-only header used on info pages (FAQ, Terms, Privacy). */
+export function PageHeader() {
+  const scrolled = useScrolled()
 
   return (
     <header
-      className={[
-        'bg-white border border-black/[0.04] sticky top-0 z-[1000] transition-[background-color,box-shadow] duration-[400ms] ease-[cubic-bezier(0.2,0,0.2,1)]',
-        scrolled
-          ? 'bg-white/85 backdrop-blur-[12px] [-webkit-backdrop-filter:blur(12px)] border-b border-black/5 shadow-[0_4px_12px_rgba(0,0,0,0.03)]'
-          : '',
-      ].join(' ')}
+      className={cn(
+        "sticky top-0 z-40 border border-black/4 bg-card transition-[background-color,box-shadow] duration-400 ease-[cubic-bezier(0.2,0,0.2,1)]",
+        scrolled &&
+          "border-b-black/5 bg-card/85 shadow-[0_4px_12px_rgba(0,0,0,0.03)] backdrop-blur-md"
+      )}
     >
-      <div className="flex items-center min-h-16 md:h-[72px] container-fluid">
-        <a href="/" className="flex items-center flex-shrink-0">
+      <div className="container flex min-h-16 max-w-none items-center md:h-18">
+        <a href={assetUrl("")} className="flex shrink-0 items-center">
           <img
-            src="/images/logo1-blue.svg"
+            src={assetUrl("images/logo1-blue.svg")}
             alt="GALLOPICS"
-            className="h-6 min-[480px]:h-7 w-auto block"
+            className="block h-6 w-auto min-[480px]:h-7"
           />
         </a>
       </div>
     </header>
-  );
-};
+  )
+}
