@@ -3,13 +3,13 @@ import { formatLabel } from "../lib/utils"
 import type {
   ClassSection,
   DailySchedule,
+  EventData,
   EventDetail,
   Meeting,
   Photo,
 } from "../types"
 import { ApiError, getApiBaseUrl, resolveApiAssetUrl } from "./apiClient"
 import type { ApiPhoto } from "./apiClient"
-import type { EventData } from "./mockEvents"
 
 const EVENTS_REQUEST_TIMEOUT_MS = 15000
 
@@ -129,7 +129,7 @@ export interface ApiClassSectionStart {
   result_at?: string | null
 }
 
-function normalizeCountry(country: string) {
+export function normalizeCountry(country: string) {
   const countryMap: Record<string, string> = {
     SE: "Sweden",
     SWE: "Sweden",

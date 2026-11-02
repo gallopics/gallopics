@@ -87,7 +87,7 @@ function MainCard({
           eventOptions={search.searchEvents}
           eventSearchIndex={search.eventSearchIndex}
           eventMatchLabels={search.eventMatchLabels}
-          eventOnly={Boolean(search.searchEvents)}
+          isSearching={search.isSearching}
           onSearchChange={search.onSearchChange}
         />
       </div>

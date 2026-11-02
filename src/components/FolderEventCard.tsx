@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router"
 
 import { cn } from "@/lib/utils"
-import type { EventData } from "@/data/mockEvents"
+import type { EventData } from "@/types"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"

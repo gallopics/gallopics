@@ -84,6 +84,28 @@ export interface DailySchedule {
   arenas: Arena[]
 }
 
+/** An event as the event lists and cards show it */
+export interface EventData {
+  id: string
+  name: string
+  coverImage: string
+  period: string // e.g., "12 Jun – 14 Jun 2026"
+  startDate?: string
+  endDate?: string
+  flag: string // Emoji
+  city: string
+  discipline: string
+  country: string // For filtering (e.g., "Sweden")
+  photoCount?: number
+  logo: string // New field for Event Avatar
+  photographer: {
+    id: string
+    name: string
+    avatar: string
+  } | null
+  status?: "active" | "disabled"
+}
+
 export interface EventDetail {
   meetingId: string
   meeting: Meeting

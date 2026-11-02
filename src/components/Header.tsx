@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router"
 import { Camera, LayoutDashboard, ShoppingBag, User } from "lucide-react"
 
 import { assetUrl, cn } from "@/lib/utils"
+import { useEventSearch } from "@/hooks/useEventSearch"
 import { useMediaQuery } from "@/hooks/useMediaQuery"
 import { useScrolled } from "@/hooks/useScrolled"
 import { useAuth } from "@/context/AuthContext"
@@ -53,10 +54,30 @@ export function Header({
   searchEvents,
   eventSearchIndex,
   eventMatchLabels,
+  isSearching,
   onSearchChange,
 }: EventSearchProps = {}) {
   const scrolled = useScrolled()
   const isMobile = useMediaQuery("(max-width: 767px)")
+
+  // Pages without their own event search (all but home) search here
+  const [headerQuery, setHeaderQuery] = useState("")
+  const headerSearch = useEventSearch(headerQuery)
+  const search: EventSearchProps = searchEvents
+    ? {
+        searchEvents,
+        eventSearchIndex,
+        eventMatchLabels,
+        isSearching,
+        onSearchChange,
+      }
+    : {
+        searchEvents: headerSearch.filteredEvents,
+        eventSearchIndex: headerSearch.eventSearchIndex,
+        eventMatchLabels: headerSearch.eventMatchLabels,
+        isSearching: headerSearch.isSearchingPhotoMetadata,
+        onSearchChange: setHeaderQuery,
+      }
 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [authModalConfig, setAuthModalConfig] = useState<{
@@ -197,11 +218,11 @@ export function Header({
             <div className="relative ml-auto flex flex-wrap items-center justify-end gap-1.5 min-[480px]:gap-3">
               <ModernSearchBar
                 collapsible
-                eventOptions={searchEvents}
-                eventSearchIndex={eventSearchIndex}
-                eventMatchLabels={eventMatchLabels}
-                eventOnly={Boolean(searchEvents)}
-                onSearchChange={onSearchChange}
+                eventOptions={search.searchEvents}
+                eventSearchIndex={search.eventSearchIndex}
+                eventMatchLabels={search.eventMatchLabels}
+                isSearching={search.isSearching}
+                onSearchChange={search.onSearchChange}
               />
 
               {!isLoaded ? null : isAuthenticated ? (

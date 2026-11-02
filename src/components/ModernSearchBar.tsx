@@ -2,29 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { useLocation, useNavigate } from "react-router"
 import { Combobox as ComboboxPrimitive } from "@base-ui/react"
-import {
-  ArrowRight,
-  Calendar,
-  Camera,
-  ChevronRight,
-  Image,
-  Search,
-  X,
-} from "lucide-react"
+import { ArrowRight, Calendar, ChevronRight, Search, X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { useMediaQuery } from "@/hooks/useMediaQuery"
 import { useMobileSearchMode } from "@/hooks/useMobileSearchMode"
-import {
-  COMPETITIONS,
-  HORSE_PRIMARY_RIDER,
-  HORSES,
-  PHOTOGRAPHERS,
-  photos,
-  RIDER_PRIMARY_HORSE,
-  RIDERS,
-} from "@/data/mockData"
-import type { EventData } from "@/data/mockEvents"
+import type { EventData } from "@/types"
 import { Button } from "@/components/ui/button"
 import {
   Combobox,
@@ -36,16 +19,11 @@ import {
   ComboboxLabel,
   ComboboxList,
 } from "@/components/ui/combobox"
-import { HorseIcon } from "@/components/icons/HorseIcon"
-import { RiderIcon } from "@/components/icons/RiderIcon"
 
-// ─── Search (mock data) ──────────────────────────────────────────────
-
-type ResultType = "event" | "rider" | "horse" | "photographer" | "photo"
+// ─── Search ──────────────────────────────────────────────────────────
 
 interface SearchResult {
   id: string
-  type: ResultType
   title: string
   subtitle: string
   /** Why an event matched, e.g. "Rider: Anna Svensson" */
@@ -53,204 +31,61 @@ interface SearchResult {
   meta?: string
 }
 
+/** The results list shows groups, each with a heading; today only events */
 interface ResultGroup {
-  value: ResultType
+  label: string
   items: SearchResult[]
 }
 
-const GROUP_LABELS: Record<ResultType, string> = {
-  event: "Events",
-  rider: "Riders",
-  horse: "Horses",
-  photographer: "Photographers",
-  photo: "Photos",
-}
-
-const MAX_PER_GROUP = 3
+const MAX_RESULTS = 5
 const EMPTY_INDEX: Record<string, string> = {}
-
-const formatDate = (d: string, end?: string) => {
-  const startStr = new Date(d).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-  })
-  if (!end) return startStr
-  const endStr = new Date(end).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  })
-  return `${startStr} – ${endStr}`
-}
-
-/** Top association based on explicit mappings (source of truth) */
-const getAssociation = (id: string, type: "rider" | "horse"): string => {
-  if (type === "rider") {
-    const match = RIDER_PRIMARY_HORSE.find((m) => m.riderId === id)
-    if (match) {
-      const horse = HORSES.find((h) => h.id === match.primaryHorseId)
-      return horse ? horse.registeredName || horse.name : "—"
-    }
-  } else {
-    const match = HORSE_PRIMARY_RIDER.find((m) => m.horseId === id)
-    if (match) {
-      const rider = RIDERS.find((r) => r.id === match.primaryRiderId)
-      return rider ? `${rider.firstName} ${rider.lastName}` : "—"
-    }
-  }
-  return "—"
-}
+const NO_EVENTS: EventData[] = []
 
 interface EventSearchOptions {
-  eventOptions?: EventData[]
+  eventOptions: EventData[]
   eventSearchIndex: Record<string, string>
   eventMatchLabels: Record<string, string>
-  eventOnly: boolean
 }
 
 function searchAll(
   query: string,
-  {
-    eventOptions,
-    eventSearchIndex,
-    eventMatchLabels,
-    eventOnly,
-  }: EventSearchOptions
+  { eventOptions, eventSearchIndex, eventMatchLabels }: EventSearchOptions
 ): ResultGroup[] {
   if (query.length < 2) return []
   const lower = query.toLowerCase()
 
   const events: SearchResult[] = eventOptions
-    ? eventOptions
-        .filter((event) =>
-          [
-            event.name,
-            event.city,
-            event.country,
-            event.discipline,
-            event.photographer?.name,
-            eventSearchIndex[event.id],
-          ]
-            .filter(Boolean)
-            .join(" ")
-            .toLowerCase()
-            .includes(lower)
-        )
-        .map((event) => ({
-          id: event.id,
-          type: "event" as const,
-          title: event.name,
-          subtitle: `${event.city} • ${event.period} • ${event.discipline}`,
-          matchLabel: eventMatchLabels[event.id],
-          meta: event.country,
-        }))
-    : COMPETITIONS.filter(
-        (c) =>
-          c.name.toLowerCase().includes(lower) ||
-          c.city.toLowerCase().includes(lower)
-      ).map((c) => ({
-        id: c.id,
-        type: "event" as const,
-        title: c.name,
-        subtitle: `${c.city} • ${formatDate(c.date, c.endDate)} • ${c.discipline}`,
-        meta: c.country,
-      }))
-
-  if (eventOnly) {
-    return events.length
-      ? [{ value: "event", items: events.slice(0, MAX_PER_GROUP) }]
-      : []
-  }
-
-  const riders = RIDERS.filter((r) =>
-    `${r.firstName} ${r.lastName}`.toLowerCase().includes(lower)
-  ).map((r) => ({
-    id: r.id,
-    type: "rider" as const,
-    title: `${r.firstName} ${r.lastName}`,
-    subtitle: getAssociation(r.id, "rider"),
-  }))
-
-  const horses = HORSES.filter(
-    (h) =>
-      h.name.toLowerCase().includes(lower) ||
-      h.registeredName.toLowerCase().includes(lower)
-  ).map((h) => ({
-    id: h.id,
-    type: "horse" as const,
-    title: h.name,
-    subtitle: getAssociation(h.id, "horse"),
-  }))
-
-  const photographers = PHOTOGRAPHERS.filter((p) =>
-    `${p.firstName} ${p.lastName}`.toLowerCase().includes(lower)
-  ).map((p) => ({
-    id: p.id,
-    type: "photographer" as const,
-    title: `${p.firstName} ${p.lastName}`,
-    subtitle: p.city || "Photographer",
-  }))
-
-  // Photo ID search: ignore a leading #
-  const cleanQuery = lower.replace(/^#/, "")
-  const matchingPhotos = photos
-    .filter((p) => p.id.toLowerCase().includes(cleanQuery))
-    .map((p) => ({
-      id: p.id,
-      type: "photo" as const,
-      title: `#${p.id.toUpperCase()}`,
-      subtitle: `${p.event} • ${p.rider}`,
+    .filter((event) =>
+      [
+        event.name,
+        event.city,
+        event.country,
+        event.discipline,
+        event.photographer?.name,
+        eventSearchIndex[event.id],
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(lower)
+    )
+    .map((event) => ({
+      id: event.id,
+      title: event.name,
+      subtitle: `${event.city} • ${event.period} • ${event.discipline}`,
+      matchLabel: eventMatchLabels[event.id],
+      meta: event.country,
     }))
 
-  const groups: ResultGroup[] = [
-    { value: "event", items: events },
-    { value: "rider", items: riders },
-    { value: "horse", items: horses },
-    { value: "photographer", items: photographers },
-    { value: "photo", items: matchingPhotos },
-  ]
-
-  return groups
-    .map((g) => ({ ...g, items: g.items.slice(0, MAX_PER_GROUP) }))
-    .filter((g) => g.items.length > 0)
-}
-
-const RESULT_PATHS: Record<ResultType, string> = {
-  event: "/event",
-  rider: "/rider",
-  horse: "/horse",
-  photographer: "/photographer",
-  photo: "/photo",
+  return events.length
+    ? [{ label: "Events", items: events.slice(0, MAX_RESULTS) }]
+    : []
 }
 
 // ─── Result rendering ────────────────────────────────────────────────
 
-function ResultIcon({ type }: { type: ResultType }) {
-  switch (type) {
-    case "event":
-      return <Calendar size={16} />
-    case "rider":
-      return <RiderIcon size={16} />
-    case "horse":
-      return <HorseIcon size={16} />
-    case "photographer":
-      return <Camera size={16} />
-    case "photo":
-      return <Image size={16} />
-  }
-}
-
-const ICON_BOX_LIGHT: Partial<Record<ResultType, string>> = {
-  event: "bg-[#1976D2]/8 text-[#1976D2]!",
-  rider: "bg-[#7c3aed]/8 text-[#7c3aed]!",
-  horse: "bg-[#E65100]/8 text-[#E65100]!",
-}
-
-const ICON_BOX_DARK: Partial<Record<ResultType, string>> = {
-  event: "bg-[#90caf9]/10 text-[#90caf9]!",
-  rider: "bg-[#a78bfa]/10 text-[#a78bfa]!",
-  horse: "bg-[#ffcc80]/10 text-[#ffcc80]!",
-}
+const ICON_BOX_LIGHT = "bg-[#1976D2]/8 text-[#1976D2]!"
+const ICON_BOX_DARK = "bg-[#90caf9]/10 text-[#90caf9]!"
 
 // ─── Component ───────────────────────────────────────────────────────
 
@@ -259,6 +94,8 @@ export interface EventSearchProps {
   searchEvents?: EventData[]
   eventSearchIndex?: Record<string, string>
   eventMatchLabels?: Record<string, string>
+  /** The photo tag search is still running */
+  isSearching?: boolean
   onSearchChange?: (value: string) => void
 }
 
@@ -272,14 +109,14 @@ interface ModernSearchBarProps {
   desktopPlaceholder?: string
   /** Hero search: tall white bar with a "go" button */
   heroMode?: boolean
-  /** Home page: search these API events instead of the mock data */
+  /** The events to search (already filtered by the page's search) */
   eventOptions?: EventData[]
   /** Extra searchable text per event id (photo tags, class names...) */
   eventSearchIndex?: Record<string, string>
   /** Line shown under an event result, per event id */
   eventMatchLabels?: Record<string, string>
-  /** Only show the Events group */
-  eventOnly?: boolean
+  /** The photo tag search is still running */
+  isSearching?: boolean
   onSearchChange?: (value: string) => void
 }
 
@@ -300,10 +137,10 @@ export function ModernSearchBar({
   mobilePlaceholder,
   desktopPlaceholder,
   heroMode = false,
-  eventOptions,
+  eventOptions = NO_EVENTS,
   eventSearchIndex = EMPTY_INDEX,
   eventMatchLabels = EMPTY_INDEX,
-  eventOnly = false,
+  isSearching = false,
   onSearchChange,
 }: ModernSearchBarProps) {
   const navigate = useNavigate()
@@ -327,20 +164,12 @@ export function ModernSearchBar({
 
   const groups = useMemo(
     () =>
-      searchAll(query, {
-        eventOptions,
-        eventSearchIndex,
-        eventMatchLabels,
-        eventOnly,
-      }),
-    [query, eventOptions, eventSearchIndex, eventMatchLabels, eventOnly]
+      searchAll(query, { eventOptions, eventSearchIndex, eventMatchLabels }),
+    [query, eventOptions, eventSearchIndex, eventMatchLabels]
   )
   const placeholder = isMobile
-    ? mobilePlaceholder || (eventOnly ? "Search events..." : "Search...")
-    : desktopPlaceholder ||
-      (eventOnly
-        ? "Search events, riders, horses, photographers..."
-        : "Search riders, horses, events, photographers, photo ID...")
+    ? mobilePlaceholder || "Search events..."
+    : desktopPlaceholder || "Search events, riders, horses, photographers..."
 
   const isDark = theme === "dark" || collapsible
   const useOverlay = collapsible && isExpanded && isMobile
@@ -429,7 +258,7 @@ export function ModernSearchBar({
     close()
     setQuery("")
     onSearchChange?.("")
-    navigate(`${RESULT_PATHS[item.type]}/${item.id}`)
+    navigate(`/event/${item.id}`)
   }
 
   const input = (
@@ -514,11 +343,13 @@ export function ModernSearchBar({
           "bg-[#262626] text-[#eee] shadow-[0_16px_48px_rgba(0,0,0,0.5)] ring-white/10"
       )}
     >
-      <ComboboxEmpty className="py-6">No matches found</ComboboxEmpty>
+      <ComboboxEmpty className="py-6">
+        {isSearching ? "Searching..." : "No matches found"}
+      </ComboboxEmpty>
       <ComboboxList className="max-h-[min(420px,var(--available-height))] px-0 py-2">
         {(group: ResultGroup) => (
           <ComboboxGroup
-            key={group.value}
+            key={group.label}
             items={group.items}
             className={cn(
               "mb-1 border-b pb-1 last:mb-0 last:border-b-0 last:pb-0",
@@ -526,12 +357,12 @@ export function ModernSearchBar({
             )}
           >
             <ComboboxLabel className="px-4 pt-2.5 pb-1 leading-normal font-semibold tracking-[0.08em] uppercase">
-              {GROUP_LABELS[group.value]}
+              {group.label}
             </ComboboxLabel>
             <ComboboxCollection>
               {(item: SearchResult) => (
                 <ComboboxItem
-                  key={`${item.type}-${item.id}`}
+                  key={item.id}
                   value={item}
                   className={cn(
                     "group/result gap-3 px-4",
@@ -545,13 +376,10 @@ export function ModernSearchBar({
                     className={cn(
                       // keep the icon colour when the row is highlighted
                       "flex size-8 shrink-0 items-center justify-center rounded-full **:text-inherit!",
-                      (isDark ? ICON_BOX_DARK : ICON_BOX_LIGHT)[item.type] ??
-                        (isDark
-                          ? "bg-foreground text-border!"
-                          : "bg-muted text-muted-foreground!")
+                      isDark ? ICON_BOX_DARK : ICON_BOX_LIGHT
                     )}
                   >
-                    <ResultIcon type={item.type} />
+                    <Calendar size={16} />
                   </span>
                   <span className="flex min-w-0 flex-1 flex-col">
                     <span
@@ -735,9 +563,7 @@ export function ModernSearchBar({
                 {clearButton}
               </div>
               <div className="pointer-events-none mt-2 line-clamp-2 text-center text-xs font-medium tracking-[0.02em] text-white/90 [text-shadow:0_1px_2px_rgba(0,0,0,0.6)]">
-                {eventOnly
-                  ? "Events • Riders • Horses • Photographers"
-                  : "Riders • Horses • Events • Photographers • Photo ID"}
+                Events • Riders • Horses • Photographers
               </div>
             </div>
           </div>,
