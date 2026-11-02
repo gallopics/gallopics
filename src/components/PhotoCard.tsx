@@ -37,7 +37,7 @@ interface PhotoCardProps {
     /** pgDuplicate: other places this photo appears in */
     alsoIn?: string[]
     /** pgDuplicate: where this copy is stored */
-    storedLocation?: string
+    folderName?: string
   }
   onKeep?: () => void
   onRemove?: () => void
@@ -319,9 +319,9 @@ function PhotoCardFooter({
         <span className="flex-1 truncate text-xs leading-[1.4] font-semibold">
           {pgMeta.fileName || "Untitled"}
         </span>
-        {pgMeta.storedLocation && (
+        {pgMeta.folderName && (
           <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[0.625rem] font-bold tracking-[0.02em] text-muted-foreground uppercase">
-            {pgMeta.storedLocation}
+            {pgMeta.folderName}
           </span>
         )}
       </div>

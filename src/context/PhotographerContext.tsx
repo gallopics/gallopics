@@ -97,13 +97,12 @@ export interface Photo {
   fileName?: string
   photoCode?: string // e.g. "PHT-9X2A1"
   uploadDate?: string // ISO date string
-  batch?: string // Batch name (empty = Uncategorised)
+  folderId?: string // The photographer's own folder (empty = Uncategorised)
   classId?: string
   className?: string
   isDuplicate?: boolean
   duplicateResolved?: boolean // True after "Keep" action resolves duplicates
   duplicateGroupId?: string // Identifies which duplicate group this instance belongs to
-  storedLocation?: "Random" | "Misc" | "Uncategorised" | "Published" // Where this instance lives
   prices?: PhotoPrices // in SEK
 }
 
@@ -499,7 +498,6 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
             fileName: file.name,
             photoCode: generatePhotoCode(),
             uploadDate: new Date().toISOString(),
-            batch: "",
             classId:
               getApiPhotoClassId(p) ||
               uploadMetadata.equipeClassSectionId ||
