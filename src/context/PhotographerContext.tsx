@@ -20,7 +20,6 @@ import {
   getSessionToken,
   type ApiPhoto,
 } from "../data/apiClient"
-import { PHOTOGRAPHERS } from "../data/mockData"
 import { invalidateEventPhotos } from "../data/queries/events"
 import {
   deletePhotosMutationOptions,
@@ -63,6 +62,9 @@ export interface PgEvent {
   venueName: string
   disciplines: string[]
   city: string
+  organiser?: string
+  county?: string
+  country?: string
   assignedPhotographers?: { id: string; name: string; avatar: string }[]
   applicationsWelcomed?: boolean
   canUploadPhotos?: boolean
@@ -124,10 +126,6 @@ interface PhotographerContextType {
     fileId: string,
     options?: { deleteUploaded?: boolean }
   ) => Promise<boolean>
-
-  // Profile
-  availableToHire: boolean
-  toggleAvailableToHire: (val: boolean) => void
 }
 
 const generatePhotoCode = () => {
@@ -346,23 +344,6 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
     uploadStore.getSnapshot
   )
 
-  // Not stored by the API yet: the mock profile's value until changed here
-  const [availableToHireOverride, setAvailableToHireOverride] = useState<
-    boolean | null
-  >(null)
-  const availableToHire =
-    availableToHireOverride ??
-    PHOTOGRAPHERS.find((p) => p.id === photographerId)?.isAvailableToHire ??
-    true
-
-  const toggleAvailableToHire = (val: boolean) => {
-    setAvailableToHireOverride(val)
-    const p = PHOTOGRAPHERS.find((p) => p.id === photographerId)
-    if (p) {
-      p.isAvailableToHire = val
-    }
-  }
-
   // --- Upload Logic ---
 
   const removePhotos = useMutation(deletePhotosMutationOptions())
@@ -572,9 +553,6 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
         startUpload,
         clearUploadSession,
         removeUploadFile,
-        // Profile
-        availableToHire,
-        toggleAvailableToHire,
       }}
     >
       {children}

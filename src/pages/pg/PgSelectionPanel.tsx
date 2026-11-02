@@ -30,7 +30,6 @@ import { cn } from "@/lib/utils"
 import { useDeletePhotosWithUndo } from "@/hooks/useDeletePhotosWithUndo"
 import type { Photo } from "@/context/PhotographerContext"
 import type { ApiClassSectionStart } from "@/data/eventsApi"
-import { HORSES, RIDERS } from "@/data/mockData"
 import { classStartsQueryOptions } from "@/data/queries/events"
 import {
   PhotoPricesSaveError,
@@ -201,12 +200,6 @@ export function PgSelectionPanel({
       if (photo.rider && photo.rider !== "None") names.add(photo.rider)
     })
 
-    if (names.size === 0) {
-      RIDERS.forEach((rider) =>
-        names.add(`${rider.firstName} ${rider.lastName}`)
-      )
-    }
-
     return Array.from(names)
       .sort((a, b) => a.localeCompare(b))
       .map((name) => ({ label: name, value: name }))
@@ -220,10 +213,6 @@ export function PgSelectionPanel({
     selectedPhotos.forEach((photo) => {
       if (photo.horse && photo.horse !== "None") names.add(photo.horse)
     })
-
-    if (names.size === 0) {
-      HORSES.forEach((horse) => names.add(horse.name))
-    }
 
     return Array.from(names)
       .sort((a, b) => a.localeCompare(b))

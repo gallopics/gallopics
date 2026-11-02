@@ -2,17 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { useLocation, useNavigate } from "react-router"
 import { useAuth as useClerkAuth } from "@clerk/clerk-react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import {
-  AlertCircle,
-  Archive,
-  CalendarPlus,
-  CalendarX2,
-  CheckCircle,
-  Edit2,
-  MoreHorizontal,
-  Search,
-  Trash2,
-} from "lucide-react"
+import { AlertCircle, CalendarPlus, CalendarX2 } from "lucide-react"
 
 import { getEventSortTime, isPreviousEventDate } from "@/lib/eventDates"
 import { assetUrl, cn } from "@/lib/utils"
@@ -22,33 +12,23 @@ import type { PgEvent } from "@/context/PhotographerContext"
 import { useWorkspace } from "@/context/WorkspaceContext"
 import { api, ApiError, type ApiEvent } from "@/data/apiClient"
 import { mapApiEventToEventData } from "@/data/eventsApi"
-import type { EventData } from "@/data/mockEvents"
 import { eventsListQueryOptions } from "@/data/queries/events"
 import {
   bookingsQueryOptions,
   photographerKeys,
 } from "@/data/queries/photographer"
+import type { EventData } from "@/types"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "@/components/ui/toast"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
 import { EmptyState } from "@/components/EmptyState"
 import { FilterBar, ResetFiltersButton } from "@/components/FilterBar"
-import { ModernDropdown } from "@/components/ModernDropdown"
 import { SearchInput } from "@/components/SearchInput"
 import { TitleHeader } from "@/components/TitleHeader"
 import { WorkspaceTabs } from "@/components/WorkspaceTabs"
-import { AddEventModal } from "@/pages/pg/components/AddEventModal"
-import { CoverImagePickerModal } from "@/pages/pg/components/CoverImagePickerModal"
 import {
   PgEventCard,
   PgEventCardSkeleton,
@@ -122,7 +102,8 @@ const mapApiEventToPgEvent = (event: EventData): PgEvent => ({
   publishedCount: 0,
   soldCount: 0,
   logo: event.logo || event.coverImage || assetUrl("images/events/default.png"),
-  venueName: event.name,
+  // EventData has no venue; bookings add the real one below
+  venueName: "",
   disciplines: [event.discipline],
   city: event.city,
   assignedPhotographers: event.photographer ? [event.photographer] : [],
@@ -135,6 +116,7 @@ const mapBackendEventToPgEvent = (
   isRegistered: boolean
 ): PgEvent => ({
   ...mapApiEventToPgEvent(mapApiEventToEventData(event)),
+  venueName: event.venue_name || "",
   isRegistered,
   status: isRegistered ? "open" : "upcoming",
   canUploadPhotos: isRegistered,
@@ -152,31 +134,23 @@ export function EventsList() {
   const [view, setView] = useState<
     "my" | "upcoming" | "previous" | "live" | "past" | "archived"
   >(initialTab ?? (isAdmin ? "live" : "my"))
-  const [county, setCounty] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
 
-  const [activePickerEventId, setActivePickerEventId] = useState<string | null>(
-    null
-  )
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
-  const [eventToEdit, setEventToEdit] = useState<any>(null)
   // Bookings cancelled here stay listed, read-only, until the page is left
   const [cancelledEvents, setCancelledEvents] = useState<PgEvent[]>([])
   const [actionError, setActionError] = useState<string | null>(null)
 
-  const [confirmModal, setConfirmModal] = useState<{
-    isOpen: boolean
-    type: "archive" | "delete"
-    event: any
-  } | null>(null)
   const [cancelBookingTarget, setCancelBookingTarget] =
     useState<PgEvent | null>(null)
 
-  const loadsPhotographerEvents =
-    !isAdmin && isClerkLoaded && !!isSignedIn && isAuthProfileLoaded
+  const canLoadEvents = isClerkLoaded && !!isSignedIn && isAuthProfileLoaded
+  const loadsPhotographerEvents = !isAdmin && canLoadEvents
+  // Admins get every event; photographers' "My events" only the ones with photos
   const eventsQuery = useQuery({
-    ...eventsListQueryOptions(!(view === "upcoming" || view === "previous")),
-    enabled: loadsPhotographerEvents,
+    ...eventsListQueryOptions(
+      !isAdmin && !(view === "upcoming" || view === "previous")
+    ),
+    enabled: canLoadEvents,
   })
   const bookingsQuery = useQuery({
     ...bookingsQueryOptions(),
@@ -185,6 +159,8 @@ export function EventsList() {
   const isLoadingUpcomingEvents =
     loadsPhotographerEvents &&
     (eventsQuery.isPending || (isPhotographer && bookingsQuery.isPending))
+  const isLoadingAdminEvents =
+    isAdmin && (!canLoadEvents || eventsQuery.isPending)
   // Load errors only when there is nothing to show (a failed refetch keeps the list)
   const upcomingEventsError =
     actionError ??
@@ -322,24 +298,22 @@ export function EventsList() {
     ]
   }, [apiPhotoEvents, bookedEventIds, bookedEvents, cancelledEvents, isAdmin])
 
-  const eventSource =
-    !isAdmin && (view === "upcoming" || view === "previous")
+  const eventSource = isAdmin
+    ? apiEvents
+    : view === "upcoming" || view === "previous"
       ? apiUpcomingEvents
       : workspaceEvents
 
-  const filteredEvents = eventSource.filter((e) => {
-    const matchesCounty =
-      !county || e.city.toLowerCase().includes(county.toLowerCase())
-    const matchesSearch =
-      !searchTerm ||
-      e.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      e.city.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (e.assignedPhotographers &&
-        e.assignedPhotographers.some((p) =>
-          p.name.toLowerCase().includes(searchTerm.toLowerCase())
-        ))
-    return matchesCounty && matchesSearch
-  })
+  // Event name and photographer; not the city, which falls back to "Sweden"
+  const term = searchTerm.trim().toLowerCase()
+  const filteredEvents = eventSource.filter(
+    (e) =>
+      !term ||
+      e.title.toLowerCase().includes(term) ||
+      !!e.assignedPhotographers?.some((p) =>
+        p.name.toLowerCase().includes(term)
+      )
+  )
 
   const myEvents = filteredEvents.filter(
     (e) => e.isRegistered || e.status === "open"
@@ -375,7 +349,8 @@ export function EventsList() {
       })),
     [latestPhotoUrlByEventId, myEvents]
   )
-  const liveEvents = filteredEvents.filter((e) => e.status === "open")
+  // Admin "Live": events with photos, i.e. what buyers see on the site
+  const liveEvents = filteredEvents.filter((e) => (e.photosCount ?? 0) > 0)
   const pastEvents = filteredEvents
     .filter((e) => isPreviousEventDate(e.date, e.endDate))
     .sort((a, b) => getEventSortTime(b.date) - getEventSortTime(a.date))
@@ -388,10 +363,6 @@ export function EventsList() {
   const previousEvents = filteredEvents
     .filter((e) => isPreviousEventDate(e.date, e.endDate))
     .sort((a, b) => getEventSortTime(b.date) - getEventSortTime(a.date))
-  const archivedEvents =
-    filteredEvents.filter((e) => e.status === "archived").length > 0
-      ? filteredEvents.filter((e) => e.status === "archived")
-      : filteredEvents.slice(-2) // Fallback if no status match
 
   const handleBookEvent = async (event: PgEvent, e?: React.MouseEvent) => {
     e?.stopPropagation()
@@ -424,10 +395,6 @@ export function EventsList() {
     }
   }
 
-  const handleCoverChange = (eventId: string) => {
-    setActivePickerEventId(eventId)
-  }
-
   const handleNavigateToEvent = (eventId: string) => {
     const basePath = isAdmin ? "/admin" : "/pg"
     navigate(`${basePath}/events/${eventId}`, { state: { fromTab: view } })
@@ -455,15 +422,12 @@ export function EventsList() {
     if (isAdmin) {
       if (view === "live") return liveEvents
       if (view === "past") return pastEvents
-      if (view === "archived") return archivedEvents
-      if (view === "upcoming") return upcomingEvents.slice(3)
       return upcomingEvents
     }
     if (view === "upcoming") return upcomingEvents
     if (view === "previous") return previousEvents
     return myEvents
   }, [
-    archivedEvents,
     filteredEvents,
     isAdmin,
     liveEvents,
@@ -476,6 +440,9 @@ export function EventsList() {
   const isPhotographerUpcomingView = !isAdmin && view === "upcoming"
   const isPhotographerApiEventView =
     isPhotographerUpcomingView || (!isAdmin && view === "previous")
+  const isLoadingEventRows =
+    isLoadingAdminEvents ||
+    (isPhotographerApiEventView && isLoadingUpcomingEvents)
   // Waits for both lists (events + bookings): showing one first made cards jump
   // when the other arrived. isPending, so refetches keep the cards.
   const isPhotographerMyEventsLoading =
@@ -489,9 +456,8 @@ export function EventsList() {
   const tabs: { value: EventsView; label: string }[] = isAdmin
     ? [
         { value: "live", label: "Live events" },
-        { value: "past", label: "Past events" },
         { value: "upcoming", label: "Current" },
-        { value: "archived", label: "Archived" },
+        { value: "past", label: "Past events" },
       ]
     : [
         { value: "my", label: "My events" },
@@ -499,121 +465,45 @@ export function EventsList() {
         { value: "previous", label: "Previous" },
       ]
 
-  const openAddModal = (ev: PgEvent | null) => {
-    setEventToEdit(ev)
-    setIsAddModalOpen(true)
-  }
-
   const renderRowActions = (event: PgEvent, isApplied: boolean) => {
     if (isAdmin) {
       const photographer = event.assignedPhotographers?.[0]
+      const showsApplications = view !== "past"
+      // develop: the actions menu (edit, archive, delete) is hidden: no API for it yet
       return (
         <div className="flex items-center justify-end">
-          {/* Stats for Live / Past / Archived */}
-          {view !== "upcoming" && (
+          <div className="flex flex-col items-start rounded-lg bg-muted px-3.5 py-1.5 text-muted-foreground">
+            <span className="text-[0.65rem] leading-[1.2] font-semibold opacity-80">
+              Photos
+            </span>
+            <span className="text-[0.8125rem] leading-[1.2] font-bold text-foreground">
+              {event.photosCount ?? 0}
+            </span>
+          </div>
+
+          {(showsApplications || photographer) && (
             <>
-              <div className="flex flex-col items-start rounded-lg bg-muted px-3.5 py-1.5 text-muted-foreground">
-                <span className="text-[0.65rem] leading-[1.2] font-semibold opacity-80">
-                  Published
-                </span>
-                <span className="text-[0.8125rem] leading-[1.2] font-bold text-foreground">
-                  {event.publishedCount ?? 0}
-                </span>
-              </div>
               <Separator
                 orientation="vertical"
                 className="mx-5 h-8 data-vertical:self-center"
               />
+              <div className="flex shrink-0 items-center gap-3">
+                {showsApplications && (
+                  <ApplicationsTag
+                    open={event.applicationsWelcomed !== false}
+                  />
+                )}
+                {photographer && (
+                  <img
+                    src={photographer.avatar}
+                    alt={photographer.name}
+                    title={`Photographer: ${photographer.name}`}
+                    className="size-7 rounded-full border-2 border-white object-cover shadow-[0_2px_4px_rgba(0,0,0,0.1)]"
+                  />
+                )}
+              </div>
             </>
           )}
-
-          <div className="flex shrink-0 items-center gap-3">
-            {view !== "past" && view !== "archived" && (
-              <ApplicationsTag open={event.applicationsWelcomed !== false} />
-            )}
-            {photographer && (
-              <img
-                src={photographer.avatar}
-                alt={photographer.name}
-                title={`Photographer: ${photographer.name}`}
-                className="size-7 rounded-full border-2 border-white object-cover shadow-[0_2px_4px_rgba(0,0,0,0.1)]"
-              />
-            )}
-          </div>
-
-          <Separator
-            orientation="vertical"
-            className="mx-3 h-6 data-vertical:self-center"
-          />
-          <div onClick={(e) => e.stopPropagation()}>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    variant="outline"
-                    size="icon-sm"
-                    aria-label="Event actions"
-                    className="text-muted-foreground"
-                  />
-                }
-              >
-                <MoreHorizontal className="size-4.5" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-max min-w-45">
-                {view === "archived" ? (
-                  <>
-                    <DropdownMenuItem
-                      onClick={() => handleNavigateToEvent(event.id)}
-                    >
-                      <Search />
-                      View Dashboard
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() => console.log("Make active", event.id)}
-                    >
-                      <CheckCircle />
-                      Make active
-                    </DropdownMenuItem>
-                  </>
-                ) : (
-                  <>
-                    <DropdownMenuItem
-                      onClick={() => handleNavigateToEvent(event.id)}
-                    >
-                      <Search />
-                      Manage uploads
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => openAddModal(event)}>
-                      <Edit2 />
-                      Edit Event
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() =>
-                        setConfirmModal({
-                          isOpen: true,
-                          type: "archive",
-                          event,
-                        })
-                      }
-                    >
-                      <Archive />
-                      Archive
-                    </DropdownMenuItem>
-                  </>
-                )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  variant="destructive"
-                  onClick={() =>
-                    setConfirmModal({ isOpen: true, type: "delete", event })
-                  }
-                >
-                  <Trash2 />
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
         </div>
       )
     }
@@ -675,13 +565,6 @@ export function EventsList() {
           variant="workspace"
           title="Events"
           className="border-b-0 pb-5"
-          rightContent={
-            isAdmin && (
-              <Button size="sm" onClick={() => openAddModal(null)}>
-                Add an event
-              </Button>
-            )
-          }
         />
         <div className="container">
           <WorkspaceTabs
@@ -698,42 +581,18 @@ export function EventsList() {
       <div className="container">
         <FilterBar
           searchWidth="fixed"
+          // develop: Country / County filters hidden; events have no county data yet
           filters={
-            <>
-              <ModernDropdown
-                value="Sweden"
-                options={[{ label: "Sweden", value: "Sweden", icon: "🇸🇪" }]}
-                onChange={() => {}}
-                variant="pill"
-                label="Country"
-              />
-              <ModernDropdown
-                value={county}
-                options={[
-                  { label: "All counties", value: "" },
-                  { label: "Skåne", value: "Skane" },
-                  { label: "Stockholm", value: "Stockholm" },
-                  { label: "Västra Götaland", value: "VastraGotaland" },
-                ]}
-                onChange={(val) => setCounty(val)}
-                placeholder="Select county"
-                variant="pill"
-                label="County"
-              />
-              <ResetFiltersButton
-                disabled={!county && !searchTerm}
-                onClick={() => {
-                  setCounty("")
-                  setSearchTerm("")
-                }}
-              />
-            </>
+            <ResetFiltersButton
+              disabled={!searchTerm}
+              onClick={() => setSearchTerm("")}
+            />
           }
           search={
             <SearchInput
               value={searchTerm}
               onChange={setSearchTerm}
-              placeholder="Search event name, city, organiser..."
+              placeholder="Search events..."
             />
           }
           meta={<>Showing {activeList.length} events</>}
@@ -741,20 +600,15 @@ export function EventsList() {
       </div>
 
       {isAdmin || isPhotographerApiEventView ? (
-        <div
-          aria-busy={
-            (isPhotographerApiEventView && isLoadingUpcomingEvents) || undefined
-          }
-          className="container"
-        >
-          {isPhotographerApiEventView && isLoadingUpcomingEvents ? (
+        <div aria-busy={isLoadingEventRows || undefined} className="container">
+          {isLoadingEventRows ? (
             <>
               <span className="sr-only">Loading events…</span>
               {Array.from({ length: 6 }).map((_, index) => (
                 <EventRowSkeleton key={index} />
               ))}
             </>
-          ) : isPhotographerApiEventView && upcomingEventsError ? (
+          ) : (isAdmin || isPhotographerApiEventView) && upcomingEventsError ? (
             <EmptyState
               icon={<AlertCircle />}
               title="Could not load events"
@@ -850,7 +704,6 @@ export function EventsList() {
               <PgEventCard
                 key={event.id}
                 event={event}
-                onCoverChange={handleCoverChange}
                 onCancelBooking={
                   event.canUploadPhotos !== false &&
                   bookedEventIds.has(event.id)
@@ -871,30 +724,11 @@ export function EventsList() {
                 }
                 hideLogo={!isAdmin && view === "my"}
                 fromTab={view}
-                onEdit={(ev) => openAddModal(ev)}
               />
             ))
           )}
         </div>
       )}
-
-      <CoverImagePickerModal
-        isOpen={!!activePickerEventId}
-        onClose={() => setActivePickerEventId(null)}
-        eventId={activePickerEventId || ""}
-        onSelect={(url) => {
-          console.log("New cover selected:", url)
-        }}
-      />
-
-      <AddEventModal
-        isOpen={isAddModalOpen}
-        onClose={() => {
-          setIsAddModalOpen(false)
-          setEventToEdit(null)
-        }}
-        eventToEdit={eventToEdit}
-      />
 
       <ConfirmDialog
         open={!!cancelBookingTarget}
@@ -915,38 +749,6 @@ export function EventsList() {
         }
         confirmLabel="Cancel booking"
         cancelLabel="Keep booking"
-      />
-
-      <ConfirmDialog
-        open={!!confirmModal?.isOpen}
-        onCancel={() => setConfirmModal(null)}
-        onConfirm={() => {
-          // Mock action, as in the old app
-          console.log(
-            `${confirmModal?.type}ing event:`,
-            confirmModal?.event?.id
-          )
-          setConfirmModal(null)
-        }}
-        title={
-          confirmModal?.type === "archive" ? "Archive event?" : "Delete event?"
-        }
-        description={
-          confirmModal?.type === "archive" ? (
-            <>
-              Are you sure you want to archive{" "}
-              <strong>{confirmModal?.event?.title}</strong>? It will be moved to
-              the Archived tab.
-            </>
-          ) : (
-            <>
-              This will permanently delete{" "}
-              <strong>{confirmModal?.event?.title}</strong>. This action cannot
-              be undone.
-            </>
-          )
-        }
-        confirmLabel={confirmModal?.type === "archive" ? "Archive" : "Delete"}
       />
     </div>
   )

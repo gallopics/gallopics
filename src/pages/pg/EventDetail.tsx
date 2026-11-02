@@ -15,44 +15,34 @@ import {
 } from "lucide-react"
 
 import { hasCustomPrices } from "@/constants/qualityTiers"
-import { assetUrl, cn } from "@/lib/utils"
+import { cn } from "@/lib/utils"
 import { useDeletePhotosWithUndo } from "@/hooks/useDeletePhotosWithUndo"
 import { useWorkspacePhotos } from "@/hooks/useWorkspaceData"
 import { useAuth } from "@/context/AuthContext"
-import type { PgEvent, Photo } from "@/context/PhotographerContext"
+import type { Photo } from "@/context/PhotographerContext"
 import { useWorkspace } from "@/context/WorkspaceContext"
-import { mapApiEventToEventData } from "@/data/eventsApi"
-import { PHOTOGRAPHERS } from "@/data/mockData"
 import { eventQueryOptions } from "@/data/queries/events"
 import {
   bookingsQueryOptions,
   myPhotosQueryOptions,
   resolveCachedDuplicate,
+  toPgEvent,
   toWorkspaceEvents,
 } from "@/data/queries/photographer"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import {
-  Dialog,
-  DialogBody,
-  DialogClose,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
 import { EmptyState } from "@/components/EmptyState"
 import { FilterChip } from "@/components/FilterChip"
 import { ActionCluster } from "@/components/HeaderActions"
-import { InfoChip } from "@/components/InfoChip"
 import { PhotoCard, PhotoCardSkeleton } from "@/components/PhotoCard"
 import { PhotoPreviewDialog } from "@/components/PhotoPreviewDialog"
 import { ScopedSearchBar } from "@/components/ScopedSearchBar"
 import { TitleHeader } from "@/components/TitleHeader"
 import { WorkspaceTabs } from "@/components/WorkspaceTabs"
+import { EventDetailsDialog } from "@/pages/pg/components/EventDetailsDialog"
 import { PgSelectionPanel } from "@/pages/pg/PgSelectionPanel"
 
 // Tab type
@@ -62,40 +52,16 @@ type TabType = "uploads" | "published" | "archive"
 type FolderType = "random" | "misc" | "uncategorised" | "duplicates"
 type PublishedFolderType = "selling_photos" | "unsold"
 
-const mapApiEventToPgEvent = (
-  eventId: string,
-  event: unknown,
-  canUploadPhotos = false
-): PgEvent => {
-  const eventData = mapApiEventToEventData(event as any)
-
-  return {
-    id: eventData.id || eventId,
-    title: eventData.name,
-    date: eventData.startDate || eventData.period,
-    endDate: eventData.endDate || eventData.startDate,
-    dateRange: eventData.period,
-    location: `${eventData.city}, ${eventData.country}`,
-    coverImage: eventData.coverImage,
-    status: "open",
-    isRegistered: true,
-    photosCount: eventData.photoCount || 0,
-    publishedCount: 0,
-    soldCount: 0,
-    logo:
-      eventData.logo ||
-      eventData.coverImage ||
-      assetUrl("images/events/default.png"),
-    venueName: eventData.name,
-    disciplines: [eventData.discipline].filter(Boolean),
-    city: eventData.city,
-    assignedPhotographers: eventData.photographer
-      ? [eventData.photographer]
-      : [],
-    applicationsWelcomed: eventData.status !== "disabled",
-    canUploadPhotos,
-  }
-}
+/** Search in the photo grid: file name, photo code / ID and the tags */
+const matchesPhotoSearch = (photo: Photo, term: string) =>
+  [
+    photo.fileName,
+    photo.photoCode,
+    photo.id,
+    photo.rider,
+    photo.horse,
+    photo.className,
+  ].some((value) => value?.toLowerCase().includes(term))
 
 export function EventDetail() {
   const { eventId } = useParams<{ eventId: string }>()
@@ -103,7 +69,7 @@ export function EventDetail() {
 
   const location = useLocation()
   const fromTab = (location.state as any)?.fromTab
-  const { basePath, isAdmin } = useWorkspace()
+  const { basePath } = useWorkspace()
   const { isPhotographer } = useAuth()
   const queryClient = useQueryClient()
   const deletePhotosWithUndo = useDeletePhotosWithUndo()
@@ -132,7 +98,7 @@ export function EventDetail() {
   const apiEvent = useMemo(
     () =>
       eventId && apiEventQuery.data
-        ? mapApiEventToPgEvent(eventId, apiEventQuery.data)
+        ? toPgEvent(eventId, apiEventQuery.data)
         : null,
     [apiEventQuery.data, eventId]
   )
@@ -140,7 +106,7 @@ export function EventDetail() {
     !contextEvent && (!bookingsSettled || apiEventQuery.isLoading)
   const apiEventError = apiEventQuery.error?.message ?? null
   const event = contextEvent || apiEvent || undefined
-  const canUploadPhotos = isAdmin || event?.canUploadPhotos !== false
+  const canUploadPhotos = event?.canUploadPhotos !== false
   const allEventPhotos = useMemo(
     () =>
       eventId
@@ -148,6 +114,11 @@ export function EventDetail() {
         : [],
     [eventId, workspacePhotos]
   )
+  // The photographer's own public (ready) photos
+  const publishedCount = allEventPhotos.filter(
+    (photo) =>
+      photo.status === "uploadedUnpublished" || photo.status === "published"
+  ).length
   const selectedClassContext = useMemo(() => {
     const state = location.state as
       | {
@@ -342,16 +313,7 @@ export function EventDetail() {
     // Apply search filter if search term exists
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase().trim()
-      photos = photos.filter((p) => {
-        const clientEmail =
-          (p as any).clientEmail || `client_${p.id.slice(0, 4)}@example.com`
-        return (
-          p.fileName?.toLowerCase().includes(term) ||
-          p.photoCode?.toLowerCase().includes(term) ||
-          p.id?.toLowerCase().includes(term) ||
-          clientEmail.toLowerCase().includes(term)
-        )
-      })
+      photos = photos.filter((p) => matchesPhotoSearch(p, term))
     }
 
     const chip = publishedChips.find((c) => c.id === activeChip)
@@ -403,14 +365,7 @@ export function EventDetail() {
 
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase().trim()
-      photos = photos.filter(
-        (p) =>
-          p.fileName?.toLowerCase().includes(term) ||
-          p.photoCode?.toLowerCase().includes(term) ||
-          p.id?.toLowerCase().includes(term) ||
-          p.rider?.toLowerCase().includes(term) ||
-          p.horse?.toLowerCase().includes(term)
-      )
+      photos = photos.filter((p) => matchesPhotoSearch(p, term))
     }
 
     const chip = archivedChips.find((c) => c.id === activeChip)
@@ -458,12 +413,7 @@ export function EventDetail() {
     // Apply search filter if search term exists
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase().trim()
-      photos = photos.filter(
-        (p) =>
-          p.fileName?.toLowerCase().includes(term) ||
-          p.photoCode?.toLowerCase().includes(term) ||
-          p.id?.toLowerCase().includes(term)
-      )
+      photos = photos.filter((p) => matchesPhotoSearch(p, term))
     }
 
     return photos
@@ -564,31 +514,16 @@ export function EventDetail() {
   }, [allPhotos])
 
   // Get filtered photos based on active chip AND search term
+  // folderPhotos are already searched; here only the chip
   const filteredFolderPhotos = useMemo(() => {
-    // Base: Folder photos
-    let photos = folderPhotos
-
-    // 1. Filter by Search Term
-    if (searchTerm) {
-      const lower = searchTerm.toLowerCase()
-      photos = photos.filter(
-        (p) =>
-          (p.rider && p.rider.toLowerCase().includes(lower)) ||
-          (p.horse && p.horse.toLowerCase().includes(lower)) ||
-          (p.fileName && p.fileName.toLowerCase().includes(lower)) ||
-          (p.id && p.id.toLowerCase().includes(lower))
-      )
-    }
-
     // Duplicates folder shows all duplicates (no chip filtering)
-    if (isDuplicatesFolder) return photos
+    if (isDuplicatesFolder) return folderPhotos
 
-    // 2. Filter by Chip
     const chip = folderChips.find((c) => c.id === activeChip)
-    if (!chip || activeChip === "all") return photos
+    if (!chip || activeChip === "all") return folderPhotos
 
-    return photos.filter(chip.filterFn)
-  }, [folderPhotos, activeChip, folderChips, isDuplicatesFolder, searchTerm])
+    return folderPhotos.filter(chip.filterFn)
+  }, [folderPhotos, activeChip, folderChips, isDuplicatesFolder])
 
   // Get display photos based on current tab
   const displayedPhotos = useMemo(() => {
@@ -752,13 +687,6 @@ export function EventDetail() {
     setActivePanelTab("tags")
   }
 
-  const eventPhotographer = useMemo(() => {
-    if (!eventId) return null
-    return (
-      PHOTOGRAPHERS.find((p) => p.primaryEventId === eventId) ||
-      PHOTOGRAPHERS[0]
-    )
-  }, [eventId])
   // Guard after all hooks — safe to return early now
   if (!event && isLoadingApiEvent)
     // Booked events have no logo; once the bookings are in, this is an API event (with one)
@@ -867,18 +795,9 @@ export function EventDetail() {
                 Published
               </span>
               <span className="text-sm leading-[1.2] font-bold text-foreground">
-                {event.publishedCount ?? 0}
+                {publishedCount}
               </span>
             </div>
-
-            {isAdmin && eventPhotographer && (
-              <InfoChip
-                label="Photographer"
-                name={`${eventPhotographer.firstName} ${eventPhotographer.lastName}`}
-                variant="photographer"
-                avatarUrl={undefined}
-              />
-            )}
           </ActionCluster>
         }
       />
@@ -1281,75 +1200,11 @@ export function EventDetail() {
         confirmLabel="Delete"
       />
 
-      {/* Event details (read only) */}
-      <Dialog open={showInfoModal} onOpenChange={setShowInfoModal}>
-        <DialogContent className="sm:max-w-120">
-          <DialogHeader>
-            <DialogTitle>Event details</DialogTitle>
-          </DialogHeader>
-          <DialogBody className="flex flex-col gap-5">
-            <div className="flex items-center gap-4">
-              <div className="size-20 shrink-0 overflow-hidden rounded-xl border">
-                <img
-                  src={event.logo}
-                  alt=""
-                  className="size-full object-contain p-2"
-                />
-              </div>
-              <div>
-                <div className="mb-2 text-xl leading-[1.2] font-bold text-foreground">
-                  {event.title}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  {event.dateRange}
-                </div>
-              </div>
-            </div>
-
-            <InfoField label="Organiser">
-              <span className="font-medium">EquiSport Events AB</span>
-            </InfoField>
-
-            <div className="grid grid-cols-2 gap-5">
-              <InfoField label="City">{event.city}</InfoField>
-              {event.venueName && (
-                <InfoField label="Venue">{event.venueName}</InfoField>
-              )}
-              <InfoField label="County">Stockholm County</InfoField>
-              <InfoField label="Country">Sweden</InfoField>
-            </div>
-
-            <InfoField label="Disciplines">
-              <div className="flex flex-wrap gap-2">
-                {(event.disciplines || []).map((d) => (
-                  <span
-                    key={d}
-                    className="rounded-full bg-muted px-3 py-1.5 text-sm font-medium text-foreground/80"
-                  >
-                    {d}
-                  </span>
-                ))}
-              </div>
-            </InfoField>
-
-            <InfoField label="Photographer">
-              <div className="inline-flex items-center gap-2 rounded-full bg-muted py-1 pr-3 pl-1 text-sm font-medium">
-                <span className="flex size-6 items-center justify-center rounded-full bg-border text-[0.6875rem] font-semibold text-muted-foreground">
-                  {eventPhotographer
-                    ? eventPhotographer.firstName.charAt(0)
-                    : "?"}
-                </span>
-                {eventPhotographer
-                  ? `${eventPhotographer.firstName} ${eventPhotographer.lastName}`
-                  : "Unassigned"}
-              </div>
-            </InfoField>
-          </DialogBody>
-          <DialogFooter>
-            <DialogClose render={<Button />}>Close</DialogClose>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <EventDetailsDialog
+        event={event}
+        open={showInfoModal}
+        onOpenChange={setShowInfoModal}
+      />
     </div>
   )
 }
@@ -1427,20 +1282,3 @@ const selectedCard =
 const roundButton = "size-10 text-muted-foreground"
 
 const roundDanger = "size-10 border-destructive/20 hover:border-destructive"
-
-function InfoField({
-  label,
-  children,
-}: {
-  label: string
-  children: React.ReactNode
-}) {
-  return (
-    <div>
-      <div className="mb-1.5 text-xs font-semibold tracking-[0.02em] text-muted-foreground/70 uppercase">
-        {label}
-      </div>
-      <div className="text-base text-foreground">{children}</div>
-    </div>
-  )
-}

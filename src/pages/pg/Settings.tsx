@@ -9,7 +9,6 @@ import {
   saveHighlightsMutationOptions,
 } from "@/data/queries/photographer"
 import { Button } from "@/components/ui/button"
-import { Switch } from "@/components/ui/switch"
 import { ManageHighlightsModal } from "@/components/ManageHighlightsModal"
 import { TitleHeader } from "@/components/TitleHeader"
 import {
@@ -53,8 +52,7 @@ export function Settings() {
   })
   const highlights = highlightsQuery.data ?? NO_IDS
   const saveHighlights = useMutation(saveHighlightsMutationOptions())
-  const { availableToHire, toggleAvailableToHire, photographerId } =
-    usePhotographer()
+  const { photographerId } = usePhotographer()
   const [isHighlightsModalOpen, setIsHighlightsModalOpen] = useState(false)
 
   return (
@@ -83,7 +81,9 @@ export function Settings() {
             Profile & public page
           </h2>
 
+          {/* develop: "Available to hire" hidden; nothing uses it yet and it wasn't saved */}
           <SettingRow
+            last
             title="Highlight photos"
             description={`${highlights.length} / 10 selected`}
             control={
@@ -97,18 +97,6 @@ export function Settings() {
               >
                 Manage
               </Button>
-            }
-          />
-          <SettingRow
-            last
-            title="Available to hire"
-            description="Allow potential clients to hire you from your public profile"
-            control={
-              <Switch
-                aria-label="Available to hire"
-                checked={availableToHire}
-                onCheckedChange={(checked) => toggleAvailableToHire(checked)}
-              />
             }
           />
         </WorkspaceCard>

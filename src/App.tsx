@@ -4,7 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router"
 import { AuthProvider } from "@/context/AuthContext"
 import { CartProvider } from "@/context/CartContext"
 import { PhotographerProvider } from "@/context/PhotographerContext"
-import { WorkspaceProvider } from "@/context/WorkspaceContext"
+import { useWorkspace, WorkspaceProvider } from "@/context/WorkspaceContext"
 import { PageState } from "@/components/PageState"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
 import ScrollToTop from "@/components/ScrollToTop"
@@ -50,6 +50,11 @@ const EventsList = lazy(() =>
 const EventDetail = lazy(() =>
   import("@/pages/pg/EventDetail").then((m) => ({ default: m.EventDetail }))
 )
+const AdminEventDetail = lazy(() =>
+  import("@/pages/pg/AdminEventDetail").then((m) => ({
+    default: m.AdminEventDetail,
+  }))
+)
 const SoldPhotos = lazy(() =>
   import("@/pages/pg/SoldPhotos").then((m) => ({ default: m.SoldPhotos }))
 )
@@ -86,9 +91,15 @@ const TermsPage = lazy(() =>
 )
 
 // Workspace pages, served under both /pg and /admin (same pages, role-checked)
+/** Admins see all public photos of an event; photographers manage their own */
+function EventDetailRoute() {
+  const { isAdmin } = useWorkspace()
+  return isAdmin ? <AdminEventDetail /> : <EventDetail />
+}
+
 const workspacePages = [
   { path: "events", element: <EventsList /> },
-  { path: "events/:eventId", element: <EventDetail /> },
+  { path: "events/:eventId", element: <EventDetailRoute /> },
   { path: "sold", element: <SoldPhotos /> },
   { path: "receipts", element: <Receipts /> },
   { path: "billing", element: <PhotographerBilling /> },

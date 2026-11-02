@@ -1,5 +1,4 @@
 import { useNavigate } from "react-router"
-import { Image as ImageIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import type { PgEvent } from "@/context/PhotographerContext"
@@ -7,12 +6,9 @@ import { useWorkspace } from "@/context/WorkspaceContext"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
-import { GlassButton } from "@/components/PhotoCard"
 
 interface PgEventCardProps {
   event: PgEvent
-  onCoverChange: (eventId: string) => void
-  onEdit?: (event: PgEvent) => void
   onCancelBooking?: (event: PgEvent, e: React.MouseEvent) => void
   fromTab?: string
   eventProfilePath?: string
@@ -23,7 +19,6 @@ interface PgEventCardProps {
 /** Folder-style event card in the photographer's "My events" grid. */
 export function PgEventCard({
   event,
-  onCoverChange,
   onCancelBooking,
   fromTab,
   eventProfilePath,
@@ -62,28 +57,15 @@ export function PgEventCard({
             />
           )}
 
+          {/* The cover falls back to the latest photo, so no cover means no photos */}
           {!hasCover && (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
               <span className="text-[0.8125rem] font-medium text-muted-foreground">
-                Add cover photo
+                No photos yet
               </span>
             </div>
           )}
-
-          <div className="pointer-events-none absolute top-3 right-3 z-30 -translate-y-1 opacity-0 transition-[translate,opacity] duration-250 group-hover:translate-y-0 group-hover:opacity-100">
-            <GlassButton
-              title={hasCover ? "Change cover image" : "No cover to edit"}
-              aria-label="Change cover image"
-              disabled={!hasCover}
-              onClick={(e) => {
-                e.stopPropagation()
-                if (hasCover) onCoverChange(event.id)
-              }}
-              className="pointer-events-auto text-foreground disabled:opacity-30 [&_svg:not([class*='size-'])]:size-4"
-            >
-              <ImageIcon />
-            </GlassButton>
-          </div>
+          {/* develop: "Change cover image" hidden; there is no API to save a cover */}
         </div>
 
         <div className="flex flex-col pt-4">

@@ -9,11 +9,16 @@ import {
   toSekPrices,
   type PhotoPrices,
 } from "@/constants/qualityTiers"
-import { formatLabel } from "@/lib/utils"
+import { assetUrl, formatLabel } from "@/lib/utils"
 import type { PgEvent, Photo } from "@/context/PhotographerContext"
 
 import { api, getApiPhotoPreviewUrl, type ApiPhoto } from "../apiClient"
-import { formatEventPeriod, type ApiEvent } from "../eventsApi"
+import {
+  formatEventPeriod,
+  mapApiEventToEventData,
+  normalizeCountry,
+  type ApiEvent,
+} from "../eventsApi"
 import { invalidateEventPhotos } from "./events"
 import { photoKeys, publicPhotographerKeys } from "./photos"
 
@@ -72,6 +77,45 @@ async function fetchAllMyPhotos() {
   return photos.map(mapApiPhotoToPgPhoto)
 }
 
+/** An event from the events API as the studio pages show it */
+export const toPgEvent = (
+  eventId: string,
+  event: ApiEvent,
+  canUploadPhotos = false
+): PgEvent => {
+  const eventData = mapApiEventToEventData(event)
+
+  return {
+    id: eventData.id || eventId,
+    title: eventData.name,
+    date: eventData.startDate || eventData.period,
+    endDate: eventData.endDate || eventData.startDate,
+    dateRange: eventData.period,
+    location: `${eventData.city}, ${eventData.country}`,
+    coverImage: eventData.coverImage,
+    status: "open",
+    isRegistered: true,
+    photosCount: eventData.photoCount || 0,
+    publishedCount: 0,
+    soldCount: 0,
+    logo:
+      eventData.logo ||
+      eventData.coverImage ||
+      assetUrl("images/events/default.png"),
+    venueName: event.venue_name || "",
+    disciplines: [eventData.discipline].filter(Boolean),
+    city: event.city || "",
+    organiser: event.organizer_name || "",
+    county: event.district || "",
+    country: eventData.country,
+    assignedPhotographers: eventData.photographer
+      ? [eventData.photographer]
+      : [],
+    applicationsWelcomed: eventData.status !== "disabled",
+    canUploadPhotos,
+  }
+}
+
 /** A booked event as the studio pages show it (`select` for `bookings`) */
 export const toWorkspaceEvents = (bookings: ApiEvent[]): PgEvent[] =>
   bookings.map((event) => ({
@@ -93,6 +137,9 @@ export const toWorkspaceEvents = (bookings: ApiEvent[]): PgEvent[] =>
     venueName: event.venue_name || "",
     disciplines: event.discipline ? [formatLabel(event.discipline)] : [],
     city: event.city || "",
+    organiser: event.organizer_name || "",
+    county: event.district || "",
+    country: normalizeCountry(event.country),
     assignedPhotographers: [],
     applicationsWelcomed: true,
     canUploadPhotos: true,

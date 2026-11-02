@@ -20,12 +20,27 @@ export const eventKeys = {
     [...eventKeys.detail(eventId), "gallery"] as const,
   gallery: (eventId: string, pageSize: number) =>
     [...eventKeys.galleries(eventId), pageSize] as const,
+  allPhotos: (eventId: string) =>
+    [...eventKeys.galleries(eventId), "all"] as const,
   searches: (eventId: string) =>
     [...eventKeys.detail(eventId), "search"] as const,
   search: (eventId: string, query: string) =>
     [...eventKeys.searches(eventId), query] as const,
   classStarts: (classSectionId: string) =>
     [...eventKeys.all, "class-sections", classSectionId, "starts"] as const,
+}
+
+const GALLERY_PAGE_SIZE = 100
+
+/** Every public photo of an event (all gallery pages, 100 at a time) */
+async function fetchAllEventPhotos(eventId: string) {
+  const photos: ApiPhoto[] = []
+  for (let page = 1; ; page += 1) {
+    const data = await api.getEventGallery(eventId, page, GALLERY_PAGE_SIZE)
+    photos.push(...data.items)
+    if (photos.length >= data.total || data.items.length === 0) break
+  }
+  return photos
 }
 
 /** Photos of one event that match the query (tags, or photographer name) */
@@ -78,6 +93,13 @@ export const eventGalleryQueryOptions = (eventId: string, pageSize: number) =>
   queryOptions({
     queryKey: eventKeys.gallery(eventId, pageSize),
     queryFn: () => api.getEventGallery(eventId, 1, pageSize),
+  })
+
+/** All public photos of an event */
+export const eventAllPhotosQueryOptions = (eventId: string) =>
+  queryOptions({
+    queryKey: eventKeys.allPhotos(eventId),
+    queryFn: () => fetchAllEventPhotos(eventId),
   })
 
 /** An event's photos matching a search (never fails: errors give no matches) */
