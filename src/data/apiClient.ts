@@ -495,6 +495,41 @@ export const api = {
       { method: "DELETE", auth: true }
     ),
 
+  /** Several of the photographer's photos into one folder; null = Uncategorised */
+  movePhotosToFolder: (photoIds: string[], folderId: string | null) =>
+    request<ApiPhoto[]>("/api/v1/photographer/photos/folder", {
+      method: "PATCH",
+      body: JSON.stringify({ photo_ids: photoIds, folder_id: folderId }),
+      auth: true,
+    }),
+
+  /** The photographer's own folders in one event */
+  listMyFolders: (eventId: string) =>
+    request<ApiPhotoFolder[]>(
+      `/api/v1/photographer/folders?event_id=${encodeURIComponent(eventId)}`,
+      { auth: true }
+    ),
+
+  createFolder: (eventId: string, name: string) =>
+    request<ApiPhotoFolder>("/api/v1/photographer/folders", {
+      method: "POST",
+      body: JSON.stringify({ event_id: eventId, name }),
+      auth: true,
+    }),
+
+  renameFolder: (folderId: string, name: string) =>
+    request<ApiPhotoFolder>(
+      `/api/v1/photographer/folders/${encodeURIComponent(folderId)}`,
+      { method: "PATCH", body: JSON.stringify({ name }), auth: true }
+    ),
+
+  /** Its photos go back to Uncategorised */
+  deleteFolder: (folderId: string) =>
+    request<void>(
+      `/api/v1/photographer/folders/${encodeURIComponent(folderId)}`,
+      { method: "DELETE", auth: true }
+    ),
+
   getEventGallery: (
     eventId: string,
     page?: number,
@@ -636,6 +671,17 @@ export interface ApiPhoto {
   thumbnail_url: string
   /** Only in the photographer's own photo lists */
   file_name?: string | null
+  /** Only in the photographer's own photo lists; null = Uncategorised */
+  folder_id?: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** A photographer's own folder for their photos in one event */
+export interface ApiPhotoFolder {
+  id: string
+  event_id: string
+  name: string
   created_at: string
   updated_at: string
 }

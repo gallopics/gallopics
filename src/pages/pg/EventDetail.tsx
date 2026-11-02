@@ -15,15 +15,23 @@ import {
 } from "lucide-react"
 
 import { hasCustomPrices } from "@/constants/qualityTiers"
+import {
+  ALL_FOLDERS,
+  getFolderValue,
+  UNCATEGORISED,
+  UNCATEGORISED_LABEL,
+} from "@/lib/photoFolders"
 import { cn } from "@/lib/utils"
 import { useDeletePhotosWithUndo } from "@/hooks/useDeletePhotosWithUndo"
 import { useWorkspacePhotos } from "@/hooks/useWorkspaceData"
 import { useAuth } from "@/context/AuthContext"
 import type { Photo } from "@/context/PhotographerContext"
 import { useWorkspace } from "@/context/WorkspaceContext"
+import type { ApiPhotoFolder } from "@/data/apiClient"
 import { eventQueryOptions } from "@/data/queries/events"
 import {
   bookingsQueryOptions,
+  foldersQueryOptions,
   myPhotosQueryOptions,
   resolveCachedDuplicate,
   toPgEvent,
@@ -43,14 +51,17 @@ import { ScopedSearchBar } from "@/components/ScopedSearchBar"
 import { TitleHeader } from "@/components/TitleHeader"
 import { WorkspaceTabs } from "@/components/WorkspaceTabs"
 import { EventDetailsDialog } from "@/pages/pg/components/EventDetailsDialog"
+import { PhotoFolderBar } from "@/pages/pg/components/PhotoFolderBar"
 import { PgSelectionPanel } from "@/pages/pg/PgSelectionPanel"
 
 // Tab type
 type TabType = "uploads" | "published" | "archive"
 
-// Folder type
-type FolderType = "random" | "misc" | "uncategorised" | "duplicates"
+// Uploads filter: a folder value (ALL_FOLDERS, UNCATEGORISED, a folder id) or the duplicates view
+const DUPLICATES = "duplicates"
 type PublishedFolderType = "selling_photos" | "unsold"
+
+const NO_FOLDERS: ApiPhotoFolder[] = []
 
 /** Search in the photo grid: file name, photo code / ID and the tags */
 const matchesPhotoSearch = (photo: Photo, term: string) =>
@@ -85,6 +96,11 @@ export function EventDetail() {
     enabled: isPhotographer,
   })
   const isLoadingPhotos = isPhotographer && isPhotosPending
+  // The photographer's own folders in this event (private)
+  const { data: folders = NO_FOLDERS } = useQuery({
+    ...foldersQueryOptions(eventId ?? ""),
+    enabled: isPhotographer && !!eventId,
+  })
 
   const contextEvent = eventId
     ? bookingsQuery.data?.find((e) => e.id === eventId)
@@ -190,7 +206,7 @@ export function EventDetail() {
 
   // State
   const [activeTab, setActiveTab] = useState<TabType>("uploads")
-  const [activeFolder, setActiveFolder] = useState<FolderType>("uncategorised")
+  const [activeFolder, setActiveFolder] = useState<string>(ALL_FOLDERS)
   const [activePublishedFolder] =
     useState<PublishedFolderType>("selling_photos")
   const [activeChip, setActiveChip] = useState<string>("all")
@@ -212,7 +228,7 @@ export function EventDetail() {
 
       // Force switch to duplicate view
       if (activeTab !== "uploads") setActiveTab("uploads")
-      if (activeFolder !== "duplicates") setActiveFolder("duplicates")
+      if (activeFolder !== DUPLICATES) setActiveFolder(DUPLICATES)
 
       // Wait for render/transition
       setTimeout(() => {
@@ -402,13 +418,21 @@ export function EventDetail() {
     return validIds
   }, [uploadPhotos])
 
-  // Photos in the Uploads tab. The old Random/Misc/Uncategorised bucket filter
-  // is intentionally removed so event pages show every available upload.
+  // A folder deleted elsewhere (e.g. another tab) falls back to All
+  const currentFolder =
+    [ALL_FOLDERS, UNCATEGORISED, DUPLICATES].includes(activeFolder) ||
+    folders.some((folder) => folder.id === activeFolder)
+      ? activeFolder
+      : ALL_FOLDERS
+
+  // Photos in the Uploads tab: all of them, one folder or the duplicates
   const folderPhotos = useMemo(() => {
     let photos: Photo[] =
-      activeFolder === "duplicates"
+      currentFolder === DUPLICATES
         ? uploadPhotos.filter((p) => validDuplicateIds.has(p.id))
-        : uploadPhotos
+        : currentFolder === ALL_FOLDERS
+          ? uploadPhotos
+          : uploadPhotos.filter((p) => getFolderValue(p) === currentFolder)
 
     // Apply search filter if search term exists
     if (searchTerm.trim()) {
@@ -417,10 +441,10 @@ export function EventDetail() {
     }
 
     return photos
-  }, [activeFolder, searchTerm, uploadPhotos, validDuplicateIds])
+  }, [currentFolder, searchTerm, uploadPhotos, validDuplicateIds])
 
   // Determine if we're in duplicates folder
-  const isDuplicatesFolder = activeFolder === "duplicates"
+  const isDuplicatesFolder = currentFolder === DUPLICATES
 
   // Build chips for inside folder (NOT for duplicates folder)
   const folderChips = useMemo(() => {
@@ -556,7 +580,21 @@ export function EventDetail() {
     return groups
   }, [displayedPhotos, isDuplicatesFolder])
 
-  // Compute "Also in" for duplicates - ONLY batch or Uncategorised (no class/rider/horse)
+  // Folder name on duplicate cards
+  const folderNames = useMemo(
+    () => new Map(folders.map((folder) => [folder.id, folder.name])),
+    [folders]
+  )
+  const getFolderName = (photo: Photo) =>
+    (photo.folderId && folderNames.get(photo.folderId)) || UNCATEGORISED_LABEL
+
+  const handleFolderChange = (folder: string) => {
+    if (folder === currentFolder) return
+    setActiveFolder(folder)
+    setSelectedIds(new Set())
+    setIsPanelOpen(false)
+  }
+
   // Reset chip selection when folder changes
   useEffect(() => {
     setActiveChip("all")
@@ -840,6 +878,17 @@ export function EventDetail() {
       </div>
 
       <div className="container pt-6">
+        {activeTab === "uploads" &&
+          (uploadPhotos.length > 0 || folders.length > 0) && (
+            <PhotoFolderBar
+              eventId={event.id}
+              folders={folders}
+              photos={uploadPhotos}
+              eventPhotos={allEventPhotos}
+              value={currentFolder}
+              onChange={handleFolderChange}
+            />
+          )}
         <div className="flex items-start gap-8">
           {/* Left sidebar: tag filters */}
           {showFilters && (
@@ -1024,7 +1073,7 @@ export function EventDetail() {
                                       photoCode: photo.photoCode,
                                       uploadDate: photo.uploadDate,
                                       timestamp: photo.timestamp,
-                                      storedLocation: photo.storedLocation,
+                                      folderName: getFolderName(photo),
                                     }}
                                     onKeep={() => handleKeep(photo.id)}
                                     onRemove={() => handleRemove(photo.id)}
@@ -1094,7 +1143,7 @@ export function EventDetail() {
                           uploadDate: photo.uploadDate,
                           timestamp: photo.timestamp,
                           prices: isDuplicatesFolder ? undefined : photo.prices,
-                          storedLocation: photo.storedLocation,
+                          folderName: getFolderName(photo),
                           soldCount:
                             activeTab === "published" || activeTab === "archive"
                               ? photo.soldCount
@@ -1142,9 +1191,12 @@ export function EventDetail() {
                   description={
                     searchTerm
                       ? `No photos match "${searchTerm}"`
-                      : canUploadPhotos
-                        ? "This folder is empty. Upload photos to get started."
-                        : "This event is read-only because the booking was cancelled."
+                      : currentFolder !== ALL_FOLDERS &&
+                          currentFolder !== UNCATEGORISED
+                        ? "This folder is empty. Select photos and use Move to... to add them."
+                        : canUploadPhotos
+                          ? "This folder is empty. Upload photos to get started."
+                          : "This event is read-only because the booking was cancelled."
                   }
                 />
               )}
@@ -1184,6 +1236,8 @@ export function EventDetail() {
         activeTab={activePanelTab}
         currentTab={activeTab}
         onClose={() => setIsPanelOpen(false)}
+        // Moved photos may have left the folder on screen
+        onMoved={() => setSelectedIds(new Set())}
       />
 
       <PhotoPreviewDialog

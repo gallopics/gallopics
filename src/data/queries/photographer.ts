@@ -12,7 +12,12 @@ import {
 import { assetUrl, formatLabel } from "@/lib/utils"
 import type { PgEvent, Photo } from "@/context/PhotographerContext"
 
-import { api, getApiPhotoPreviewUrl, type ApiPhoto } from "../apiClient"
+import {
+  api,
+  getApiPhotoPreviewUrl,
+  type ApiPhoto,
+  type ApiPhotoFolder,
+} from "../apiClient"
 import {
   formatEventPeriod,
   mapApiEventToEventData,
@@ -58,11 +63,10 @@ function mapApiPhotoToPgPhoto(photo: ApiPhoto): Photo {
     fileName: photo.file_name || undefined,
     photoCode: "",
     uploadDate: photo.created_at,
-    batch: "",
+    folderId: photo.folder_id || undefined,
     classId: getApiPhotoClassId(photo),
     className: getApiPhotoClassName(photo),
     isDuplicate: false,
-    storedLocation: "Uncategorised",
     prices: toSekPrices(photo.prices),
   }
 }
@@ -153,6 +157,9 @@ export const photographerKeys = {
   bookings: () => [...photographerKeys.all, "bookings"] as const,
   photos: () => [...photographerKeys.all, "photos"] as const,
   highlights: () => [...photographerKeys.all, "highlights"] as const,
+  /** Their own folders in one event */
+  folders: (eventId: string) =>
+    [...photographerKeys.all, "folders", eventId] as const,
   sales: () => [...photographerKeys.all, "sales"] as const,
   /** The saved Stripe Connect status */
   stripe: () => [...photographerKeys.all, "stripe"] as const,
@@ -169,7 +176,7 @@ export const bookingsQueryOptions = () =>
 
 /**
  * All the photographer's photos. The studio also edits fields the API does not
- * store yet (batch, prices, duplicates), and those edits live only in this cache,
+ * store yet (duplicates), and those edits live only in this cache,
  * so it is never refetched in the background; uploads and deletes update it.
  */
 export const myPhotosQueryOptions = () =>
@@ -177,6 +184,20 @@ export const myPhotosQueryOptions = () =>
     queryKey: photographerKeys.photos(),
     queryFn: () => fetchAllMyPhotos(),
     staleTime: Infinity,
+  })
+
+/** Folders by name, ignoring case and accents */
+const sortFolders = (folders: ApiPhotoFolder[]) =>
+  [...folders].sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: "base" })
+  )
+
+/** The photographer's own folders in one event */
+export const foldersQueryOptions = (eventId: string) =>
+  queryOptions({
+    queryKey: photographerKeys.folders(eventId),
+    // Sorted like the folders added later (see setCachedFolder)
+    queryFn: async () => sortFolders(await api.listMyFolders(eventId)),
   })
 
 /** Ids of the photos shown on the public profile */
@@ -339,8 +360,8 @@ export const savePhotoDetailsMutationOptions = () =>
     },
   })
 
-/** Most photos the API takes in one price update */
-const PRICE_BATCH_SIZE = 1000
+/** Most photos the API takes in one bulk update (prices, folder) */
+const BULK_UPDATE_SIZE = 1000
 
 /** A price update that failed after earlier batches were saved */
 export class PhotoPricesSaveError extends Error {
@@ -367,8 +388,8 @@ export const savePhotoPricesMutationOptions = () =>
       const ids = photoIds.filter(isUuid)
       const apiPrices = toApiPrices(prices)
       const updated: ApiPhoto[] = []
-      for (let i = 0; i < ids.length; i += PRICE_BATCH_SIZE) {
-        const batch = ids.slice(i, i + PRICE_BATCH_SIZE)
+      for (let i = 0; i < ids.length; i += BULK_UPDATE_SIZE) {
+        const batch = ids.slice(i, i + BULK_UPDATE_SIZE)
         try {
           updated.push(...(await api.updatePhotoPrices(batch, apiPrices)))
         } catch (error) {
@@ -424,5 +445,119 @@ export const saveHighlightsMutationOptions = () =>
       )
       // The public profile lists them too
       void client.invalidateQueries({ queryKey: publicPhotographerKeys.all })
+    },
+  })
+
+// Moves and folder deletes run one after another, so an Undo lands after its move
+const FOLDER_SCOPE = { id: "photo-folders" }
+
+const setCachedFolder = (client: QueryClient, folder: ApiPhotoFolder) =>
+  client.setQueryData<ApiPhotoFolder[]>(
+    photographerKeys.folders(folder.event_id),
+    (prev) =>
+      prev && sortFolders([...prev.filter((f) => f.id !== folder.id), folder])
+  )
+
+export const createFolderMutationOptions = () =>
+  mutationOptions({
+    mutationKey: [...photographerKeys.all, "folders", "create"],
+    mutationFn: ({ eventId, name }: { eventId: string; name: string }) =>
+      api.createFolder(eventId, name),
+    onSuccess: (folder, _variables, _result, { client }) =>
+      setCachedFolder(client, folder),
+  })
+
+export const renameFolderMutationOptions = () =>
+  mutationOptions({
+    mutationKey: [...photographerKeys.all, "folders", "rename"],
+    mutationFn: ({ folderId, name }: { folderId: string; name: string }) =>
+      api.renameFolder(folderId, name),
+    onSuccess: (folder, _variables, _result, { client }) =>
+      setCachedFolder(client, folder),
+  })
+
+/** Gone at once with its photos back in Uncategorised; both return if the API refuses */
+export const deleteFolderMutationOptions = () =>
+  mutationOptions({
+    mutationKey: [...photographerKeys.all, "folders", "delete"],
+    scope: FOLDER_SCOPE,
+    mutationFn: (folder: ApiPhotoFolder) => api.deleteFolder(folder.id),
+    onMutate: async (folder, { client }) => {
+      const key = photographerKeys.folders(folder.event_id)
+      await client.cancelQueries({ queryKey: key })
+      const movedIds = new Set(
+        getCachedPhotos(client)
+          .filter((p) => p.folderId === folder.id)
+          .map((p) => p.id)
+      )
+      client.setQueryData<ApiPhotoFolder[]>(key, (prev) =>
+        prev?.filter((f) => f.id !== folder.id)
+      )
+      updateCachedPhotos(client, (prev) =>
+        prev.map((p) =>
+          movedIds.has(p.id) ? { ...p, folderId: undefined } : p
+        )
+      )
+      return { movedIds }
+    },
+    onError: (error, folder, result, { client }) => {
+      setCachedFolder(client, folder)
+      const movedIds = result?.movedIds ?? new Set<string>()
+      updateCachedPhotos(client, (prev) =>
+        prev.map((p) =>
+          movedIds.has(p.id) ? { ...p, folderId: folder.id } : p
+        )
+      )
+      console.error("Failed to delete folder:", error)
+    },
+  })
+
+/** Photos into a folder (null = Uncategorised) at once; back where they were if the API refuses */
+export const movePhotosToFolderMutationOptions = () =>
+  mutationOptions({
+    mutationKey: [...photographerKeys.photos(), "folder"],
+    scope: FOLDER_SCOPE,
+    mutationFn: async ({
+      photoIds,
+      folderId,
+    }: {
+      photoIds: string[]
+      folderId: string | null
+    }) => {
+      const ids = photoIds.filter(isUuid)
+      for (let i = 0; i < ids.length; i += BULK_UPDATE_SIZE) {
+        await api.movePhotosToFolder(
+          ids.slice(i, i + BULK_UPDATE_SIZE),
+          folderId
+        )
+      }
+    },
+    onMutate: async ({ photoIds, folderId }, { client }) => {
+      await client.cancelQueries({ queryKey: photographerKeys.photos() })
+      const ids = new Set(photoIds)
+      const previous = new Map(
+        getCachedPhotos(client)
+          .filter((p) => ids.has(p.id))
+          .map((p) => [p.id, p.folderId])
+      )
+      updateCachedPhotos(client, (prev) =>
+        prev.map((p) =>
+          ids.has(p.id) ? { ...p, folderId: folderId ?? undefined } : p
+        )
+      )
+      return { previous }
+    },
+    onError: (error, _variables, result, { client }) => {
+      const previous = result?.previous ?? new Map<string, string | undefined>()
+      updateCachedPhotos(client, (prev) =>
+        prev.map((p) =>
+          previous.has(p.id) ? { ...p, folderId: previous.get(p.id) } : p
+        )
+      )
+      // An earlier batch may have moved before one was refused
+      if (previous.size > BULK_UPDATE_SIZE) {
+        void client.invalidateQueries({ queryKey: photographerKeys.photos() })
+      }
+      console.error("Failed to move photos:", error)
     },
   })
