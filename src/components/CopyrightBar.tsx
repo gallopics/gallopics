@@ -121,7 +121,7 @@ export function CopyrightBar({
         <div className="grid w-full grid-cols-[1fr_auto_1fr] items-center max-md:flex max-md:flex-col max-md:gap-6 max-md:text-center">
           <div className="flex justify-start gap-3 max-md:order-1 max-md:justify-center">
             <a
-              href="https://www.instagram.com/gallopics"
+              href="https://www.instagram.com/gallopicscom"
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Instagram"
