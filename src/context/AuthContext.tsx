@@ -315,7 +315,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       avatarUrl:
         resolveApiAssetUrl(apiPhotographer?.avatar_url) ??
         resolveApiAssetUrl(metadata.avatarUrl) ??
-        clerkUser.imageUrl ??
+        // Clerk gives every user a default picture; only use one they uploaded
+        (clerkUser.hasImage ? clerkUser.imageUrl : null) ??
         null,
       phone: apiPhotographer?.phone ?? null,
       hasCompletedOnboarding:
