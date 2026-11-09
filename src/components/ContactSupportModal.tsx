@@ -3,6 +3,7 @@ import { Mail, MessageSquare, Send, Tag } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import {
+  createDialogHandle,
   Dialog,
   DialogBody,
   DialogCancel,
@@ -34,11 +35,11 @@ import { Spinner } from "@/components/ui/spinner"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { toast } from "@/components/ui/toast"
 
-interface ContactSupportModalProps {
-  isOpen: boolean
-  onClose: () => void
+/** Opens the contact form from anywhere: `<DialogTrigger handle={contactSupportDialog}>` */
+export const contactSupportDialog = createDialogHandle<{
+  /** Photographer support: the role is fixed to Photographer */
   photographerOnly?: boolean
-}
+}>()
 
 type UserRole = "Photo buyer" | "Photographer" | "Event organiser"
 type Errors = { email?: string; subject?: string; message?: string }
@@ -50,25 +51,19 @@ const countryCodes = ["+46", "+47", "+45", "+358", "+1", "+44", "+49"].map(
 
 const contactFormEndpoint = import.meta.env.VITE_CONTACT_FORM_ENDPOINT
 
-export function ContactSupportModal({
-  isOpen,
-  onClose,
-  photographerOnly = false,
-}: ContactSupportModalProps) {
+/** Rendered once in App */
+export function ContactSupportModal() {
   return (
-    <Dialog
-      open={isOpen}
-      onOpenChange={(open) => {
-        if (!open) onClose()
-      }}
-    >
-      <DialogContent className="sm:max-w-140">
-        {/* Mounted only while open, so the form is reset on every open */}
-        <ContactSupportForm
-          onClose={onClose}
-          photographerOnly={photographerOnly}
-        />
-      </DialogContent>
+    <Dialog handle={contactSupportDialog}>
+      {({ payload }) => (
+        <DialogContent className="sm:max-w-140">
+          {/* Mounted only while open, so the form is reset on every open */}
+          <ContactSupportForm
+            onClose={() => contactSupportDialog.close()}
+            photographerOnly={!!payload?.photographerOnly}
+          />
+        </DialogContent>
+      )}
     </Dialog>
   )
 }

@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router"
+import { Link, useNavigate } from "react-router"
 
 import { cn } from "@/lib/utils"
 import type { EventData } from "@/types"
@@ -8,7 +8,9 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 interface FolderEventCardProps {
   event: EventData
-  onClick: (id: string) => void
+  /** Renders the card as a real link (crawlable, opens in a new tab) */
+  href?: string
+  onClick?: (id: string) => void
   /** Force the disabled look regardless of event status */
   forceDisabled?: boolean
 }
@@ -69,8 +71,30 @@ const initials = (name: string) =>
     .slice(0, 2)
     .toUpperCase()
 
+/** The card's root: a real link when there is an href, else the clickable div */
+function CardRoot({
+  href,
+  className,
+  children,
+  ...divProps
+}: React.ComponentProps<"div"> & { href?: string }) {
+  if (href) {
+    return (
+      <Link to={href} className={className}>
+        {children}
+      </Link>
+    )
+  }
+  return (
+    <div className={className} {...divProps}>
+      {children}
+    </div>
+  )
+}
+
 export function FolderEventCard({
   event,
+  href,
   onClick,
   forceDisabled,
 }: FolderEventCardProps) {
@@ -79,11 +103,12 @@ export function FolderEventCard({
   const isLive = isEventLive(event)
 
   const open = () => {
-    if (!isDisabled) onClick(event.id)
+    if (!isDisabled) onClick?.(event.id)
   }
 
   return (
-    <div
+    <CardRoot
+      href={isDisabled ? undefined : href}
       role="link"
       tabIndex={isDisabled ? -1 : 0}
       aria-disabled={isDisabled}
@@ -167,6 +192,8 @@ export function FolderEventCard({
                   className="size-7 cursor-pointer border border-white shadow-[0_1px_3px_rgba(0,0,0,0.1)]"
                   onClick={(e) => {
                     if (!event.photographer) return
+                    // Inside the card link: don't follow the card's href too
+                    e.preventDefault()
                     e.stopPropagation()
                     navigate(`/photographer/${event.photographer.id}`)
                   }}
@@ -184,7 +211,7 @@ export function FolderEventCard({
           </div>
         </div>
       </div>
-    </div>
+    </CardRoot>
   )
 }
 

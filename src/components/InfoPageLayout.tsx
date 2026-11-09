@@ -3,8 +3,9 @@ import { useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { DialogTrigger } from "@/components/ui/dialog"
 import { Separator } from "@/components/ui/separator"
-import { ContactSupportModal } from "@/components/ContactSupportModal"
+import { contactSupportDialog } from "@/components/ContactSupportModal"
 import { Footer } from "@/components/Footer"
 import { PageHeader } from "@/components/PageHeader"
 import { TitleHeader } from "@/components/TitleHeader"
@@ -33,16 +34,7 @@ export function InfoPageLayout({
   intro,
   children,
 }: InfoPageLayoutProps) {
-  const [isContactOpen, setIsContactOpen] = useState(false)
   const activeSection = useActiveSection(sections.map((s) => s.id))
-
-  // No main Header here, so this page owns the contact modal
-  useEffect(() => {
-    const handleContact = () => setIsContactOpen(true)
-    window.addEventListener("open-contact-support", handleContact)
-    return () =>
-      window.removeEventListener("open-contact-support", handleContact)
-  }, [])
 
   return (
     <div className="flex min-h-screen flex-col bg-[linear-gradient(180deg,#e2e5eb_0%,var(--background)_40%)]">
@@ -104,10 +96,6 @@ export function InfoPageLayout({
       </section>
 
       <Footer minimal noLinks />
-      <ContactSupportModal
-        isOpen={isContactOpen}
-        onClose={() => setIsContactOpen(false)}
-      />
     </div>
   )
 }
@@ -140,13 +128,12 @@ function useActiveSection(ids: string[]) {
 
 export function ContactSupportButton({ className }: { className?: string }) {
   return (
-    <Button
-      variant="outline"
-      className={className}
-      onClick={() => window.dispatchEvent(new Event("open-contact-support"))}
+    <DialogTrigger
+      handle={contactSupportDialog}
+      render={<Button variant="outline" className={className} />}
     >
       Contact support
-    </Button>
+    </DialogTrigger>
   )
 }
 

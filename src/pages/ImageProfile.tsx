@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import {
+  Link,
   useLocation,
   useNavigate,
   useParams,
@@ -29,14 +30,15 @@ import {
   publicPhotographerQueryOptions,
 } from "@/data/queries/photos"
 import type { Photo } from "@/types"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { DialogTrigger } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Breadcrumbs, BreadcrumbsSkeleton } from "@/components/Breadcrumbs"
 import type { BreadcrumbItem } from "@/components/Breadcrumbs"
 import { CheckoutPanel } from "@/components/CheckoutPanel"
-import { ContactSupportModal } from "@/components/ContactSupportModal"
+import { contactSupportDialog } from "@/components/ContactSupportModal"
 import { Footer } from "@/components/Footer"
 import { Header } from "@/components/Header"
 import { InfoChip } from "@/components/InfoChip"
@@ -181,7 +183,6 @@ function ImageProfileContent({
   const { cart, addToCart, removeFromCartByPhotoId } = useCart()
   const [showCheckout, setShowCheckout] = useState(false)
   const [isFullScreen, setIsFullScreen] = useState(false)
-  const [isSupportModalOpen, setIsSupportModalOpen] = useState(false)
   const from = searchParams.get("from")
   const eventIdParam = searchParams.get("eventId")
   const eventReturnState =
@@ -346,12 +347,9 @@ function ImageProfileContent({
                       name={displayedPhotographer.name}
                       variant="photographer"
                       avatarUrl={displayedPhotographer.avatarUrl}
-                      onClick={
+                      href={
                         displayedPhotographer.id
-                          ? () =>
-                              navigate(
-                                `/photographer/${displayedPhotographer.id}?from=ipro&eventId=${photo.eventId}`
-                              )
+                          ? `/photographer/${displayedPhotographer.id}?from=ipro&eventId=${photo.eventId}`
                           : undefined
                       }
                     />
@@ -453,13 +451,17 @@ function ImageProfileContent({
                         Images are delivered as JPEG.
                       </p>
 
-                      <Button
-                        variant="link"
-                        className="mt-4 h-auto w-full border-0 p-0 text-[0.8125rem] leading-normal font-normal text-muted-foreground hover:text-primary"
-                        onClick={() => setIsSupportModalOpen(true)}
+                      <DialogTrigger
+                        handle={contactSupportDialog}
+                        render={
+                          <Button
+                            variant="link"
+                            className="mt-4 h-auto w-full border-0 p-0 text-[0.8125rem] leading-normal font-normal text-muted-foreground hover:text-primary"
+                          />
+                        }
                       >
                         Questions? Contact support
-                      </Button>
+                      </DialogTrigger>
                     </>
                   ) : (
                     <div>
@@ -486,11 +488,18 @@ function ImageProfileContent({
                 <h3 className="mb-4 text-base font-semibold">Details</h3>
                 <div className="flex flex-col gap-3">
                   <DetailRow label="Event">
-                    <Button
-                      variant="link"
+                    {/* A real link styled like the link Button */}
+                    <Link
+                      to={`/event/${photo.eventId}`}
+                      data-slot="button"
                       // wraps onto several lines like the old details row
-                      className="h-auto border-0 p-0 text-right text-sm leading-normal whitespace-normal underline"
-                      onClick={() => navigate(`/event/${photo.eventId}`)}
+                      className={cn(
+                        buttonVariants({
+                          variant: "link",
+                          className:
+                            "h-auto border-0 p-0 text-right text-sm leading-normal whitespace-normal underline",
+                        })
+                      )}
                     >
                       {event?.name ??
                         (eventQuery.isPending && isUuid(photo.eventId) ? (
@@ -498,7 +507,7 @@ function ImageProfileContent({
                         ) : (
                           photo.event
                         ))}
-                    </Button>
+                    </Link>
                   </DetailRow>
                   <DetailRow label="Orientation">
                     {detectedPortrait ? "Portrait" : "Landscape"}
@@ -569,11 +578,6 @@ function ImageProfileContent({
           </DialogPrimitive.Popup>
         </DialogPrimitive.Portal>
       </DialogPrimitive.Root>
-
-      <ContactSupportModal
-        isOpen={isSupportModalOpen}
-        onClose={() => setIsSupportModalOpen(false)}
-      />
     </div>
   )
 }

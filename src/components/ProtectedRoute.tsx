@@ -2,13 +2,22 @@ import React from "react"
 import { Navigate, useLocation } from "react-router"
 
 import { useAuth } from "../context/AuthContext"
+import { NoIndexMeta } from "../seo/RouteMeta"
 import { PageState } from "./PageState"
 
 interface ProtectedRouteProps {
   children: React.ReactNode
 }
 
-export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
+/** Studio, admin, upload and onboarding: kept out of search results */
+export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => (
+  <>
+    <NoIndexMeta />
+    <ProtectedRouteContent>{children}</ProtectedRouteContent>
+  </>
+)
+
+const ProtectedRouteContent: React.FC<ProtectedRouteProps> = ({ children }) => {
   const {
     isLoaded,
     isAuthenticated,

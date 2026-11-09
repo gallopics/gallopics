@@ -1,13 +1,15 @@
 import { useState } from "react"
 import { useNavigate } from "react-router"
 import { useQueryClient } from "@tanstack/react-query"
-import { Clock3, House, RefreshCw, ShieldCheck } from "lucide-react"
+import { Camera, Clock3, House, RefreshCw, ShieldCheck } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/context/AuthContext"
 import { photographerProfileQueryOptions } from "@/data/queries/account"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { DialogTrigger } from "@/components/ui/dialog"
+import { editProfileDialog } from "@/components/EditProfileModal"
 import { Header } from "@/components/Header"
 import { heroCardBackground } from "@/components/HomeHero"
 
@@ -165,6 +167,26 @@ export function PendingApproval() {
                     </div>
                   ))}
                 </div>
+
+                {!user?.avatarUrl && (
+                  <div className="rounded-2xl border border-dashed px-4 py-3">
+                    <div className="text-sm font-semibold text-foreground">
+                      While you wait
+                    </div>
+                    <div className="mt-1 text-sm leading-[1.6] text-muted-foreground">
+                      Add a profile photo so buyers recognise you.
+                    </div>
+                    <DialogTrigger
+                      handle={editProfileDialog}
+                      render={
+                        <Button size="sm" variant="outline" className="mt-3" />
+                      }
+                    >
+                      <Camera />
+                      Add photo
+                    </DialogTrigger>
+                  </div>
+                )}
               </Card>
             )}
           </div>

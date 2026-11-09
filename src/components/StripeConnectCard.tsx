@@ -61,7 +61,8 @@ export function StripeConnectCard() {
     stripeParam === "refresh"
   )
   const [linkError, setLinkError] = useState<string | null>(null)
-  // Some sign-ins (e.g. username only) have no email, but Stripe requires one
+  // Older accounts (signed up with a username only) may have no email, but
+  // Stripe requires one: they type it here
   const [manualEmail, setManualEmail] = useState("")
 
   // Read from Stripe once per visit (also refreshes the banner's saved status).
@@ -197,6 +198,15 @@ export function StripeConnectCard() {
             {error && (
               <p className="mt-2 text-sm font-medium text-destructive">
                 {error}
+              </p>
+            )}
+
+            {email && connect?.status === "not_connected" && (
+              <p className="mt-2 text-sm leading-normal text-muted-foreground">
+                Stripe will use your account email:{" "}
+                <span className="font-medium wrap-anywhere text-foreground">
+                  {email}
+                </span>
               </p>
             )}
 

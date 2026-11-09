@@ -1,10 +1,7 @@
 import { useMemo, useState } from "react"
 
 import { cn } from "@/lib/utils"
-import {
-  useWorkspaceEvents,
-  useWorkspacePhotos,
-} from "@/hooks/useWorkspaceData"
+import { usePhotoEvents, useWorkspacePhotos } from "@/hooks/useWorkspaceData"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -59,10 +56,9 @@ function ManageHighlightsForm({
   onSave,
   onClose,
 }: Omit<ManageHighlightsModalProps, "isOpen">) {
-  const events = useWorkspaceEvents()
   const allPhotos = useWorkspacePhotos()
-
-  const myEvents = useMemo(() => events.filter((e) => e.isRegistered), [events])
+  // Events with the photographer's photos, past ones included (not just bookings)
+  const myEvents = usePhotoEvents(allPhotos)
   const [selectedIds, setSelectedIds] = useState(
     () => new Set(initialIds.slice(0, MAX_HIGHLIGHTS))
   )
@@ -189,7 +185,7 @@ function ManageHighlightsForm({
                       "pointer-events-none absolute top-2 left-2 z-10 size-5.5 rounded-[5px] border-2 border-white/60 bg-white/90 backdrop-blur-sm transition-opacity duration-150",
                       isSelected
                         ? "opacity-100"
-                        : "opacity-0 group-hover:opacity-100"
+                        : "opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100"
                     )}
                   />
                 </button>

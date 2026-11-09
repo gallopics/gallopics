@@ -1,4 +1,6 @@
 import { cn } from "@/lib/utils"
+import { DialogTrigger } from "@/components/ui/dialog"
+import { contactSupportDialog } from "@/components/ContactSupportModal"
 import { FacebookIcon } from "@/components/icons/FacebookIcon"
 import { InstagramIcon } from "@/components/icons/InstagramIcon"
 import { TikTokIcon } from "@/components/icons/TikTokIcon"
@@ -15,12 +17,6 @@ export interface CopyrightBarProps {
 }
 
 const year = new Date().getFullYear()
-
-function openSupport(photographerOnly = false) {
-  window.dispatchEvent(
-    new CustomEvent("open-contact-support", { detail: { photographerOnly } })
-  )
-}
 
 function FooterLink({
   href,
@@ -64,13 +60,13 @@ export function CopyrightBar({
             FAQs
           </FooterLink>
           {!isAdmin && (
-            <button
-              type="button"
-              onClick={() => openSupport(true)}
+            <DialogTrigger
+              handle={contactSupportDialog}
+              payload={{ photographerOnly: true }}
               className="text-xs leading-normal text-muted-foreground hover:text-primary"
             >
               Support
-            </button>
+            </DialogTrigger>
           )}
           <FooterLink href="/terms" className={sidebarLink}>
             Terms
@@ -121,7 +117,7 @@ export function CopyrightBar({
         <div className="grid w-full grid-cols-[1fr_auto_1fr] items-center max-md:flex max-md:flex-col max-md:gap-6 max-md:text-center">
           <div className="flex justify-start gap-3 max-md:order-1 max-md:justify-center">
             <a
-              href="https://www.instagram.com/gallopics"
+              href="https://www.instagram.com/gallopicscom"
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Instagram"

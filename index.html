@@ -25,7 +25,60 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover"
     />
-    <title>Gallopics | Horse Photography Marketplace</title>
+    <meta name="theme-color" content="#ffffff" />
+
+    <!--
+      SEO defaults (Swedish; the texts live in src/seo/seoTexts.ts). Tags marked
+      data-page-meta are replaced per page by <PageMeta> once the app loads.
+      No static canonical: it would point every URL at the home page.
+    -->
+    <title data-page-meta>Tävlingsbilder på hästar &amp; ryttare | Gallopics</title>
+    <meta
+      data-page-meta
+      name="description"
+      content="Hitta och köp bilder från hopptävlingar, dressyr och andra ridtävlingar i Sverige. Sök din tävling och upptäck dina bästa ögonblick."
+    />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Gallopics" />
+    <meta property="og:locale" content="sv_SE" />
+    <meta data-page-meta property="og:url" content="https://gallopics.com/" />
+    <meta
+      data-page-meta
+      property="og:title"
+      content="Tävlingsbilder på hästar &amp; ryttare | Gallopics"
+    />
+    <meta
+      data-page-meta
+      property="og:description"
+      content="Hitta och köp bilder från hopptävlingar, dressyr och andra ridtävlingar i Sverige. Sök din tävling och upptäck dina bästa ögonblick."
+    />
+    <meta property="og:image" content="https://gallopics.com/images/card1.jpg" />
+    <meta property="og:image:width" content="1896" />
+    <meta property="og:image:height" content="848" />
+    <meta
+      property="og:image:alt"
+      content="Ryttare och häst i ett hopp på en hopptävling"
+    />
+
+    <!-- Twitter / X card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      data-page-meta
+      name="twitter:title"
+      content="Tävlingsbilder på hästar &amp; ryttare | Gallopics"
+    />
+    <meta
+      data-page-meta
+      name="twitter:description"
+      content="Hitta och köp bilder från hopptävlingar, dressyr och andra ridtävlingar i Sverige. Sök din tävling och upptäck dina bästa ögonblick."
+    />
+    <meta name="twitter:image" content="https://gallopics.com/images/card1.jpg" />
+    <meta
+      name="twitter:image:alt"
+      content="Ryttare och häst i ett hopp på en hopptävling"
+    />
     <!-- Inter + Sora are bundled via @fontsource (see src/index.css), no Google Fonts needed -->
   </head>
   <body>

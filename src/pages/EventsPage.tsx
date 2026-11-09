@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react"
-import { useNavigate } from "react-router"
 import { useQueries, type UseQueryResult } from "@tanstack/react-query"
 
 import { useEventSearch } from "@/hooks/useEventSearch"
@@ -27,8 +26,6 @@ const combineCoverUrls = (results: UseQueryResult<string | null>[]) =>
   results.map((result) => result.data ?? null)
 
 export function EventsPage() {
-  const navigate = useNavigate()
-
   const [searchQuery, setSearchQuery] = useState("")
   const trimmedQuery = searchQuery.trim()
   const {
@@ -112,7 +109,7 @@ export function EventsPage() {
                 <FolderEventCard
                   key={event.id}
                   event={event}
-                  onClick={(id) => navigate(`/event/${id}`)}
+                  href={`/event/${event.id}`}
                 />
               ))}
             </div>
