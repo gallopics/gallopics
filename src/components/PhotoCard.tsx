@@ -252,8 +252,9 @@ export function PhotoCard({
           </>
         )}
 
+        {/* Shown on hover; always on touch screens, which have no hover */}
         {hasPgActions && (
-          <div className="pointer-events-none absolute top-3 right-3 z-30 flex flex-col gap-2 opacity-0 transition-all duration-200 group-hover/photo:pointer-events-auto group-hover/photo:opacity-100">
+          <div className="pointer-events-none absolute top-3 right-3 z-30 flex flex-col gap-2 opacity-0 transition-all duration-200 group-hover/photo:pointer-events-auto group-hover/photo:opacity-100 pointer-coarse:pointer-events-auto pointer-coarse:opacity-100">
             {showEdit && (
               <GlassButton
                 title="Edit details"
@@ -279,7 +280,7 @@ export function PhotoCard({
         )}
 
         {variant === "pgDuplicate" && (
-          <div className="pointer-events-none absolute inset-x-3 bottom-3 flex translate-y-2 gap-2 opacity-0 transition-all duration-200 group-hover/photo:pointer-events-auto group-hover/photo:translate-y-0 group-hover/photo:opacity-100">
+          <div className="pointer-events-none absolute inset-x-3 bottom-3 flex translate-y-2 gap-2 opacity-0 transition-all duration-200 group-hover/photo:pointer-events-auto group-hover/photo:translate-y-0 group-hover/photo:opacity-100 pointer-coarse:pointer-events-auto pointer-coarse:translate-y-0 pointer-coarse:opacity-100">
             <Button
               size="sm"
               variant="outline"

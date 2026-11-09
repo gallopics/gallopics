@@ -189,7 +189,7 @@ function ManageHighlightsForm({
                       "pointer-events-none absolute top-2 left-2 z-10 size-5.5 rounded-[5px] border-2 border-white/60 bg-white/90 backdrop-blur-sm transition-opacity duration-150",
                       isSelected
                         ? "opacity-100"
-                        : "opacity-0 group-hover:opacity-100"
+                        : "opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100"
                     )}
                   />
                 </button>
