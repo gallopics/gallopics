@@ -20,7 +20,6 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { AuthModal } from "@/components/AuthModal"
 import { ContactSupportModal } from "@/components/ContactSupportModal"
-import { DesktopRecommendationModal } from "@/components/DesktopRecommendationModal"
 import { EditProfileModal } from "@/components/EditProfileModal"
 import {
   ModernSearchBar,
@@ -85,7 +84,6 @@ export function Header({
     type: AccountType
   }>({ tab: "signin", type: "photographer" })
   const [isEditProfileModalOpen, setIsEditProfileModalOpen] = useState(false)
-  const [isRecommendationOpen, setIsRecommendationOpen] = useState(false)
   const [isContactModalOpen, setIsContactModalOpen] = useState(false)
   const [isContactPhotographerOnly, setIsContactPhotographerOnly] =
     useState(false)
@@ -147,11 +145,6 @@ export function Header({
       setIsContactModalOpen(false)
       openAuth(detail?.tab ?? "signin", detail?.type ?? "photographer")
     }
-    const handleOpenMobileRecommendation = () => {
-      setIsAuthModalOpen(false)
-      setIsContactModalOpen(false)
-      setIsRecommendationOpen(true)
-    }
     const handleOpenContact = (e: Event) => {
       const detail = (e as CustomEvent<{ photographerOnly?: boolean }>).detail
       setIsAuthModalOpen(false)
@@ -161,17 +154,9 @@ export function Header({
     }
 
     window.addEventListener("open-auth-modal", handleOpenAuth)
-    window.addEventListener(
-      "open-mobile-recommendation",
-      handleOpenMobileRecommendation
-    )
     window.addEventListener("open-contact-support", handleOpenContact)
     return () => {
       window.removeEventListener("open-auth-modal", handleOpenAuth)
-      window.removeEventListener(
-        "open-mobile-recommendation",
-        handleOpenMobileRecommendation
-      )
       window.removeEventListener("open-contact-support", handleOpenContact)
     }
   }, [])
@@ -326,43 +311,29 @@ export function Header({
                     className="mx-1 h-6 max-md:hidden data-vertical:self-center"
                   />
 
-                  {isMobile ? (
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      aria-label="Sign in or Register"
-                      className={iconButtonClass}
-                      onClick={() => setIsRecommendationOpen(true)}
+                  {/* Same menu on every screen size: photographers can sign in and register on phones too */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          aria-label="Sign in or Register"
+                          className={iconButtonClass}
+                        />
+                      }
                     >
                       <User className="size-5.5" />
-                    </Button>
-                  ) : (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        render={
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            aria-label="Sign in or Register"
-                            className={iconButtonClass}
-                          />
-                        }
-                      >
-                        <User className="size-5.5" />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent
-                        align="end"
-                        className="w-36 min-w-36"
-                      >
-                        <DropdownMenuItem onClick={() => openAuth("signin")}>
-                          Sign in
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => openAuth("register")}>
-                          Register
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-36 min-w-36">
+                      <DropdownMenuItem onClick={() => openAuth("signin")}>
+                        Sign in
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => openAuth("register")}>
+                        Register
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </>
               )}
             </div>
@@ -386,11 +357,6 @@ export function Header({
       <EditProfileModal
         isOpen={isEditProfileModalOpen}
         onClose={() => setIsEditProfileModalOpen(false)}
-      />
-
-      <DesktopRecommendationModal
-        isOpen={isRecommendationOpen}
-        onClose={() => setIsRecommendationOpen(false)}
       />
 
       <ContactSupportModal

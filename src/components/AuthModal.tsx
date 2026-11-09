@@ -1,10 +1,7 @@
 import { useState } from "react"
 import { useNavigate } from "react-router"
 import { useClerk, useSignIn, useSignUp } from "@clerk/clerk-react"
-import { Check, Link, Monitor } from "lucide-react"
 
-import { cn } from "@/lib/utils"
-import { useMediaQuery } from "@/hooks/useMediaQuery"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -160,7 +157,6 @@ export function AuthModal({
   isOpen,
   onClose,
   initialTab = "signin",
-  initialAccountType = "photographer",
   onSwitchTab,
 }: AuthModalProps) {
   return (
@@ -175,7 +171,6 @@ export function AuthModal({
         {/* Mounted only while open, so state starts fresh on every open */}
         <AuthContent
           activeTab={initialTab}
-          initialAccountType={initialAccountType}
           onClose={onClose}
           onSwitchTab={onSwitchTab}
         />
@@ -184,21 +179,17 @@ export function AuthModal({
   )
 }
 
+// Sign-in and sign-up work on every screen size (the studio works on phones too)
 function AuthContent({
   activeTab,
-  initialAccountType,
   onClose,
   onSwitchTab,
 }: {
   activeTab: "signin" | "register"
-  initialAccountType: "photographer" | "buyer"
   onClose: () => void
   onSwitchTab?: () => void
 }) {
   const [isLoading, setIsLoading] = useState(false)
-  const isMobile = useMediaQuery("(max-width: 767px)")
-  const showMobilePhotographerView =
-    initialAccountType === "photographer" && isMobile
 
   const ctaLabel =
     activeTab === "signin"
@@ -218,9 +209,7 @@ function AuthContent({
       </DialogHeader>
 
       <DialogBody>
-        {showMobilePhotographerView ? (
-          <MobilePhotographerNotice onClose={onClose} />
-        ) : activeTab === "signin" ? (
+        {activeTab === "signin" ? (
           <SignInForm
             isLoading={isLoading}
             setIsLoading={setIsLoading}
@@ -235,95 +224,59 @@ function AuthContent({
         )}
       </DialogBody>
 
-      {!showMobilePhotographerView && (
-        <DialogFooter className="flex-col gap-4 pb-6 sm:flex-col sm:justify-start">
-          <div className="flex w-full gap-3">
-            <DialogCancel className="flex-1" disabled={isLoading} />
-            <Button
-              type="submit"
-              form="auth-main-form"
-              className="flex-2"
-              disabled={isLoading}
+      <DialogFooter className="flex-col gap-4 pb-6 sm:flex-col sm:justify-start">
+        <div className="flex w-full gap-3">
+          <DialogCancel className="flex-1" disabled={isLoading} />
+          <Button
+            type="submit"
+            form="auth-main-form"
+            className="flex-2"
+            disabled={isLoading}
+          >
+            {ctaLabel}
+          </Button>
+        </div>
+
+        {activeTab === "register" && (
+          <p className="text-center text-xs leading-[1.4] text-muted-foreground">
+            By continuing, you agree to our{" "}
+            <a
+              href="/terms"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary underline"
             >
-              {ctaLabel}
+              Terms
+            </a>{" "}
+            and{" "}
+            <a
+              href="/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary underline"
+            >
+              Privacy Policy
+            </a>
+            .
+          </p>
+        )}
+
+        {onSwitchTab && (
+          <div className="flex items-center justify-center gap-1 border-t pt-3 text-[0.8125rem]">
+            <span className="text-muted-foreground">
+              {activeTab === "signin" ? "New user?" : "Already registered?"}
+            </span>
+            <Button
+              variant="link"
+              className="h-auto border-0 p-0 text-[0.8125rem] leading-normal"
+              onClick={onSwitchTab}
+            >
+              {activeTab === "signin" ? "Register here" : "Sign in now"}
             </Button>
           </div>
-
-          {activeTab === "register" && (
-            <p className="text-center text-xs leading-[1.4] text-muted-foreground">
-              By continuing, you agree to our{" "}
-              <a
-                href="/terms"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary underline"
-              >
-                Terms
-              </a>{" "}
-              and{" "}
-              <a
-                href="/privacy"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary underline"
-              >
-                Privacy Policy
-              </a>
-              .
-            </p>
-          )}
-
-          {onSwitchTab && (
-            <div className="flex items-center justify-center gap-1 border-t pt-3 text-[0.8125rem]">
-              <span className="text-muted-foreground">
-                {activeTab === "signin" ? "New user?" : "Already registered?"}
-              </span>
-              <Button
-                variant="link"
-                className="h-auto border-0 p-0 text-[0.8125rem] leading-normal"
-                onClick={onSwitchTab}
-              >
-                {activeTab === "signin" ? "Register here" : "Sign in now"}
-              </Button>
-            </div>
-          )}
-        </DialogFooter>
-      )}
+        )}
+      </DialogFooter>
     </>
-  )
-}
-
-function MobilePhotographerNotice({ onClose }: { onClose: () => void }) {
-  const [copied, setCopied] = useState(false)
-
-  return (
-    <div className="px-1 py-6 text-center">
-      <div className="mx-auto mb-6 flex size-14 items-center justify-center rounded-lg bg-primary/8 text-primary">
-        <Monitor size={28} />
-      </div>
-      <h2 className="mb-2.5 text-base font-semibold">
-        Use a desktop for photographer tools
-      </h2>
-      <p className="mb-6 text-sm leading-normal text-muted-foreground">
-        For the best experience, please open Gallopics on a desktop or laptop to
-        upload and manage photos.
-      </p>
-      <div className="flex flex-col gap-2.5">
-        <Button onClick={onClose}>Got it</Button>
-        <Button
-          variant="outline"
-          className={cn(copied && "border-success text-success")}
-          onClick={() => {
-            navigator.clipboard.writeText(window.location.href)
-            setCopied(true)
-            setTimeout(() => setCopied(false), 2000)
-          }}
-        >
-          {copied ? <Check /> : <Link />}
-          {copied ? "Copied!" : "Copy link"}
-        </Button>
-      </div>
-    </div>
   )
 }
 
