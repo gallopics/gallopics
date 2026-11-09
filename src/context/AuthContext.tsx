@@ -21,6 +21,7 @@ import {
   photographerProfileQueryOptions,
 } from "../data/queries/account"
 import { photographerKeys } from "../data/queries/photographer"
+import { publicPhotographerKeys } from "../data/queries/photos"
 
 export interface UserProfile {
   id?: string
@@ -276,6 +277,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       queryClient.setQueryData<ApiUser>(accountKeys.me, (current) =>
         current ? { ...current, role: "photographer" as const } : current
       )
+      // Their public page (My Studio) shows the new name, city and photo
+      void queryClient.invalidateQueries({
+        queryKey: publicPhotographerKeys.all,
+      })
     },
   })
 
@@ -286,6 +291,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         photographerKeys.profile(),
         profile
       )
+      void queryClient.invalidateQueries({
+        queryKey: publicPhotographerKeys.all,
+      })
     },
   })
 
@@ -339,10 +347,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       display_name: nextDisplayName,
       city: updates.city ?? user?.city ?? null,
       country: updates.country ?? user?.country ?? null,
+      // Unchanged: keep the saved path as it is (user.avatarUrl is a full URL)
       avatar_url:
-        updates.avatarUrl === undefined
-          ? (user?.avatarUrl ?? null)
-          : updates.avatarUrl,
+        updates.avatarUrl !== undefined
+          ? updates.avatarUrl
+          : apiPhotographer
+            ? apiPhotographer.avatar_url
+            : (user?.avatarUrl ?? null),
       phone:
         updates.phone === undefined ? (user?.phone ?? null) : updates.phone,
       is_available_to_hire: true,

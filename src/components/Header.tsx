@@ -20,7 +20,10 @@ import {
 import { Separator } from "@/components/ui/separator"
 import { AuthModal } from "@/components/AuthModal"
 import { ContactSupportModal } from "@/components/ContactSupportModal"
-import { EditProfileModal } from "@/components/EditProfileModal"
+import {
+  EditProfileModal,
+  OPEN_EDIT_PROFILE_EVENT,
+} from "@/components/EditProfileModal"
 import {
   ModernSearchBar,
   type EventSearchProps,
@@ -153,11 +156,19 @@ export function Header({
       setIsContactModalOpen(true)
     }
 
+    const handleOpenEditProfile = () => {
+      setIsAuthModalOpen(false)
+      setIsContactModalOpen(false)
+      setIsEditProfileModalOpen(true)
+    }
+
     window.addEventListener("open-auth-modal", handleOpenAuth)
     window.addEventListener("open-contact-support", handleOpenContact)
+    window.addEventListener(OPEN_EDIT_PROFILE_EVENT, handleOpenEditProfile)
     return () => {
       window.removeEventListener("open-auth-modal", handleOpenAuth)
       window.removeEventListener("open-contact-support", handleOpenContact)
+      window.removeEventListener(OPEN_EDIT_PROFILE_EVENT, handleOpenEditProfile)
     }
   }, [])
 
@@ -290,6 +301,14 @@ export function Header({
                             Events
                           </DropdownMenuItem>
                         )}
+                      {/* Photographers with a profile, also while waiting for approval */}
+                      {!profileError && !needsOnboarding && !isAdmin && (
+                        <DropdownMenuItem
+                          onClick={() => setIsEditProfileModalOpen(true)}
+                        >
+                          Edit profile
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem
                         variant="destructive"
                         onClick={async () => {

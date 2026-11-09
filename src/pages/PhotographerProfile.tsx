@@ -34,6 +34,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Breadcrumbs, BreadcrumbsSkeleton } from "@/components/Breadcrumbs"
 import type { BreadcrumbItem } from "@/components/Breadcrumbs"
 import { DotList } from "@/components/DotList"
+import { openEditProfile } from "@/components/EditProfileModal"
 import { EmptyState } from "@/components/EmptyState"
 import { Footer } from "@/components/Footer"
 import { Header } from "@/components/Header"
@@ -470,6 +471,14 @@ export function PhotographerProfile() {
           )
         }
         // develop: "Hire me", Instagram / TikTok (no links in the API yet) and share hidden
+        rightContent={
+          isOwner && (
+            <Button variant="outline" onClick={openEditProfile}>
+              <Pencil />
+              Edit profile
+            </Button>
+          )
+        }
       />
 
       <ManageHighlightsModal
