@@ -8,6 +8,13 @@ import { useWorkspace, WorkspaceProvider } from "@/context/WorkspaceContext"
 import { PageState } from "@/components/PageState"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
 import ScrollToTop from "@/components/ScrollToTop"
+import {
+  EventMeta,
+  NoIndexMeta,
+  PhotographerMeta,
+  PhotoMeta,
+  StaticPageMeta,
+} from "@/seo/RouteMeta"
 // Shell for all workspace pages: kept eager so it appears immediately on auth
 import { PhotographerLayout } from "@/pages/pg/PhotographerLayout"
 
@@ -129,17 +136,57 @@ function App() {
                   <Route
                     path="/"
                     element={
-                      showComingSoon ? <ComingSoonPage /> : <EventsPage />
+                      <>
+                        <StaticPageMeta page="home" />
+                        {showComingSoon ? <ComingSoonPage /> : <EventsPage />}
+                      </>
                     }
                   />
-                  <Route path="/event/:eventId" element={<EventProfile />} />
+                  <Route
+                    path="/event/:eventId"
+                    element={
+                      <>
+                        <EventMeta />
+                        <EventProfile />
+                      </>
+                    }
+                  />
                   <Route
                     path="/photographer/:id"
-                    element={<PhotographerProfile />}
+                    element={
+                      <>
+                        <PhotographerMeta />
+                        <PhotographerProfile />
+                      </>
+                    }
                   />
-                  <Route path="/photo/:id" element={<ImageProfile />} />
-                  <Route path="/cart" element={<Cart />} />
-                  <Route path="/cart/success" element={<CheckoutSuccess />} />
+                  <Route
+                    path="/photo/:id"
+                    element={
+                      <>
+                        <PhotoMeta />
+                        <ImageProfile />
+                      </>
+                    }
+                  />
+                  <Route
+                    path="/cart"
+                    element={
+                      <>
+                        <NoIndexMeta />
+                        <Cart />
+                      </>
+                    }
+                  />
+                  <Route
+                    path="/cart/success"
+                    element={
+                      <>
+                        <NoIndexMeta />
+                        <CheckoutSuccess />
+                      </>
+                    }
+                  />
                   {/* Photographer / admin workspace */}
                   <Route
                     element={
@@ -201,17 +248,52 @@ function App() {
                       </ProtectedRoute>
                     }
                   />
-                  <Route path="/comingsoon" element={<ComingSoonPage />} />
-                  <Route path="/faq" element={<FAQPage />} />
-                  <Route path="/privacy" element={<PrivacyPage />} />
-                  <Route path="/terms" element={<TermsPage />} />
+                  <Route
+                    path="/comingsoon"
+                    element={
+                      <>
+                        <NoIndexMeta />
+                        <ComingSoonPage />
+                      </>
+                    }
+                  />
+                  <Route
+                    path="/faq"
+                    element={
+                      <>
+                        <StaticPageMeta page="faq" />
+                        <FAQPage />
+                      </>
+                    }
+                  />
+                  <Route
+                    path="/privacy"
+                    element={
+                      <>
+                        <StaticPageMeta page="privacy" />
+                        <PrivacyPage />
+                      </>
+                    }
+                  />
+                  <Route
+                    path="/terms"
+                    element={
+                      <>
+                        <StaticPageMeta page="terms" />
+                        <TermsPage />
+                      </>
+                    }
+                  />
                   <Route
                     path="*"
                     element={
-                      <PageState
-                        title="Page not found"
-                        description="This page doesn't exist or may have moved."
-                      />
+                      <>
+                        <NoIndexMeta />
+                        <PageState
+                          title="Page not found"
+                          description="This page doesn't exist or may have moved."
+                        />
+                      </>
                     }
                   />
                 </Routes>

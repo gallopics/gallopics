@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Static for now: the main public pages in src/App.tsx; keep in sync when adding one.
+  Event, photographer and photo pages are not listed yet (next step: a dynamic sitemap).
+-->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://gallopics.com/</loc>
+  </url>
+  <url>
+    <loc>https://gallopics.com/faq</loc>
+  </url>
+  <url>
+    <loc>https://gallopics.com/privacy</loc>
+  </url>
+  <url>
+    <loc>https://gallopics.com/terms</loc>
+  </url>
+</urlset>

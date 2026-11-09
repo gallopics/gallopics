@@ -1,0 +1,13 @@
+# Public pages are open to all crawlers. Private areas (photographer studio,
+# admin, cart/checkout, sign-in callback) are not crawled. Their noindex tag is
+# the backup for pages a crawler still reaches (it can't see it on blocked ones).
+
+User-agent: *
+Allow: /
+Disallow: /pg
+Disallow: /admin
+Disallow: /cart
+Disallow: /auth/
+Disallow: /comingsoon
+
+Sitemap: https://gallopics.com/sitemap.xml
