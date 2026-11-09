@@ -1,10 +1,7 @@
 import { useMemo, useState } from "react"
 
 import { cn } from "@/lib/utils"
-import {
-  useWorkspaceEvents,
-  useWorkspacePhotos,
-} from "@/hooks/useWorkspaceData"
+import { usePhotoEvents, useWorkspacePhotos } from "@/hooks/useWorkspaceData"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -59,10 +56,9 @@ function ManageHighlightsForm({
   onSave,
   onClose,
 }: Omit<ManageHighlightsModalProps, "isOpen">) {
-  const events = useWorkspaceEvents()
   const allPhotos = useWorkspacePhotos()
-
-  const myEvents = useMemo(() => events.filter((e) => e.isRegistered), [events])
+  // Events with the photographer's photos, past ones included (not just bookings)
+  const myEvents = usePhotoEvents(allPhotos)
   const [selectedIds, setSelectedIds] = useState(
     () => new Set(initialIds.slice(0, MAX_HIGHLIGHTS))
   )

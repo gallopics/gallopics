@@ -9,7 +9,7 @@ import {
 import { CalendarDays, ChevronLeft, Images, Pencil, Search } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { useWorkspaceEvents } from "@/hooks/useWorkspaceData"
+import { usePhotoEvents, useWorkspaceEvents } from "@/hooks/useWorkspaceData"
 import { useAuth } from "@/context/AuthContext"
 import { usePhotographer } from "@/context/PhotographerContext"
 import {
@@ -144,6 +144,8 @@ export function PhotographerProfile() {
     () => ownPhotosQuery.data ?? [],
     [ownPhotosQuery.data]
   )
+  // Every event the owner has photos in, past ones included (not just bookings)
+  const photoEvents = usePhotoEvents(contextPhotos)
 
   const apiPhotographerQuery = useQuery(publicPhotographerQueryOptions(id))
   const apiPhotographer = apiPhotographerQuery.data ?? null
@@ -238,7 +240,7 @@ export function PhotographerProfile() {
   const profilePhotos: Photo[] = useMemo(() => {
     if (isOwner) {
       return contextPhotos.map((p) => {
-        const ev = contextEvents.find((e) => e.id === p.eventId)
+        const ev = photoEvents.find((e) => e.id === p.eventId)
         return {
           id: p.id,
           src: p.url,
@@ -246,7 +248,15 @@ export function PhotographerProfile() {
           horse: p.horse || p.fileName || "Unassigned",
           event: ev?.title || "Event",
           eventId: p.eventId,
-          date: ev?.date || p.uploadDate || "Today",
+          date:
+            ev?.date ||
+            (p.uploadDate
+              ? new Date(p.uploadDate).toLocaleDateString("en-GB", {
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                })
+              : "Today"),
           width: p.width,
           height: p.height,
           className: p.className || "Unassigned class",
@@ -263,7 +273,7 @@ export function PhotographerProfile() {
 
     // No public photos endpoint yet: visitors only see highlights
     return []
-  }, [contextEvents, contextPhotos, isOwner, loggedInId, photographer])
+  }, [photoEvents, contextPhotos, isOwner, loggedInId, photographer])
 
   const galleryEvents = useMemo(() => {
     const groups = new Map<
@@ -279,7 +289,7 @@ export function PhotographerProfile() {
     >()
 
     profilePhotos.forEach((photo) => {
-      const event = contextEvents.find((e) => e.id === photo.eventId)
+      const event = photoEvents.find((e) => e.id === photo.eventId)
       const existing = groups.get(photo.eventId)
 
       if (existing) {
@@ -300,7 +310,7 @@ export function PhotographerProfile() {
     return Array.from(groups.values()).sort(
       (a, b) => b.photos.length - a.photos.length
     )
-  }, [contextEvents, profilePhotos])
+  }, [photoEvents, profilePhotos])
 
   const selectedGalleryEvent = galleryEvents.find(
     (event) => event.id === galleryEventId
