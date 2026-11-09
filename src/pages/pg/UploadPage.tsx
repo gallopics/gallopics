@@ -390,7 +390,7 @@ export function UploadPage() {
                     ) : (
                       <button
                         type="button"
-                        className="absolute top-2 right-2 z-10 flex size-8 scale-90 items-center justify-center rounded-full bg-white/95 text-destructive opacity-0 shadow-[0_2px_8px_rgba(0,0,0,0.15)] transition-all duration-200 group-hover/item:scale-100 group-hover/item:opacity-100 hover:scale-110! hover:bg-destructive/15 focus-visible:opacity-100 disabled:cursor-not-allowed disabled:text-muted-foreground"
+                        className="absolute top-2 right-2 z-10 flex size-8 scale-90 items-center justify-center rounded-full bg-white/95 text-destructive opacity-0 shadow-[0_2px_8px_rgba(0,0,0,0.15)] transition-all duration-200 group-hover/item:scale-100 group-hover/item:opacity-100 hover:scale-110! hover:bg-destructive/15 focus-visible:opacity-100 disabled:cursor-not-allowed disabled:text-muted-foreground pointer-coarse:scale-100 pointer-coarse:opacity-100"
                         onClick={(e) => {
                           e.stopPropagation()
                           void handleRemoveFile(item.id)

@@ -5,12 +5,16 @@ import { QueryClientProvider } from "@tanstack/react-query"
 
 import "./index.css"
 
+import { initAnalytics } from "@/lib/analytics"
 import { queryClient } from "@/data/queryClient"
 import { Toaster } from "@/components/ui/toast"
 
 import App from "./App.tsx"
 
 const clerkPublishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
+
+// Google Tag Manager; loads nothing unless VITE_GTM_ID is set
+initAnalytics()
 
 async function unregisterServiceWorkers() {
   if (!("serviceWorker" in navigator)) {

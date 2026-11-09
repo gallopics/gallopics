@@ -6,10 +6,17 @@ import {
   useQuery,
   type UseQueryResult,
 } from "@tanstack/react-query"
-import { CalendarDays, ChevronLeft, Images, Pencil, Search } from "lucide-react"
+import {
+  CalendarDays,
+  Camera,
+  ChevronLeft,
+  Images,
+  Pencil,
+  Search,
+} from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { useWorkspaceEvents } from "@/hooks/useWorkspaceData"
+import { usePhotoEvents, useWorkspaceEvents } from "@/hooks/useWorkspaceData"
 import { useAuth } from "@/context/AuthContext"
 import { usePhotographer } from "@/context/PhotographerContext"
 import {
@@ -29,11 +36,13 @@ import {
 } from "@/data/queries/photos"
 import type { Photo } from "@/types"
 import { Button } from "@/components/ui/button"
+import { DialogTrigger } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Breadcrumbs, BreadcrumbsSkeleton } from "@/components/Breadcrumbs"
 import type { BreadcrumbItem } from "@/components/Breadcrumbs"
 import { DotList } from "@/components/DotList"
+import { editProfileDialog } from "@/components/EditProfileModal"
 import { EmptyState } from "@/components/EmptyState"
 import { Footer } from "@/components/Footer"
 import { Header } from "@/components/Header"
@@ -144,6 +153,8 @@ export function PhotographerProfile() {
     () => ownPhotosQuery.data ?? [],
     [ownPhotosQuery.data]
   )
+  // Every event the owner has photos in, past ones included (not just bookings)
+  const photoEvents = usePhotoEvents(contextPhotos)
 
   const apiPhotographerQuery = useQuery(publicPhotographerQueryOptions(id))
   const apiPhotographer = apiPhotographerQuery.data ?? null
@@ -238,7 +249,7 @@ export function PhotographerProfile() {
   const profilePhotos: Photo[] = useMemo(() => {
     if (isOwner) {
       return contextPhotos.map((p) => {
-        const ev = contextEvents.find((e) => e.id === p.eventId)
+        const ev = photoEvents.find((e) => e.id === p.eventId)
         return {
           id: p.id,
           src: p.url,
@@ -246,7 +257,15 @@ export function PhotographerProfile() {
           horse: p.horse || p.fileName || "Unassigned",
           event: ev?.title || "Event",
           eventId: p.eventId,
-          date: ev?.date || p.uploadDate || "Today",
+          date:
+            ev?.date ||
+            (p.uploadDate
+              ? new Date(p.uploadDate).toLocaleDateString("en-GB", {
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                })
+              : "Today"),
           width: p.width,
           height: p.height,
           className: p.className || "Unassigned class",
@@ -263,7 +282,7 @@ export function PhotographerProfile() {
 
     // No public photos endpoint yet: visitors only see highlights
     return []
-  }, [contextEvents, contextPhotos, isOwner, loggedInId, photographer])
+  }, [photoEvents, contextPhotos, isOwner, loggedInId, photographer])
 
   const galleryEvents = useMemo(() => {
     const groups = new Map<
@@ -279,7 +298,7 @@ export function PhotographerProfile() {
     >()
 
     profilePhotos.forEach((photo) => {
-      const event = contextEvents.find((e) => e.id === photo.eventId)
+      const event = photoEvents.find((e) => e.id === photo.eventId)
       const existing = groups.get(photo.eventId)
 
       if (existing) {
@@ -300,7 +319,7 @@ export function PhotographerProfile() {
     return Array.from(groups.values()).sort(
       (a, b) => b.photos.length - a.photos.length
     )
-  }, [contextEvents, profilePhotos])
+  }, [photoEvents, profilePhotos])
 
   const selectedGalleryEvent = galleryEvents.find(
     (event) => event.id === galleryEventId
@@ -460,7 +479,38 @@ export function PhotographerProfile() {
           )
         }
         // develop: "Hire me", Instagram / TikTok (no links in the API yet) and share hidden
+        rightContent={
+          isOwner && (
+            <DialogTrigger
+              handle={editProfileDialog}
+              render={<Button variant="outline" />}
+            >
+              <Pencil />
+              Edit profile
+            </DialogTrigger>
+          )
+        }
       />
+
+      {/* Only the owner sees this, until they add a photo */}
+      {isOwner && !photographerAvatar && (
+        <div className="bg-card">
+          <div className="container pb-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-background px-4 py-3">
+              <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Camera className="size-4 shrink-0" />
+                Add a profile photo so buyers recognise you.
+              </span>
+              <DialogTrigger
+                handle={editProfileDialog}
+                render={<Button size="sm" variant="outline" />}
+              >
+                Add photo
+              </DialogTrigger>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ManageHighlightsModal
         isOpen={isHighlightsModalOpen}
@@ -623,12 +673,8 @@ export function PhotographerProfile() {
                     <PhotoCard
                       key={photo.id}
                       photo={photo}
-                      onClick={(p) =>
-                        navigate(
-                          `/photo/${p.id}?from=ppro${isOwner ? "&owner=1" : ""}`,
-                          { state: { photo: p, isOwnerProfile: isOwner } }
-                        )
-                      }
+                      href={`/photo/${photo.id}?from=ppro${isOwner ? "&owner=1" : ""}`}
+                      linkState={{ photo, isOwnerProfile: isOwner }}
                       showCartActions={!isOwner}
                     />
                   ))}

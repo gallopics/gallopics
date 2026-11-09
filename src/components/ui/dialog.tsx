@@ -5,13 +5,23 @@ import { XIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 
-function Dialog({ ...props }: DialogPrimitive.Root.Props) {
+// Generic so a typed handle's payload reaches the children render function
+function Dialog<Payload>({ ...props }: DialogPrimitive.Root.Props<Payload>) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />
 }
 
-function DialogTrigger({ ...props }: DialogPrimitive.Trigger.Props) {
+function DialogTrigger<Payload>({
+  ...props
+}: DialogPrimitive.Trigger.Props<Payload>) {
   return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />
 }
+
+/**
+ * For a dialog opened from many places: render the dialog once with
+ * `handle`, then open it with `<DialogTrigger handle={...}>` anywhere,
+ * or with `handle.open(null)` / `handle.openWithPayload(...)`
+ */
+const createDialogHandle = DialogPrimitive.createHandle
 
 function DialogPortal({ ...props }: DialogPrimitive.Portal.Props) {
   return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />
@@ -181,6 +191,7 @@ function DialogDescription({
 }
 
 export {
+  createDialogHandle,
   Dialog,
   DialogBody,
   DialogCancel,

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { Link, useLocation, useNavigate } from "react-router"
 import { Camera, LayoutDashboard, ShoppingBag, User } from "lucide-react"
 
@@ -18,17 +18,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Separator } from "@/components/ui/separator"
-import { AuthModal } from "@/components/AuthModal"
-import { ContactSupportModal } from "@/components/ContactSupportModal"
-import { DesktopRecommendationModal } from "@/components/DesktopRecommendationModal"
-import { EditProfileModal } from "@/components/EditProfileModal"
+import { authDialog } from "@/components/AuthModal"
+import { editProfileDialog } from "@/components/EditProfileModal"
 import {
   ModernSearchBar,
   type EventSearchProps,
 } from "@/components/ModernSearchBar"
-
-type AuthTab = "signin" | "register"
-type AccountType = "photographer" | "buyer"
 
 const AVATAR_COLORS = [
   "#3b82f6",
@@ -79,17 +74,6 @@ export function Header({
         onSearchChange: setHeaderQuery,
       }
 
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
-  const [authModalConfig, setAuthModalConfig] = useState<{
-    tab: AuthTab
-    type: AccountType
-  }>({ tab: "signin", type: "photographer" })
-  const [isEditProfileModalOpen, setIsEditProfileModalOpen] = useState(false)
-  const [isRecommendationOpen, setIsRecommendationOpen] = useState(false)
-  const [isContactModalOpen, setIsContactModalOpen] = useState(false)
-  const [isContactPhotographerOnly, setIsContactPhotographerOnly] =
-    useState(false)
-
   const { cart } = useCart()
   const {
     isLoaded,
@@ -133,48 +117,6 @@ export function Header({
           : isPendingPhotographer
             ? "Approval pending"
             : "My Studio"
-
-  const openAuth = (tab: AuthTab, type: AccountType = "photographer") => {
-    setAuthModalConfig({ tab, type })
-    setIsAuthModalOpen(true)
-  }
-
-  // Pages open the header modals through window events
-  useEffect(() => {
-    const handleOpenAuth = (e: Event) => {
-      const detail = (e as CustomEvent<{ tab: AuthTab; type: AccountType }>)
-        .detail
-      setIsContactModalOpen(false)
-      openAuth(detail?.tab ?? "signin", detail?.type ?? "photographer")
-    }
-    const handleOpenMobileRecommendation = () => {
-      setIsAuthModalOpen(false)
-      setIsContactModalOpen(false)
-      setIsRecommendationOpen(true)
-    }
-    const handleOpenContact = (e: Event) => {
-      const detail = (e as CustomEvent<{ photographerOnly?: boolean }>).detail
-      setIsAuthModalOpen(false)
-      setIsEditProfileModalOpen(false)
-      setIsContactPhotographerOnly(!!detail?.photographerOnly)
-      setIsContactModalOpen(true)
-    }
-
-    window.addEventListener("open-auth-modal", handleOpenAuth)
-    window.addEventListener(
-      "open-mobile-recommendation",
-      handleOpenMobileRecommendation
-    )
-    window.addEventListener("open-contact-support", handleOpenContact)
-    return () => {
-      window.removeEventListener("open-auth-modal", handleOpenAuth)
-      window.removeEventListener(
-        "open-mobile-recommendation",
-        handleOpenMobileRecommendation
-      )
-      window.removeEventListener("open-contact-support", handleOpenContact)
-    }
-  }, [])
 
   const cartButton = (
     <Button
@@ -305,6 +247,14 @@ export function Header({
                             Events
                           </DropdownMenuItem>
                         )}
+                      {/* Photographers with a profile, also while waiting for approval */}
+                      {!profileError && !needsOnboarding && !isAdmin && (
+                        <DropdownMenuItem
+                          onClick={() => editProfileDialog.open(null)}
+                        >
+                          Edit profile
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem
                         variant="destructive"
                         onClick={async () => {
@@ -326,78 +276,43 @@ export function Header({
                     className="mx-1 h-6 max-md:hidden data-vertical:self-center"
                   />
 
-                  {isMobile ? (
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      aria-label="Sign in or Register"
-                      className={iconButtonClass}
-                      onClick={() => setIsRecommendationOpen(true)}
+                  {/* Same menu on every screen size: photographers can sign in and register on phones too */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger
+                      render={
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          aria-label="Sign in or Register"
+                          className={iconButtonClass}
+                        />
+                      }
                     >
                       <User className="size-5.5" />
-                    </Button>
-                  ) : (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        render={
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            aria-label="Sign in or Register"
-                            className={iconButtonClass}
-                          />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-36 min-w-36">
+                      <DropdownMenuItem
+                        onClick={() =>
+                          authDialog.openWithPayload({ tab: "signin" })
                         }
                       >
-                        <User className="size-5.5" />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent
-                        align="end"
-                        className="w-36 min-w-36"
+                        Sign in
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() =>
+                          authDialog.openWithPayload({ tab: "register" })
+                        }
                       >
-                        <DropdownMenuItem onClick={() => openAuth("signin")}>
-                          Sign in
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => openAuth("register")}>
-                          Register
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
+                        Register
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </>
               )}
             </div>
           )}
         </div>
       </header>
-
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-        initialTab={authModalConfig.tab}
-        initialAccountType={authModalConfig.type}
-        onSwitchTab={() =>
-          setAuthModalConfig((prev) => ({
-            ...prev,
-            tab: prev.tab === "signin" ? "register" : "signin",
-          }))
-        }
-      />
-
-      <EditProfileModal
-        isOpen={isEditProfileModalOpen}
-        onClose={() => setIsEditProfileModalOpen(false)}
-      />
-
-      <DesktopRecommendationModal
-        isOpen={isRecommendationOpen}
-        onClose={() => setIsRecommendationOpen(false)}
-      />
-
-      <ContactSupportModal
-        isOpen={isContactModalOpen}
-        onClose={() => setIsContactModalOpen(false)}
-        photographerOnly={isContactPhotographerOnly}
-      />
     </>
   )
 }

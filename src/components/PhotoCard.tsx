@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { Link } from "react-router"
 import { Check, Pencil, Plus, RotateCcw, Share2, Trash2 } from "lucide-react"
 
 import {
@@ -21,7 +22,14 @@ type PhotoCardVariant =
 
 interface PhotoCardProps {
   photo: Photo
-  onClick: (photo: Photo) => void
+  /**
+   * Makes the whole card a real link (crawlable, opens in a new tab); the
+   * buttons on the card stay above it. Replaces onClick.
+   */
+  href?: string
+  /** Router state passed with href */
+  linkState?: unknown
+  onClick?: (photo: Photo) => void
   onAddToCart?: (photo: Photo) => void
   variant?: PhotoCardVariant
   /** Extra details for the photographer (pg*) variants */
@@ -79,6 +87,8 @@ const PG_VARIANTS: PhotoCardVariant[] = [
 
 export function PhotoCard({
   photo,
+  href,
+  linkState,
   onClick,
   onAddToCart,
   variant = "default",
@@ -130,16 +140,34 @@ export function PhotoCard({
 
   return (
     <div
-      tabIndex={0}
-      onClick={() => onClick(photo)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" && e.target === e.currentTarget) onClick(photo)
-      }}
+      // With href, the link below takes the clicks, focus and keyboard
+      {...(href
+        ? {}
+        : {
+            tabIndex: 0,
+            onClick: () => onClick?.(photo),
+            onKeyDown: (e: React.KeyboardEvent) => {
+              if (e.key === "Enter" && e.target === e.currentTarget)
+                onClick?.(photo)
+            },
+          })}
       className={cn(
         "group/photo relative mb-4 block w-full [transform:translate3d(0,0,0)] cursor-pointer break-inside-avoid overflow-hidden rounded-lg border border-black/4 bg-card mask-[radial-gradient(white,black)] shadow-[0_1px_2px_rgba(0,0,0,0.02)] transition-[translate,box-shadow] duration-200 ease-[cubic-bezier(0.2,0,0.2,1)] outline-none hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)] focus-visible:ring-4 focus-visible:ring-ring/12",
+        // Same focus ring when the card's link has keyboard focus
+        href &&
+          "has-[>a:focus-visible]:ring-4 has-[>a:focus-visible]:ring-ring/12",
         isPG && "hover:-translate-y-0.5"
       )}
     >
+      {href && (
+        // Covers the card (photo + details) under the buttons (z-30)
+        <Link
+          to={href}
+          state={linkState}
+          aria-label={`${photo.rider} on ${photo.horse}`}
+          className="absolute inset-0 z-20 outline-none"
+        />
+      )}
       <div
         className="relative block w-full bg-muted"
         style={{ aspectRatio: `${photo.width}/${photo.height}` }}
@@ -224,8 +252,9 @@ export function PhotoCard({
           </>
         )}
 
+        {/* Shown on hover; always on touch screens, which have no hover */}
         {hasPgActions && (
-          <div className="pointer-events-none absolute top-3 right-3 z-30 flex flex-col gap-2 opacity-0 transition-all duration-200 group-hover/photo:pointer-events-auto group-hover/photo:opacity-100">
+          <div className="pointer-events-none absolute top-3 right-3 z-30 flex flex-col gap-2 opacity-0 transition-all duration-200 group-hover/photo:pointer-events-auto group-hover/photo:opacity-100 pointer-coarse:pointer-events-auto pointer-coarse:opacity-100">
             {showEdit && (
               <GlassButton
                 title="Edit details"
@@ -251,7 +280,7 @@ export function PhotoCard({
         )}
 
         {variant === "pgDuplicate" && (
-          <div className="pointer-events-none absolute inset-x-3 bottom-3 flex translate-y-2 gap-2 opacity-0 transition-all duration-200 group-hover/photo:pointer-events-auto group-hover/photo:translate-y-0 group-hover/photo:opacity-100">
+          <div className="pointer-events-none absolute inset-x-3 bottom-3 flex translate-y-2 gap-2 opacity-0 transition-all duration-200 group-hover/photo:pointer-events-auto group-hover/photo:translate-y-0 group-hover/photo:opacity-100 pointer-coarse:pointer-events-auto pointer-coarse:translate-y-0 pointer-coarse:opacity-100">
             <Button
               size="sm"
               variant="outline"

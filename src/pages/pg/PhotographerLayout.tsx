@@ -135,7 +135,7 @@ function WorkspaceSidebar() {
               label="Photographers"
             />
           )}
-          {/* Receipts and Settings are hidden in the old app too (still mock) */}
+          {/* Receipts is hidden in the old app too (still mock) */}
         </SidebarMenu>
         <SidebarSeparator className="mx-3 my-3 data-horizontal:w-auto" />
       </SidebarContent>

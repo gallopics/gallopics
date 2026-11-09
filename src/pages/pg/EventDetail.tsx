@@ -771,11 +771,11 @@ export function EventDetail() {
     navigate(`${basePath}/upload?${params.toString()}`)
   }
 
-  // Checkbox shown on hover (always when selected) in the card's corner
+  // Checkbox shown on hover (always when selected, and always on touch screens) in the card's corner
   const renderSelectBox = (photo: Photo, isSelected: boolean) => (
     <div
       className={cn(
-        "absolute top-2.5 left-2.5 z-10 transition-opacity duration-200 group-hover:opacity-100",
+        "absolute top-2.5 left-2.5 z-10 transition-opacity duration-200 group-hover:opacity-100 pointer-coarse:opacity-100",
         isSelected ? "opacity-100" : "opacity-0"
       )}
       onClick={(e) => e.stopPropagation()}

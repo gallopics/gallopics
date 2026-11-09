@@ -5,7 +5,10 @@ import { Camera, LayoutDashboard } from "lucide-react"
 import { assetUrl, cn } from "@/lib/utils"
 import { useAuth } from "@/context/AuthContext"
 import { Button } from "@/components/ui/button"
+import { DialogTrigger } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
+import { authDialog } from "@/components/AuthModal"
+import { contactSupportDialog } from "@/components/ContactSupportModal"
 import {
   ModernSearchBar,
   type EventSearchProps,
@@ -191,18 +194,13 @@ function GuestHero({ title, description, search }: HomeHeroProps) {
             }
             className="bg-[image:linear-gradient(rgba(0,0,0,0.4),rgba(0,0,0,0.3)),var(--pg-bg)] bg-cover bg-center hover:shadow-[0_12px_32px_rgba(0,0,0,0.08)]"
             action={
-              <Button
-                className="font-bold"
-                onClick={() =>
-                  window.dispatchEvent(
-                    new CustomEvent("open-auth-modal", {
-                      detail: { tab: "register", type: "photographer" },
-                    })
-                  )
-                }
+              <DialogTrigger
+                handle={authDialog}
+                payload={{ tab: "register" }}
+                render={<Button className="font-bold" />}
               >
                 Register
-              </Button>
+              </DialogTrigger>
             }
           />
 
@@ -217,14 +215,14 @@ function GuestHero({ title, description, search }: HomeHeroProps) {
             text="Helps you find the right photographers, coordinate coverage, and make it easy for riders to discover and purchase their photos."
             className="bg-primary"
             action={
-              <Button
-                className="bg-foreground font-bold hover:bg-black"
-                onClick={() =>
-                  window.dispatchEvent(new Event("open-contact-support"))
+              <DialogTrigger
+                handle={contactSupportDialog}
+                render={
+                  <Button className="bg-foreground font-bold hover:bg-black" />
                 }
               >
                 Contact us
-              </Button>
+              </DialogTrigger>
             }
           />
         </div>
