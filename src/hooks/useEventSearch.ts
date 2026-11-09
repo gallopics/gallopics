@@ -5,7 +5,6 @@ import {
   type UseQueryResult,
 } from "@tanstack/react-query"
 
-import { useAuth } from "@/context/AuthContext"
 import type { ApiPhoto } from "@/data/apiClient"
 import {
   eventPhotoSearchQueryOptions,
@@ -109,13 +108,8 @@ function toPhotoSearchResult(
  * Used by the home page and the header search on every other page.
  */
 export function useEventSearch(searchQuery: string) {
-  const { isLoaded, isAuthenticated, user } = useAuth()
-  const shouldShowPhotoBackedEvents = !isAuthenticated || user?.role === "pg"
-
-  const eventsQuery = useQuery({
-    ...eventsListQueryOptions(shouldShowPhotoBackedEvents),
-    enabled: isLoaded,
-  })
+  // Same list for everyone, admins included: only events with photos
+  const eventsQuery = useQuery(eventsListQueryOptions(true))
   const events = eventsQuery.data ?? NO_EVENTS
   const isLoadingEvents = eventsQuery.isPending
   // Only when there is nothing to show (a failed refetch keeps the list)
