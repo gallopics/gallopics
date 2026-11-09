@@ -5,6 +5,9 @@ import { AuthProvider } from "@/context/AuthContext"
 import { CartProvider } from "@/context/CartContext"
 import { PhotographerProvider } from "@/context/PhotographerContext"
 import { useWorkspace, WorkspaceProvider } from "@/context/WorkspaceContext"
+import { AuthModal } from "@/components/AuthModal"
+import { ContactSupportModal } from "@/components/ContactSupportModal"
+import { EditProfileModal } from "@/components/EditProfileModal"
 import { PageState } from "@/components/PageState"
 import { ProtectedRoute } from "@/components/ProtectedRoute"
 import ScrollToTop from "@/components/ScrollToTop"
@@ -294,6 +297,10 @@ function App() {
                   />
                 </Routes>
               </Suspense>
+              {/* App-wide dialogs, rendered once: open them with their handles */}
+              <AuthModal />
+              <ContactSupportModal />
+              <EditProfileModal />
             </WorkspaceProvider>
           </BrowserRouter>
         </PhotographerProvider>

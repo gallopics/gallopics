@@ -2,6 +2,7 @@ import { useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import {
+  createDialogHandle,
   Dialog,
   DialogBody,
   DialogCancel,
@@ -14,13 +15,10 @@ import type { AuthStep } from "@/components/auth/authHelpers"
 import { RegisterForm } from "@/components/auth/RegisterForm"
 import { SignInForm } from "@/components/auth/SignInForm"
 
-interface AuthModalProps {
-  isOpen: boolean
-  onClose: () => void
-  initialTab?: "signin" | "register"
-  initialAccountType?: "photographer" | "buyer"
-  onSwitchTab?: () => void
-}
+type AuthTab = "signin" | "register"
+
+/** Opens sign-in or register from anywhere: `<DialogTrigger handle={authDialog} payload={{ tab: "register" }}>` */
+export const authDialog = createDialogHandle<{ tab: AuthTab }>()
 
 const STEP_COPY: Record<
   AuthStep,
@@ -50,30 +48,33 @@ const STEP_COPY: Record<
   },
 }
 
-export function AuthModal({
-  isOpen,
-  onClose,
-  initialTab = "signin",
-  onSwitchTab,
-}: AuthModalProps) {
+/** Rendered once in App */
+export function AuthModal() {
   return (
-    <Dialog
-      open={isOpen}
-      onOpenChange={(open) => {
-        if (!open) onClose()
-      }}
-    >
-      {/* Old auth modal rendered 608px wide */}
-      <DialogContent className="sm:max-w-152">
-        {/* Mounted only while open (and again on a tab switch), so state starts fresh */}
-        <AuthContent
-          key={initialTab}
-          activeTab={initialTab}
-          onClose={onClose}
-          onSwitchTab={onSwitchTab}
-        />
-      </DialogContent>
+    <Dialog handle={authDialog}>
+      {({ payload }) => (
+        // Old auth modal rendered 608px wide
+        <DialogContent className="sm:max-w-152">
+          {/* Mounted only while open, so state starts fresh */}
+          <AuthTabs initialTab={payload?.tab ?? "signin"} />
+        </DialogContent>
+      )}
     </Dialog>
+  )
+}
+
+function AuthTabs({ initialTab }: { initialTab: AuthTab }) {
+  const [tab, setTab] = useState(initialTab)
+  return (
+    // Remounted on a tab switch, so the other form starts fresh too
+    <AuthContent
+      key={tab}
+      activeTab={tab}
+      onClose={() => authDialog.close()}
+      onSwitchTab={() =>
+        setTab((current) => (current === "signin" ? "register" : "signin"))
+      }
+    />
   )
 }
 
@@ -83,9 +84,9 @@ function AuthContent({
   onClose,
   onSwitchTab,
 }: {
-  activeTab: "signin" | "register"
+  activeTab: AuthTab
   onClose: () => void
-  onSwitchTab?: () => void
+  onSwitchTab: () => void
 }) {
   const [isLoading, setIsLoading] = useState(false)
   const [step, setStep] = useState<AuthStep>(activeTab)
@@ -155,7 +156,7 @@ function AuthContent({
           </p>
         )}
 
-        {onSwitchTab && isFirstStep && (
+        {isFirstStep && (
           <div className="flex items-center justify-center gap-1 border-t pt-3 text-[0.8125rem]">
             <span className="text-muted-foreground">
               {activeTab === "signin" ? "New user?" : "Already registered?"}

@@ -1,6 +1,7 @@
 import { notify } from "@/lib/notify"
 import { Button } from "@/components/ui/button"
 import {
+  createDialogHandle,
   Dialog,
   DialogBody,
   DialogCancel,
@@ -11,27 +12,16 @@ import {
 } from "@/components/ui/dialog"
 import { ProfileFields, useProfileForm } from "@/components/ProfileForm"
 
-/** The Header owns the dialog; pages open it with this */
-export const OPEN_EDIT_PROFILE_EVENT = "open-edit-profile"
-export const openEditProfile = () =>
-  window.dispatchEvent(new Event(OPEN_EDIT_PROFILE_EVENT))
+/** Opens Edit profile from anywhere: `<DialogTrigger handle={editProfileDialog}>` */
+export const editProfileDialog = createDialogHandle()
 
-interface EditProfileModalProps {
-  isOpen: boolean
-  onClose: () => void
-}
-
-export function EditProfileModal({ isOpen, onClose }: EditProfileModalProps) {
+/** Rendered once in App */
+export function EditProfileModal() {
   return (
-    <Dialog
-      open={isOpen}
-      onOpenChange={(open) => {
-        if (!open) onClose()
-      }}
-    >
+    <Dialog handle={editProfileDialog}>
       <DialogContent className="sm:max-w-130">
         {/* Mounted only while open, so the form starts from the current user each time */}
-        <EditProfileForm onClose={onClose} />
+        <EditProfileForm onClose={() => editProfileDialog.close()} />
       </DialogContent>
     </Dialog>
   )

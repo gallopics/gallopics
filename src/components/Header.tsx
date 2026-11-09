@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { Link, useLocation, useNavigate } from "react-router"
 import { Camera, LayoutDashboard, ShoppingBag, User } from "lucide-react"
 
@@ -18,19 +18,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Separator } from "@/components/ui/separator"
-import { AuthModal } from "@/components/AuthModal"
-import { ContactSupportModal } from "@/components/ContactSupportModal"
-import {
-  EditProfileModal,
-  OPEN_EDIT_PROFILE_EVENT,
-} from "@/components/EditProfileModal"
+import { authDialog } from "@/components/AuthModal"
+import { editProfileDialog } from "@/components/EditProfileModal"
 import {
   ModernSearchBar,
   type EventSearchProps,
 } from "@/components/ModernSearchBar"
-
-type AuthTab = "signin" | "register"
-type AccountType = "photographer" | "buyer"
 
 const AVATAR_COLORS = [
   "#3b82f6",
@@ -81,16 +74,6 @@ export function Header({
         onSearchChange: setHeaderQuery,
       }
 
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
-  const [authModalConfig, setAuthModalConfig] = useState<{
-    tab: AuthTab
-    type: AccountType
-  }>({ tab: "signin", type: "photographer" })
-  const [isEditProfileModalOpen, setIsEditProfileModalOpen] = useState(false)
-  const [isContactModalOpen, setIsContactModalOpen] = useState(false)
-  const [isContactPhotographerOnly, setIsContactPhotographerOnly] =
-    useState(false)
-
   const { cart } = useCart()
   const {
     isLoaded,
@@ -134,43 +117,6 @@ export function Header({
           : isPendingPhotographer
             ? "Approval pending"
             : "My Studio"
-
-  const openAuth = (tab: AuthTab, type: AccountType = "photographer") => {
-    setAuthModalConfig({ tab, type })
-    setIsAuthModalOpen(true)
-  }
-
-  // Pages open the header modals through window events
-  useEffect(() => {
-    const handleOpenAuth = (e: Event) => {
-      const detail = (e as CustomEvent<{ tab: AuthTab; type: AccountType }>)
-        .detail
-      setIsContactModalOpen(false)
-      openAuth(detail?.tab ?? "signin", detail?.type ?? "photographer")
-    }
-    const handleOpenContact = (e: Event) => {
-      const detail = (e as CustomEvent<{ photographerOnly?: boolean }>).detail
-      setIsAuthModalOpen(false)
-      setIsEditProfileModalOpen(false)
-      setIsContactPhotographerOnly(!!detail?.photographerOnly)
-      setIsContactModalOpen(true)
-    }
-
-    const handleOpenEditProfile = () => {
-      setIsAuthModalOpen(false)
-      setIsContactModalOpen(false)
-      setIsEditProfileModalOpen(true)
-    }
-
-    window.addEventListener("open-auth-modal", handleOpenAuth)
-    window.addEventListener("open-contact-support", handleOpenContact)
-    window.addEventListener(OPEN_EDIT_PROFILE_EVENT, handleOpenEditProfile)
-    return () => {
-      window.removeEventListener("open-auth-modal", handleOpenAuth)
-      window.removeEventListener("open-contact-support", handleOpenContact)
-      window.removeEventListener(OPEN_EDIT_PROFILE_EVENT, handleOpenEditProfile)
-    }
-  }, [])
 
   const cartButton = (
     <Button
@@ -304,7 +250,7 @@ export function Header({
                       {/* Photographers with a profile, also while waiting for approval */}
                       {!profileError && !needsOnboarding && !isAdmin && (
                         <DropdownMenuItem
-                          onClick={() => setIsEditProfileModalOpen(true)}
+                          onClick={() => editProfileDialog.open(null)}
                         >
                           Edit profile
                         </DropdownMenuItem>
@@ -345,10 +291,18 @@ export function Header({
                       <User className="size-5.5" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-36 min-w-36">
-                      <DropdownMenuItem onClick={() => openAuth("signin")}>
+                      <DropdownMenuItem
+                        onClick={() =>
+                          authDialog.openWithPayload({ tab: "signin" })
+                        }
+                      >
                         Sign in
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => openAuth("register")}>
+                      <DropdownMenuItem
+                        onClick={() =>
+                          authDialog.openWithPayload({ tab: "register" })
+                        }
+                      >
                         Register
                       </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -359,30 +313,6 @@ export function Header({
           )}
         </div>
       </header>
-
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-        initialTab={authModalConfig.tab}
-        initialAccountType={authModalConfig.type}
-        onSwitchTab={() =>
-          setAuthModalConfig((prev) => ({
-            ...prev,
-            tab: prev.tab === "signin" ? "register" : "signin",
-          }))
-        }
-      />
-
-      <EditProfileModal
-        isOpen={isEditProfileModalOpen}
-        onClose={() => setIsEditProfileModalOpen(false)}
-      />
-
-      <ContactSupportModal
-        isOpen={isContactModalOpen}
-        onClose={() => setIsContactModalOpen(false)}
-        photographerOnly={isContactPhotographerOnly}
-      />
     </>
   )
 }
