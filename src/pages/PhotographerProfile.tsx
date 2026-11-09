@@ -6,7 +6,14 @@ import {
   useQuery,
   type UseQueryResult,
 } from "@tanstack/react-query"
-import { CalendarDays, ChevronLeft, Images, Pencil, Search } from "lucide-react"
+import {
+  CalendarDays,
+  Camera,
+  ChevronLeft,
+  Images,
+  Pencil,
+  Search,
+} from "lucide-react"
 
 import { cn } from "@/lib/utils"
 import { usePhotoEvents, useWorkspaceEvents } from "@/hooks/useWorkspaceData"
@@ -480,6 +487,23 @@ export function PhotographerProfile() {
           )
         }
       />
+
+      {/* Only the owner sees this, until they add a photo */}
+      {isOwner && !photographerAvatar && (
+        <div className="bg-card">
+          <div className="container pb-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-background px-4 py-3">
+              <span className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Camera className="size-4 shrink-0" />
+                Add a profile photo so buyers recognise you.
+              </span>
+              <Button size="sm" variant="outline" onClick={openEditProfile}>
+                Add photo
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ManageHighlightsModal
         isOpen={isHighlightsModalOpen}
