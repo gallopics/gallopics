@@ -84,9 +84,6 @@ const PhotographerBilling = lazy(() =>
 const Receipts = lazy(() =>
   import("@/pages/pg/Receipts").then((m) => ({ default: m.Receipts }))
 )
-const Settings = lazy(() =>
-  import("@/pages/pg/Settings").then((m) => ({ default: m.Settings }))
-)
 const FAQPage = lazy(() =>
   import("@/pages/FAQPage").then((m) => ({ default: m.FAQPage }))
 )
@@ -110,7 +107,6 @@ const workspacePages = [
   { path: "sold", element: <SoldPhotos /> },
   { path: "receipts", element: <Receipts /> },
   { path: "billing", element: <PhotographerBilling /> },
-  { path: "settings", element: <Settings /> },
 ]
 
 const showComingSoon =
