@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import {
+  Link,
   useLocation,
   useNavigate,
   useParams,
@@ -29,7 +30,7 @@ import {
   publicPhotographerQueryOptions,
 } from "@/data/queries/photos"
 import type { Photo } from "@/types"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -346,12 +347,9 @@ function ImageProfileContent({
                       name={displayedPhotographer.name}
                       variant="photographer"
                       avatarUrl={displayedPhotographer.avatarUrl}
-                      onClick={
+                      href={
                         displayedPhotographer.id
-                          ? () =>
-                              navigate(
-                                `/photographer/${displayedPhotographer.id}?from=ipro&eventId=${photo.eventId}`
-                              )
+                          ? `/photographer/${displayedPhotographer.id}?from=ipro&eventId=${photo.eventId}`
                           : undefined
                       }
                     />
@@ -486,11 +484,18 @@ function ImageProfileContent({
                 <h3 className="mb-4 text-base font-semibold">Details</h3>
                 <div className="flex flex-col gap-3">
                   <DetailRow label="Event">
-                    <Button
-                      variant="link"
+                    {/* A real link styled like the link Button */}
+                    <Link
+                      to={`/event/${photo.eventId}`}
+                      data-slot="button"
                       // wraps onto several lines like the old details row
-                      className="h-auto border-0 p-0 text-right text-sm leading-normal whitespace-normal underline"
-                      onClick={() => navigate(`/event/${photo.eventId}`)}
+                      className={cn(
+                        buttonVariants({
+                          variant: "link",
+                          className:
+                            "h-auto border-0 p-0 text-right text-sm leading-normal whitespace-normal underline",
+                        })
+                      )}
                     >
                       {event?.name ??
                         (eventQuery.isPending && isUuid(photo.eventId) ? (
@@ -498,7 +503,7 @@ function ImageProfileContent({
                         ) : (
                           photo.event
                         ))}
-                    </Button>
+                    </Link>
                   </DetailRow>
                   <DetailRow label="Orientation">
                     {detectedPortrait ? "Portrait" : "Landscape"}

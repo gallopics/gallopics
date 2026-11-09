@@ -623,12 +623,8 @@ export function PhotographerProfile() {
                     <PhotoCard
                       key={photo.id}
                       photo={photo}
-                      onClick={(p) =>
-                        navigate(
-                          `/photo/${p.id}?from=ppro${isOwner ? "&owner=1" : ""}`,
-                          { state: { photo: p, isOwnerProfile: isOwner } }
-                        )
-                      }
+                      href={`/photo/${photo.id}?from=ppro${isOwner ? "&owner=1" : ""}`}
+                      linkState={{ photo, isOwnerProfile: isOwner }}
                       showCartActions={!isOwner}
                     />
                   ))}

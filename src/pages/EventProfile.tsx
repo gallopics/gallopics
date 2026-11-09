@@ -431,11 +431,7 @@ export function EventProfile() {
                   name={meeting.photographer.name}
                   variant="photographer"
                   avatarUrl={meeting.photographer.avatar || undefined}
-                  onClick={() =>
-                    navigate(
-                      `/photographer/${meeting.photographer?.id}?from=event&eventId=${eventId}`
-                    )
-                  }
+                  href={`/photographer/${meeting.photographer.id}?from=event&eventId=${eventId}`}
                 />
                 <ActionSeparator />
               </>
@@ -505,16 +501,14 @@ export function EventProfile() {
                           // Manage view: edit/delete replace the share and cart buttons
                           showCartActions={!isPhotographerMyEventView}
                           showShareActions={false}
-                          onClick={(p) => {
-                            if (isPhotographerMyEventView) {
-                              setPreviewPhoto(p)
-                              return
-                            }
-                            navigate(
-                              `/photo/${p.id}?from=epro&eventId=${meeting.id}`,
-                              { state: { photo: p, eventReturnState } }
-                            )
-                          }}
+                          // Manage view opens a preview; everyone else gets a real link
+                          href={
+                            isPhotographerMyEventView
+                              ? undefined
+                              : `/photo/${photo.id}?from=epro&eventId=${meeting.id}`
+                          }
+                          linkState={{ photo, eventReturnState }}
+                          onClick={setPreviewPhoto}
                         />
                         {isPhotographerMyEventView && (
                           <div className="absolute top-3 right-3 z-40 flex flex-col gap-2">
