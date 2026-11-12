@@ -461,7 +461,14 @@ export function EventDetail() {
       new Set(folderPhotos.map((p) => p.horse).filter((h) => h && h !== "None"))
     ) as string[]
 
-    const allChips: any[] = []
+    const allChips: any[] = [
+      {
+        id: "all",
+        label: "All",
+        count: folderPhotos.length,
+        filterFn: () => true,
+      },
+    ]
 
     // Add dynamic Class chips
     uniqueClasses.sort().forEach((cls) => {
@@ -916,7 +923,9 @@ export function EventDetail() {
                       </span>
                     }
                     isActive={activeChip === chip.id}
-                    onClick={() => setActiveChip(chip.id)}
+                    onClick={() =>
+                      setActiveChip(activeChip === chip.id ? "all" : chip.id)
+                    }
                     variant="filterCount"
                     accent={chip.id === "missing-tags" ? "red" : undefined}
                     count={chip.count}
