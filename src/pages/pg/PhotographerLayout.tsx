@@ -7,6 +7,7 @@ import {
   DollarSign,
   LayoutGrid,
   Menu,
+  Settings,
   Users,
   Wallet,
 } from "lucide-react"
@@ -136,6 +137,9 @@ function WorkspaceSidebar() {
             />
           )}
           {/* Receipts is hidden in the old app too (still mock) */}
+          {!isAdmin && (
+            <NavItem to="/pg/settings" icon={<Settings />} label="Settings" />
+          )}
         </SidebarMenu>
         <SidebarSeparator className="mx-3 my-3 data-horizontal:w-auto" />
       </SidebarContent>

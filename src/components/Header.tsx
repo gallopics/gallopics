@@ -19,7 +19,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Separator } from "@/components/ui/separator"
 import { authDialog } from "@/components/AuthModal"
-import { editProfileDialog } from "@/components/EditProfileModal"
 import {
   ModernSearchBar,
   type EventSearchProps,
@@ -250,7 +249,7 @@ export function Header({
                       {/* Photographers with a profile, also while waiting for approval */}
                       {!profileError && !needsOnboarding && !isAdmin && (
                         <DropdownMenuItem
-                          onClick={() => editProfileDialog.open(null)}
+                          onClick={() => navigate("/pg/settings")}
                         >
                           Edit profile
                         </DropdownMenuItem>

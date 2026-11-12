@@ -13,7 +13,13 @@ import {
   type UploadSession,
 } from "@/lib/uploadSessions"
 
-import type { PhotoPrices } from "../constants/qualityTiers"
+import {
+  LINKED_PRICES,
+  toSekOwnPrices,
+  toSekPrices,
+  type OwnPhotoPrices,
+  type PhotoPrices,
+} from "../constants/qualityTiers"
 import {
   getApiBaseUrl,
   getApiPhotoPreviewUrl,
@@ -104,6 +110,7 @@ export interface Photo {
   duplicateResolved?: boolean // True after "Keep" action resolves duplicates
   duplicateGroupId?: string // Identifies which duplicate group this instance belongs to
   prices?: PhotoPrices // in SEK
+  ownPrices?: OwnPhotoPrices // null tiers follow defaults
 }
 
 // Server data (booked events, photos, highlights) and its writes live in
@@ -483,6 +490,8 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
             eventId: p.event_id,
             status: p.status === "ready" ? "uploadedUnpublished" : "processing",
             soldCount: 0,
+            prices: toSekPrices(p.prices),
+            ownPrices: toSekOwnPrices(p.own_prices ?? LINKED_PRICES),
             rider,
             riderId: p.equipe_rider_id || undefined,
             horse,

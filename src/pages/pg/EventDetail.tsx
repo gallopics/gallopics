@@ -309,14 +309,14 @@ export function EventDetail() {
       {
         id: "default-prices",
         label: "Default prices",
-        count: photos.filter((p) => !hasCustomPrices(p.prices)).length,
-        filterFn: (p: Photo) => !hasCustomPrices(p.prices),
+        count: photos.filter((p) => !hasCustomPrices(p.ownPrices)).length,
+        filterFn: (p: Photo) => !hasCustomPrices(p.ownPrices),
       },
       {
         id: "own-prices",
         label: "Own prices",
-        count: photos.filter((p) => hasCustomPrices(p.prices)).length,
-        filterFn: (p: Photo) => hasCustomPrices(p.prices),
+        count: photos.filter((p) => hasCustomPrices(p.ownPrices)).length,
+        filterFn: (p: Photo) => hasCustomPrices(p.ownPrices),
       },
     ]
 
@@ -362,14 +362,14 @@ export function EventDetail() {
       {
         id: "default-prices",
         label: "Default prices",
-        count: photos.filter((p) => !hasCustomPrices(p.prices)).length,
-        filterFn: (p: Photo) => !hasCustomPrices(p.prices),
+        count: photos.filter((p) => !hasCustomPrices(p.ownPrices)).length,
+        filterFn: (p: Photo) => !hasCustomPrices(p.ownPrices),
       },
       {
         id: "own-prices",
         label: "Own prices",
-        count: photos.filter((p) => hasCustomPrices(p.prices)).length,
-        filterFn: (p: Photo) => hasCustomPrices(p.prices),
+        count: photos.filter((p) => hasCustomPrices(p.ownPrices)).length,
+        filterFn: (p: Photo) => hasCustomPrices(p.ownPrices),
       },
     ]
 
@@ -672,6 +672,7 @@ export function EventDetail() {
     duplicateGroupId: photo.duplicateGroupId,
     photographer: event?.assignedPhotographers?.[0]?.name,
     prices: photo.prices,
+    ownPrices: photo.ownPrices,
   })
 
   // Selection Helpers

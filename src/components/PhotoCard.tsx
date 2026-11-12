@@ -7,6 +7,7 @@ import {
   getPhotoPrice,
   hasCustomPrices,
   QUALITY_TIERS,
+  type OwnPhotoPrices,
   type PhotoPrices,
 } from "@/constants/qualityTiers"
 import { cn } from "@/lib/utils"
@@ -40,6 +41,7 @@ interface PhotoCardProps {
     timestamp?: string
     /** The photo's prices in SEK; shown as "from … SEK" (opens Edit price) */
     prices?: PhotoPrices
+    ownPrices?: OwnPhotoPrices
     soldCount?: number
     totalBucketSales?: number
     /** pgDuplicate: other places this photo appears in */
@@ -371,7 +373,7 @@ function PhotoCardFooter({
   const totalBucketSales = pgMeta.totalBucketSales || 0
   const priceSummary =
     prices &&
-    `${hasCustomPrices(prices) ? "Own prices" : "Default prices"}: ${QUALITY_TIERS.map(
+    `${hasCustomPrices(pgMeta.ownPrices ?? photo.ownPrices) ? "Own prices" : "Default prices"}: ${QUALITY_TIERS.map(
       (tier) => `${tier.label} ${prices[tier.id]} SEK`
     ).join(" · ")}`
 

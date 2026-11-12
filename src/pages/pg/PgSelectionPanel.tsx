@@ -16,13 +16,12 @@ import {
 } from "lucide-react"
 
 import {
-  DEFAULT_PRICES,
-  getPhotoPrice,
   getPriceError,
+  LINKED_PRICES,
   MAX_PRICE_SEK,
   MIN_PRICE_SEK,
   QUALITY_TIERS,
-  type PhotoPrices,
+  type OwnPhotoPrices,
   type QualityTierId,
 } from "@/constants/qualityTiers"
 import { notify, type NotifyType } from "@/lib/notify"
@@ -42,6 +41,7 @@ import type { ApiClassSectionStart } from "@/data/eventsApi"
 import { classStartsQueryOptions } from "@/data/queries/events"
 import {
   createFolderMutationOptions,
+  defaultPricesQueryOptions,
   foldersQueryOptions,
   movePhotosToFolderMutationOptions,
   PhotoPricesSaveError,
@@ -107,7 +107,7 @@ const toPriceFields = (photos: Photo[]): PriceFields =>
   Object.fromEntries(
     QUALITY_TIERS.map((tier) => {
       const values = new Set(
-        photos.map((photo) => getPhotoPrice(photo.prices, tier.id))
+        photos.map((photo) => photo.ownPrices?.[tier.id] ?? "default")
       )
       return [tier.id, values.size === 1 ? String([...values][0]) : ""]
     })
@@ -128,6 +128,10 @@ export function PgSelectionPanel({
   const updatePhotoMetadata = (photoIds: string[], details: Partial<Photo>) =>
     savePhotoDetails.mutateAsync({ photoIds, details })
   const savePhotoPrices = useMutation(savePhotoPricesMutationOptions())
+  const defaultPrices = useQuery({
+    ...defaultPricesQueryOptions(),
+    enabled: isOpen,
+  })
 
   // Derived Selection
   const selectedPhotos = useMemo(() => {
@@ -261,7 +265,7 @@ export function PgSelectionPanel({
   const priceErrors = Object.fromEntries(
     QUALITY_TIERS.map((tier) => [
       tier.id,
-      !isSingle && prices[tier.id] === ""
+      prices[tier.id] === "default" || (!isSingle && prices[tier.id] === "")
         ? null
         : getPriceError(prices[tier.id]),
     ])
@@ -387,12 +391,12 @@ export function PgSelectionPanel({
 
   // Only the tiers whose price was changed (an empty multi field keeps them)
   const changedPrices = useMemo(() => {
-    const changed: Partial<PhotoPrices> = {}
+    const changed: Partial<OwnPhotoPrices> = {}
     if (!originalState) return changed
     QUALITY_TIERS.forEach((tier) => {
       const value = prices[tier.id]
       if (value !== "" && value !== originalState.prices[tier.id]) {
-        changed[tier.id] = Number(value)
+        changed[tier.id] = value === "default" ? null : Number(value)
       }
     })
     return changed
@@ -413,12 +417,12 @@ export function PgSelectionPanel({
   }
 
   const isDefaultPrices = QUALITY_TIERS.every(
-    (tier) => prices[tier.id] === String(DEFAULT_PRICES[tier.id])
+    (tier) => prices[tier.id] === "default"
   )
 
   /** Undo: each photo gets its old prices back (one request per set of prices) */
   const restorePrices = (
-    previous: Array<{ id: string; prices: PhotoPrices }>
+    previous: Array<{ id: string; prices: OwnPhotoPrices }>
   ) => {
     const idsByPrices = new Map<string, string[]>()
     previous.forEach(({ id, prices: photoPrices }) => {
@@ -427,7 +431,7 @@ export function PgSelectionPanel({
     })
     idsByPrices.forEach((photoIds, key) => {
       void savePhotoPrices
-        .mutateAsync({ photoIds, prices: JSON.parse(key) as PhotoPrices })
+        .mutateAsync({ photoIds, prices: JSON.parse(key) as OwnPhotoPrices })
         .catch(() => undefined)
     })
   }
@@ -469,7 +473,7 @@ export function PgSelectionPanel({
     }))
     const previousPrices = selectedPhotos.map((p) => ({
       id: p.id,
-      prices: p.prices ?? DEFAULT_PRICES,
+      prices: p.ownPrices ?? LINKED_PRICES,
     }))
     const hasPriceChanges = Object.keys(changedPrices).length > 0
 
@@ -938,11 +942,24 @@ export function PgSelectionPanel({
                             inputMode="numeric"
                             aria-label={`${tier.label} price (SEK)`}
                             aria-invalid={!!error}
-                            value={prices[tier.id]}
+                            value={
+                              prices[tier.id] === "default"
+                                ? ""
+                                : prices[tier.id]
+                            }
                             onChange={(e) =>
                               handlePriceChange(tier.id, e.target.value)
                             }
-                            placeholder={isSingle ? "" : "Mixed"}
+                            placeholder={
+                              prices[tier.id] === "default"
+                                ? String(
+                                    (defaultPrices.data?.effective[tier.id] ??
+                                      tier.price * 100) / 100
+                                  )
+                                : isSingle
+                                  ? ""
+                                  : "Mixed"
+                            }
                           />
                           <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-sm text-muted-foreground">
                             SEK
@@ -954,8 +971,27 @@ export function PgSelectionPanel({
                             error ? "text-destructive" : "text-muted-foreground"
                           )}
                         >
-                          {error ?? tier.description}
+                          {error ??
+                            (prices[tier.id] === "default"
+                              ? "Uses default price. Updates when your default changes."
+                              : !isSingle && prices[tier.id] === ""
+                                ? `Mixed prices: ${selectedPhotos.filter((photo) => photo.ownPrices?.[tier.id] == null).length} use default price.`
+                                : tier.description)}
                         </div>
+                        <Button
+                          variant="link"
+                          size="xs"
+                          className="mt-1 h-auto px-0"
+                          disabled={prices[tier.id] === "default"}
+                          onClick={() =>
+                            setPrices((current) => ({
+                              ...current,
+                              [tier.id]: "default",
+                            }))
+                          }
+                        >
+                          Use default price
+                        </Button>
                       </FormGroup>
                     )
                   })}
@@ -974,10 +1010,7 @@ export function PgSelectionPanel({
                     onClick={() =>
                       setPrices(
                         Object.fromEntries(
-                          QUALITY_TIERS.map((tier) => [
-                            tier.id,
-                            String(tier.price),
-                          ])
+                          QUALITY_TIERS.map((tier) => [tier.id, "default"])
                         ) as PriceFields
                       )
                     }

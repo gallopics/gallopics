@@ -1,4 +1,4 @@
-import type { ApiPhotoPrices } from "@/constants/qualityTiers"
+import type { ApiPhotoPrices, OwnPhotoPrices } from "@/constants/qualityTiers"
 
 const SERVER_API_BASE_URL = "http://82.96.43.103:8081"
 
@@ -67,6 +67,11 @@ export interface ApiUser {
   role: "user" | "photographer" | "admin"
   created_at: string
   updated_at: string
+}
+
+export interface PhotographerPricing {
+  defaults: OwnPhotoPrices
+  effective: ApiPhotoPrices
 }
 
 export interface ApiPhotographer {
@@ -362,6 +367,17 @@ export const api = {
   getMe: () => request<ApiUser>("/api/v1/me", { auth: true }),
   getMyPhotographer: () =>
     request<ApiPhotographer>("/api/v1/photographer/me", { auth: true }),
+
+  getMyDefaultPrices: () =>
+    request<PhotographerPricing>("/api/v1/photographer/me/prices", {
+      auth: true,
+    }),
+  updateMyDefaultPrices: (prices: Partial<OwnPhotoPrices>) =>
+    request<PhotographerPricing>("/api/v1/photographer/me/prices", {
+      method: "PATCH",
+      body: JSON.stringify(prices),
+      auth: true,
+    }),
   upsertMyPhotographer: (body: UpsertPhotographerProfile) =>
     request<ApiPhotographer>("/api/v1/photographer/me", {
       method: "PUT",
@@ -482,7 +498,7 @@ export const api = {
     ),
 
   /** The same prices (öre) for several of the photographer's photos; tiers left out keep theirs */
-  updatePhotoPrices: (photoIds: string[], prices: Partial<ApiPhotoPrices>) =>
+  updatePhotoPrices: (photoIds: string[], prices: Partial<OwnPhotoPrices>) =>
     request<ApiPhoto[]>("/api/v1/photographer/photos/prices", {
       method: "PATCH",
       body: JSON.stringify({ photo_ids: photoIds, prices }),
@@ -652,6 +668,7 @@ export interface ApiPhoto {
   photographer_display_name?: string | null
   photographer_avatar_url?: string | null
   prices: ApiPhotoPrices
+  own_prices?: OwnPhotoPrices
   currency: string
   status: "processing" | "ready" | "failed"
   visibility: "draft" | "published"

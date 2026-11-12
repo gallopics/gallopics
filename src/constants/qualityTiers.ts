@@ -2,6 +2,14 @@ export type QualityTierId = "web" | "high" | "commercial"
 
 /** A photo's price per quality tier, in whole SEK */
 export type PhotoPrices = Record<QualityTierId, number>
+/** Null means this tier follows the photographer's current default. */
+export type OwnPhotoPrices = Record<QualityTierId, number | null>
+
+export const LINKED_PRICES: OwnPhotoPrices = {
+  web: null,
+  high: null,
+  commercial: null,
+}
 
 /** The same in öre (SEK × 100), as the API sends and takes them */
 export type ApiPhotoPrices = Record<QualityTierId, number>
@@ -9,7 +17,7 @@ export type ApiPhotoPrices = Record<QualityTierId, number>
 export interface QualityTier {
   id: QualityTierId
   label: string
-  /** Default price in SEK; each photo has its own price (`photo.prices`) */
+  /** Site fallback in SEK; `photo.prices` contains the resolved prices. */
   price: number
   description: string
   purpose: string
@@ -60,10 +68,13 @@ export const toSekPrices = (prices: ApiPhotoPrices): PhotoPrices =>
 
 /** Prices in SEK for the API (öre); tiers left out stay out */
 export const toApiPrices = (
-  prices: Partial<PhotoPrices>
-): Partial<ApiPhotoPrices> =>
+  prices: Partial<OwnPhotoPrices>
+): Partial<OwnPhotoPrices> =>
   Object.fromEntries(
-    Object.entries(prices).map(([tierId, sek]) => [tierId, sek * 100])
+    Object.entries(prices).map(([tierId, sek]) => [
+      tierId,
+      sek === null ? null : sek * 100,
+    ])
   )
 
 /** What a photo costs in a tier, in SEK; the default price when unknown */
@@ -76,8 +87,16 @@ export const getPhotoPrice = (
   return prices?.[tier.id] ?? tier.price
 }
 
-export const hasCustomPrices = (prices: PhotoPrices | undefined) =>
-  !!prices && QUALITY_TIERS.some((tier) => prices[tier.id] !== tier.price)
+export const hasCustomPrices = (prices: OwnPhotoPrices | undefined) =>
+  !!prices && QUALITY_TIERS.some((tier) => prices[tier.id] != null)
+
+export const toSekOwnPrices = (prices: OwnPhotoPrices): OwnPhotoPrices =>
+  Object.fromEntries(
+    QUALITY_TIERS.map((tier) => {
+      const value = prices[tier.id]
+      return [tier.id, value == null ? null : value / 100]
+    })
+  ) as OwnPhotoPrices
 
 /** Why a price typed in SEK can't be saved; null when it can */
 export const getPriceError = (value: string): string | null => {

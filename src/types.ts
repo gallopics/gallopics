@@ -1,4 +1,4 @@
-import type { PhotoPrices } from "@/constants/qualityTiers"
+import type { OwnPhotoPrices, PhotoPrices } from "@/constants/qualityTiers"
 
 export interface Photo {
   id: string
@@ -20,6 +20,7 @@ export interface Photo {
   photographerId?: string
   /** Price per quality tier, in SEK */
   prices?: PhotoPrices
+  ownPrices?: OwnPhotoPrices
   isDuplicate?: boolean
   duplicateGroupId?: string
 }

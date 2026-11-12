@@ -5,9 +5,11 @@ import {
 } from "@tanstack/react-query"
 
 import {
+  LINKED_PRICES,
   toApiPrices,
+  toSekOwnPrices,
   toSekPrices,
-  type PhotoPrices,
+  type OwnPhotoPrices,
 } from "@/constants/qualityTiers"
 import { assetUrl, formatLabel } from "@/lib/utils"
 import type { PgEvent, Photo } from "@/context/PhotographerContext"
@@ -24,10 +26,31 @@ import {
   normalizeCountry,
   type ApiEvent,
 } from "../eventsApi"
-import { invalidateEventPhotos } from "./events"
+import { eventKeys, invalidateEventPhotos } from "./events"
 import { photoKeys, publicPhotographerKeys } from "./photos"
 
 const PHOTOS_PAGE_SIZE = 100
+
+export const defaultPricesQueryOptions = () =>
+  queryOptions({
+    queryKey: photographerKeys.defaultPrices(),
+    queryFn: () => api.getMyDefaultPrices(),
+  })
+
+export const saveDefaultPricesMutationOptions = () =>
+  mutationOptions({
+    mutationFn: (prices: Partial<OwnPhotoPrices>) =>
+      api.updateMyDefaultPrices(toApiPrices(prices)),
+    onSuccess: async (data, _variables, _result, { client }) => {
+      client.setQueryData(photographerKeys.defaultPrices(), data)
+      await Promise.all([
+        client.invalidateQueries({ queryKey: photographerKeys.photos() }),
+        client.invalidateQueries({ queryKey: photoKeys.all }),
+        client.invalidateQueries({ queryKey: eventKeys.all }),
+        client.invalidateQueries({ queryKey: publicPhotographerKeys.all }),
+      ])
+    },
+  })
 
 export const getApiPhotoTag = (photo: ApiPhoto, type: string) =>
   photo.tags.find((tag) => tag.type === type)?.value
@@ -68,6 +91,7 @@ function mapApiPhotoToPgPhoto(photo: ApiPhoto): Photo {
     className: getApiPhotoClassName(photo),
     isDuplicate: false,
     prices: toSekPrices(photo.prices),
+    ownPrices: toSekOwnPrices(photo.own_prices ?? LINKED_PRICES),
   }
 }
 
@@ -156,6 +180,7 @@ export const photographerKeys = {
   profile: () => [...photographerKeys.all, "me"] as const,
   bookings: () => [...photographerKeys.all, "bookings"] as const,
   photos: () => [...photographerKeys.all, "photos"] as const,
+  defaultPrices: () => [...photographerKeys.all, "default-prices"] as const,
   highlights: () => [...photographerKeys.all, "highlights"] as const,
   /** Their own folders in one event */
   folders: (eventId: string) =>
@@ -383,7 +408,7 @@ export const savePhotoPricesMutationOptions = () =>
       prices,
     }: {
       photoIds: string[]
-      prices: Partial<PhotoPrices>
+      prices: Partial<OwnPhotoPrices>
     }) => {
       const ids = photoIds.filter(isUuid)
       const apiPrices = toApiPrices(prices)
@@ -403,11 +428,17 @@ export const savePhotoPricesMutationOptions = () =>
     },
     onSuccess: (updated, _variables, _result, { client }) => {
       const pricesById = new Map(
-        updated.map((photo) => [photo.id, toSekPrices(photo.prices)])
+        updated.map((photo) => [
+          photo.id,
+          {
+            prices: toSekPrices(photo.prices),
+            ownPrices: toSekOwnPrices(photo.own_prices ?? LINKED_PRICES),
+          },
+        ])
       )
       updateCachedPhotos(client, (prev) =>
         prev.map((p) =>
-          pricesById.has(p.id) ? { ...p, prices: pricesById.get(p.id) } : p
+          pricesById.has(p.id) ? { ...p, ...pricesById.get(p.id) } : p
         )
       )
       invalidateEventPhotos(
