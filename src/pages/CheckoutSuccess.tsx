@@ -72,12 +72,13 @@ export function CheckoutSuccess() {
 
   const handleDownload = async (item: OrderItem) => {
     if (!order) return
-    setDownloadingPhotoId(item.photo_id)
+    setDownloadingPhotoId(`${item.photo_id}:${item.quality}`)
     setDownloadError(null)
     try {
       const download = await api.createPhotoDownload(
         item.photo_id,
-        order.order_id
+        order.order_id,
+        item.quality
       )
       window.location.assign(download.url)
     } catch (err) {
@@ -157,9 +158,13 @@ export function CheckoutSuccess() {
                             size="sm"
                             className="shrink-0 bg-black hover:bg-foreground"
                             onClick={() => handleDownload(item)}
-                            disabled={downloadingPhotoId === item.photo_id}
+                            disabled={
+                              downloadingPhotoId ===
+                              `${item.photo_id}:${item.quality}`
+                            }
                           >
-                            {downloadingPhotoId === item.photo_id
+                            {downloadingPhotoId ===
+                            `${item.photo_id}:${item.quality}`
                               ? "Preparing"
                               : "Download"}
                           </Button>

@@ -13,6 +13,7 @@ export interface QualityTier {
   price: number
   description: string
   purpose: string
+  sizeLabel: string
 }
 
 // Keep in sync with the API's app/services/pricing.py
@@ -23,6 +24,7 @@ export const QUALITY_TIERS: QualityTier[] = [
     price: 499,
     description: "Best for social media and screen use.",
     purpose: "screen/social",
+    sizeLabel: "Up to 1080px",
   },
   {
     id: "high",
@@ -30,6 +32,7 @@ export const QUALITY_TIERS: QualityTier[] = [
     price: 999,
     description: "Best for printing and large displays.",
     purpose: "print/large displays",
+    sizeLabel: "Full size",
   },
   {
     id: "commercial",
@@ -37,6 +40,7 @@ export const QUALITY_TIERS: QualityTier[] = [
     price: 1500,
     description: "Best for printing and large displays.", // Name and price differ, purpose text same as High quality
     purpose: "print/large displays",
+    sizeLabel: "Full size",
   },
 ]
 

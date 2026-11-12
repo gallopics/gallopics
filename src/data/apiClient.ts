@@ -622,12 +622,16 @@ export const api = {
       `/api/v1/checkout/sessions/${encodeURIComponent(sessionId)}`
     ),
 
-  createPhotoDownload: async (photoId: string, orderId: string) => {
+  createPhotoDownload: async (
+    photoId: string,
+    orderId: string,
+    quality: string
+  ) => {
     const download = await request<PhotoDownloadResponse>(
       `/api/v1/photos/${encodeURIComponent(photoId)}/download`,
       {
         method: "POST",
-        body: JSON.stringify({ order_id: orderId }),
+        body: JSON.stringify({ order_id: orderId, quality }),
         retryNetworkErrors: 1,
       }
     )

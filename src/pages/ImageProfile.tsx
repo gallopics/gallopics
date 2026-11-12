@@ -287,19 +287,10 @@ function ImageProfileContent({
     return QUALITY_TIERS.map((tier) => ({
       label: tier.label,
       value: tier.id,
-      subtext:
-        tier.id === "web"
-          ? detectedPortrait
-            ? "Portrait: 720×1080"
-            : "Landscape: 1080×720"
-          : tier.id === "high" || tier.id === "commercial"
-            ? detectedPortrait
-              ? "Portrait: 4000×6000"
-              : "Landscape: 6000×4000"
-            : "",
+      subtext: tier.sizeLabel,
       description: tier.description,
     }))
-  }, [detectedPortrait])
+  }, [])
 
   return (
     <div className="flex min-h-screen flex-col overflow-x-hidden max-md:relative max-md:w-full max-md:max-w-[100vw]">
