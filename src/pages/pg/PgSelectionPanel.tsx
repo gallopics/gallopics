@@ -59,6 +59,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import {
+  Sheet,
+  SheetBody,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
@@ -727,18 +736,25 @@ export function PgSelectionPanel({
   const confirm = confirmCopy[confirmModal.type]
 
   return (
-    <>
-      <aside
-        aria-label="Selection details"
-        inert={!isOpen}
-        className={cn(
-          "fixed inset-y-0 right-0 z-50 flex w-100 max-w-full flex-col bg-card shadow-[-4px_0_24px_rgba(0,0,0,0.12)] transition-transform duration-300 ease-[cubic-bezier(0.2,0,0.2,1)]",
-          isOpen ? "translate-x-0" : "translate-x-[110%]"
-        )}
-      >
-        <PanelHeader title="Selection details" onClose={onCloseSafe} />
+    <Sheet
+      open={isOpen}
+      disablePointerDismissal
+      onOpenChange={(open, details) => {
+        if (!open) {
+          if (isDirty) details.cancel()
+          onCloseSafe()
+        }
+      }}
+    >
+      <SheetContent className="max-w-full bg-card data-[side=right]:w-100">
+        <SheetHeader className="h-16 py-0">
+          <SheetTitle>Selection details</SheetTitle>
+          <SheetDescription className="sr-only">
+            Edit tags and prices for the selected photos.
+          </SheetDescription>
+        </SheetHeader>
 
-        <div className="relative flex-1 overflow-y-auto p-6 leading-[1.3]">
+        <SheetBody className="relative min-h-0 leading-[1.3]">
           {!isSingle && count > 0 && (
             <div className="mb-8">
               <SectionLabel>Multiple selection ({count})</SectionLabel>
@@ -1021,12 +1037,12 @@ export function PgSelectionPanel({
               )}
             </div>
           )}
-        </div>
+        </SheetBody>
 
         {/* Footer */}
-        <div
+        <SheetFooter
           className={cn(
-            "flex shrink-0 items-center justify-between gap-3 border-t border-muted px-6 py-4",
+            "justify-between border-muted",
             (isDirty || editFromSummary) && "justify-end"
           )}
         >
@@ -1081,7 +1097,7 @@ export function PgSelectionPanel({
               </div>
             </>
           )}
-        </div>
+        </SheetFooter>
 
         {/* Info overlay (covers the whole panel) */}
         {isInfoOpen && (
@@ -1177,7 +1193,7 @@ export function PgSelectionPanel({
             </div>
           </div>
         )}
-      </aside>
+      </SheetContent>
 
       <Dialog
         open={isMoveModalOpen}
@@ -1276,7 +1292,7 @@ export function PgSelectionPanel({
         confirmLabel={confirm.label}
         tone={confirm.tone}
       />
-    </>
+    </Sheet>
   )
 }
 
