@@ -187,7 +187,7 @@ export function CheckoutSuccess() {
                       Continue browsing
                     </Button>
                     <p className="text-[0.8125rem] text-muted-foreground opacity-70">
-                      Download links are active for 24 hours.
+                      Your receipt email includes the download links too.
                     </p>
                   </div>
                 </>

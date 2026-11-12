@@ -451,9 +451,8 @@ function ImageProfileContent({
                       </div>
 
                       <p className="mt-4 text-xs leading-[1.4] text-muted-foreground">
-                        Your receipt is sent by email after payment. Download
-                        links are available immediately and valid for 24 hours.
-                        Images are delivered as JPEG.
+                        You can download right after payment, and your receipt
+                        email includes the download links too.
                       </p>
 
                       <DialogTrigger
