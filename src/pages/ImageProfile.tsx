@@ -214,13 +214,16 @@ function ImageProfileContent({
   const [loadedOrientation, setLoadedOrientation] = useState<{
     key: string
     portrait: boolean
+    aspectRatio: number
   } | null>(null)
   const detectedPortrait =
     loadedOrientation?.key === orientationKey
       ? loadedOrientation.portrait
       : photo.height > photo.width
-  const setDetectedPortrait = (portrait: boolean) =>
-    setLoadedOrientation({ key: orientationKey, portrait })
+  const imageAspectRatio =
+    loadedOrientation?.key === orientationKey
+      ? loadedOrientation.aspectRatio
+      : photo.width / photo.height
 
   // Check if current selection is in cart
   const isInCart = useMemo(() => {
@@ -314,14 +317,23 @@ function ImageProfileContent({
                   type="button"
                   aria-label="View full screen"
                   onClick={() => setIsFullScreen(true)}
-                  className="flex aspect-3/2 min-h-100 w-full cursor-zoom-in items-center justify-center bg-muted max-md:min-h-0 max-md:p-4"
+                  className="flex aspect-3/2 min-h-100 w-full cursor-zoom-in items-center justify-center bg-muted max-md:aspect-(--photo-aspect) max-md:max-h-[70svh] max-md:min-h-0"
+                  style={
+                    {
+                      "--photo-aspect": imageAspectRatio,
+                    } as React.CSSProperties
+                  }
                 >
                   <WatermarkedPhotoPreview
                     src={photo.src || undefined}
                     alt={photo.rider}
                     onLoad={(e) => {
                       const img = e.currentTarget
-                      setDetectedPortrait(img.naturalHeight > img.naturalWidth)
+                      setLoadedOrientation({
+                        key: orientationKey,
+                        portrait: img.naturalHeight > img.naturalWidth,
+                        aspectRatio: img.naturalWidth / img.naturalHeight,
+                      })
                     }}
                   />
                 </button>
