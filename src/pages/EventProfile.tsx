@@ -216,7 +216,6 @@ export function EventProfile() {
 
   const isResetDisabled = eventClass === "All" && searchQuery === ""
 
-  // 1. Get List of all available Competitions for the event
   const allEventClasses = useMemo(() => {
     if (!eventDetail) return []
     const classes: ClassSection[] = []
@@ -242,16 +241,6 @@ export function EventProfile() {
     }))
   }, [eventDetail])
 
-  const classOptions = useMemo(() => {
-    const unique = Array.from(
-      new Set(allEventClasses.map((c) => c.name))
-    ).sort()
-    return [
-      { label: "All Classes", value: "All" },
-      ...unique.map((c) => ({ label: c, value: c })),
-    ]
-  }, [allEventClasses])
-
   const uploadedPhotos = useMemo<EventPhoto[]>(() => {
     if (!isPhotographerMyEventView || !eventId || !eventDetail) return []
 
@@ -276,6 +265,21 @@ export function EventProfile() {
   }, [eventDetail, eventId, isPhotographerMyEventView, myEventPhotos])
 
   const uploadPhotos = isPhotographerMyEventView ? uploadedPhotos : photos
+
+  const classOptions = useMemo(() => {
+    const counts = new Map<string, number>()
+    uploadPhotos.forEach((photo) => {
+      if (photo.className && photo.className !== "Uploaded") {
+        counts.set(photo.className, (counts.get(photo.className) ?? 0) + 1)
+      }
+    })
+    return [
+      { label: "All Classes", value: "All" },
+      ...[...counts]
+        .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
+        .map(([name, count]) => ({ label: `${name} (${count})`, value: name })),
+    ]
+  }, [uploadPhotos])
 
   const combinedOptions = useMemo(() => {
     const uniqueRiders = Array.from(
@@ -472,6 +476,7 @@ export function EventProfile() {
           {activeEventTab === "uploads" ? (
             <div>
               <FilterBar
+                searchWidth="compact"
                 filters={
                   <>
                     <ModernDropdown
@@ -481,6 +486,9 @@ export function EventProfile() {
                       label="Class"
                       placeholder="Class"
                       variant="pill"
+                      className="h-auto! min-h-10 w-85 max-w-[calc(100vw-100px)] py-2 [&_[data-slot=select-value]]:min-w-0"
+                      contentClassName="w-120 max-w-[calc(100vw-32px)]"
+                      wrapLabels
                     />
                     <ResetFiltersButton
                       disabled={isResetDisabled}
