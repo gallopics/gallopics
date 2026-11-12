@@ -428,7 +428,7 @@ export function PgSelectionPanel({
     (tier) => prices[tier.id] === "default"
   )
 
-  /** Undo: each photo gets its old prices back (one request per set of prices) */
+  /** Restore each photo's previous prices after a failed save. */
   const restorePrices = (
     previous: Array<{ id: string; prices: OwnPhotoPrices }>
   ) => {
@@ -524,11 +524,6 @@ export function PgSelectionPanel({
         }).catch(() => undefined)
       })
     }
-    const restorePrevious = () => {
-      if (detailsDirty) restoreDetails()
-      if (hasPriceChanges) restorePrices(previousPrices)
-    }
-
     // Prices first: the API saves all of them or none, so a refusal changes nothing
     let pricesSaved = false
     let detailsSent = false
@@ -544,7 +539,7 @@ export function PgSelectionPanel({
         detailsSent = true
         await updatePhotoMetadata(ids, updates)
       }
-      triggerToast("Changes saved", "success", "panel", restorePrevious)
+      triggerToast("Changes saved", "success", "panel")
     } catch (error) {
       if (detailsSent) restoreDetails()
       // Many photos are saved in several requests, so some may have new prices already
