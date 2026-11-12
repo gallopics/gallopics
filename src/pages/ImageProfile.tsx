@@ -66,11 +66,8 @@ function DetailRow({
 const toPagePhoto = (photo: ApiPhoto): Photo => ({
   id: photo.id,
   src: getApiPhotoPreviewUrl(photo),
-  rider: photo.tags.find((tag) => tag.type === "rider")?.value || "Unassigned",
-  horse:
-    photo.tags.find((tag) => tag.type === "horse")?.value ||
-    photo.class_name ||
-    "Uploaded photo",
+  rider: photo.tags.find((tag) => tag.type === "rider")?.value || "",
+  horse: photo.tags.find((tag) => tag.type === "horse")?.value || "",
   event: photo.event_class_name || photo.class_name || "Event",
   eventId: photo.event_id,
   date: new Date(photo.created_at).toLocaleDateString(undefined, {
@@ -332,16 +329,20 @@ function ImageProfileContent({
                 <div className="flex w-full items-start justify-between gap-3 border-t border-black/5 px-6 py-4 max-md:px-4">
                   <div className="flex min-w-0 flex-1 flex-wrap items-start gap-2">
                     {/* No rider / horse pages yet: plain names */}
-                    <InfoChip
-                      label="Rider"
-                      name={photo.rider}
-                      variant="rider"
-                    />
-                    <InfoChip
-                      label="Horse"
-                      name={photo.horse}
-                      variant="horse"
-                    />
+                    {photo.rider && photo.rider !== "Unassigned" && (
+                      <InfoChip
+                        label="Rider"
+                        name={photo.rider}
+                        variant="rider"
+                      />
+                    )}
+                    {photo.horse && (
+                      <InfoChip
+                        label="Horse"
+                        name={photo.horse}
+                        variant="horse"
+                      />
+                    )}
                     <InfoChip
                       label="Photographer"
                       name={displayedPhotographer.name}

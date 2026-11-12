@@ -266,8 +266,8 @@ export function mapApiPhotoToPhoto(
   return {
     id: photo.id,
     src: getPhotoImageUrl(photo),
-    rider: getPhotoTag(photo, "rider") || "Unassigned",
-    horse: getPhotoTag(photo, "horse") || className || "Uploaded photo",
+    rider: getPhotoTag(photo, "rider") || "",
+    horse: getPhotoTag(photo, "horse") || "",
     event: event.name,
     eventId: event.id,
     date: photo.created_at || event.startDate || new Date().toISOString(),

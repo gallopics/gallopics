@@ -45,7 +45,7 @@ function getMatchScore(value: string, lowerQuery: string) {
   if (normalizedValue.split(/\s+/).some((word) => word.startsWith(lowerQuery)))
     return 3
   if (normalizedValue.includes(lowerQuery)) return 2
-  return 1
+  return 0
 }
 
 /** e.g. "Rider: Anna Svensson" — the best matching tag of the found photos */
@@ -59,7 +59,7 @@ function getBestMatchLabel(photos: ApiPhoto[], lowerQuery: string) {
   ])
 
   const bestCandidate = candidates
-    .filter((candidate) => candidate.value)
+    .filter((candidate) => getMatchScore(candidate.value, lowerQuery) > 0)
     .sort(
       (a, b) =>
         getMatchScore(b.value, lowerQuery) -
@@ -166,9 +166,24 @@ export function useEventSearch(searchQuery: string) {
   const photoMatchedEventIds = needsPhotoSearch
     ? photoSearch.matchedIds
     : NO_MATCHES
-  const eventMatchLabels = needsPhotoSearch
-    ? photoSearch.matchLabels
-    : NO_LABELS
+  const eventMatchLabels = useMemo(() => {
+    if (!needsPhotoSearch) return NO_LABELS
+    const lowerQuery = trimmedQuery.toLowerCase()
+    return Object.fromEntries(
+      events.map((event) => [
+        event.id,
+        [
+          event.name,
+          event.city,
+          event.country,
+          event.discipline,
+          event.photographer?.name,
+        ].some((value) => value?.toLowerCase().includes(lowerQuery))
+          ? ""
+          : (photoSearch.matchLabels[event.id] ?? ""),
+      ])
+    )
+  }, [events, needsPhotoSearch, photoSearch.matchLabels, trimmedQuery])
   const eventSearchIndex = photoSearch.searchIndex
   const isSearchingPhotoMetadata =
     needsPhotoSearch && photoSearch.query !== trimmedQuery

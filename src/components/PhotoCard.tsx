@@ -164,7 +164,10 @@ export function PhotoCard({
         <Link
           to={href}
           state={linkState}
-          aria-label={`${photo.rider} on ${photo.horse}`}
+          aria-label={
+            [photo.rider, photo.horse].filter(Boolean).join(" on ") ||
+            "View photo"
+          }
           className="absolute inset-0 z-20 outline-none"
         />
       )}
@@ -180,7 +183,10 @@ export function PhotoCard({
       >
         <WatermarkedThumbnail
           src={photo.src}
-          alt={`${photo.rider} on ${photo.horse}`}
+          alt={
+            [photo.rider, photo.horse].filter(Boolean).join(" on ") ||
+            "Event photo"
+          }
           onLoad={() => setIsLoaded(true)}
           className={cn(
             // Tailwind v4 `scale-*` sets `scale`, not `transform`
@@ -323,11 +329,13 @@ function PhotoCardFooter({
       <div className="relative z-2 bg-card px-4 pt-2 pb-4">
         <div className="flex flex-col gap-0.5">
           <h3 className="text-[0.8125rem] leading-[1.2] font-semibold text-foreground">
-            {photo.rider}
+            {photo.rider || photo.horse || "Event photo"}
           </h3>
-          <span className="text-xs leading-normal text-muted-foreground">
-            {photo.horse}
-          </span>
+          {photo.rider && photo.horse && (
+            <span className="text-xs leading-normal text-muted-foreground">
+              {photo.horse}
+            </span>
+          )}
         </div>
       </div>
     )

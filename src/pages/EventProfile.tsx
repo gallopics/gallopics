@@ -1,5 +1,10 @@
 import { useCallback, useMemo, useState } from "react"
-import { useLocation, useNavigate, useParams } from "react-router"
+import {
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router"
 import { useMutation, useQuery } from "@tanstack/react-query"
 import {
   CalendarDays,
@@ -130,7 +135,18 @@ export function EventProfile() {
     eventQuery.error instanceof ApiError &&
     (eventQuery.error.status === 404 || eventQuery.error.status === 422)
 
-  const [searchQuery, setSearchQuery] = useState("")
+  const [searchParams, setSearchParams] = useSearchParams()
+  const searchQuery = searchParams.get("q") ?? ""
+  const setSearchQuery = (value: string) => {
+    setSearchParams(
+      (params) => {
+        if (value.trim()) params.set("q", value)
+        else params.delete("q")
+        return params
+      },
+      { replace: true }
+    )
+  }
   const [eventClass, setEventClass] = useState("All")
   const [activeEventTab, setActiveEventTab] = useState<"uploads" | "classes">(
     initialEventTab
@@ -242,9 +258,8 @@ export function EventProfile() {
     return myEventPhotos.map((photo) => ({
       id: photo.id,
       src: photo.url,
-      rider: photo.rider || "Unassigned",
-      horse:
-        photo.horse || photo.className || photo.fileName || "Uploaded photo",
+      rider: photo.rider || "",
+      horse: photo.horse || "",
       event: eventDetail.meeting.name,
       eventId,
       date: photo.uploadDate || eventDetail.meeting.period.startDate,

@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react"
 import { useQueries, type UseQueryResult } from "@tanstack/react-query"
 
+import { eventSearchLink } from "@/lib/eventSearchLink"
 import { useEventSearch } from "@/hooks/useEventSearch"
 import type { ApiPhoto, PaginatedResponse } from "@/data/apiClient"
 import { pickLatestPhotoUrl } from "@/data/eventsApi"
@@ -109,7 +110,7 @@ export function EventsPage() {
                 <FolderEventCard
                   key={event.id}
                   event={event}
-                  href={`/event/${event.id}`}
+                  href={eventSearchLink(event.id, eventMatchLabels[event.id])}
                 />
               ))}
             </div>

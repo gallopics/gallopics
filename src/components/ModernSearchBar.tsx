@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router"
 import { Combobox as ComboboxPrimitive } from "@base-ui/react"
 import { ArrowRight, Calendar, ChevronRight, Search, X } from "lucide-react"
 
+import { eventSearchLink } from "@/lib/eventSearchLink"
 import { cn } from "@/lib/utils"
 import { useMediaQuery } from "@/hooks/useMediaQuery"
 import { useMobileSearchMode } from "@/hooks/useMobileSearchMode"
@@ -258,7 +259,7 @@ export function ModernSearchBar({
     close()
     setQuery("")
     onSearchChange?.("")
-    navigate(`/event/${item.id}`)
+    navigate(eventSearchLink(item.id, item.matchLabel))
   }
 
   const input = (
