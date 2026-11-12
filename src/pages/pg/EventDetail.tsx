@@ -930,9 +930,20 @@ export function EventDetail() {
           <div className="min-w-0 flex-1">
             {/* The selection actions also show without the filter row */}
             {(showFilters || selectedIds.size > 0) && (
-              <div className="mb-3 flex items-center justify-between gap-6 py-3">
+              <div
+                className={cn(
+                  "mb-3 flex items-center justify-between gap-6 py-3",
+                  selectedIds.size > 0 &&
+                    "sticky top-[74px] z-30 bg-background shadow-sm max-md:fixed max-md:inset-x-0 max-md:top-[66px] max-md:px-4"
+                )}
+              >
                 {showFilters && (
-                  <div className="max-w-150 flex-1">
+                  <div
+                    className={cn(
+                      "max-w-150 flex-1",
+                      selectedIds.size > 0 && "max-md:hidden"
+                    )}
+                  >
                     <ScopedSearchBar
                       placeholder="Search riders, horses, photo ID..."
                       options={searchOptions}
