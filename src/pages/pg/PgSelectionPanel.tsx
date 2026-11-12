@@ -10,7 +10,6 @@ import {
   Pencil,
   Plus,
   Save,
-  Slash,
   Trash2,
   X,
 } from "lucide-react"
@@ -591,6 +590,7 @@ export function PgSelectionPanel({
       }
       setEditFromSummary(false)
     }
+    propsOnClose()
   }
 
   const handleDeleteInit = () => {
@@ -1038,7 +1038,7 @@ export function PgSelectionPanel({
                 className={panelSecondary}
                 onClick={handleCancel}
               >
-                <Slash /> Cancel
+                Cancel
               </Button>
               <Button
                 size="md"
