@@ -302,8 +302,8 @@ function ImageProfileContent({
       <main className="pt-6 pb-15 max-md:pt-3 max-md:pb-10">
         <div className="container">
           <div className="flex items-start gap-6 max-lg:flex-col">
-            {/* Photo viewer */}
-            <div className="min-w-0 flex-1">
+            {/* Photo viewer: full width when stacked (the preview doesn't size it) */}
+            <div className="min-w-0 flex-1 max-lg:w-full">
               <Card className="gap-0 rounded-3xl py-0 shadow-[0_1px_2px_rgba(0,0,0,0.02)] max-md:rounded-xl">
                 <button
                   type="button"
