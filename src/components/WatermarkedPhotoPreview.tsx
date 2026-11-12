@@ -1,16 +1,41 @@
+import { useEffect, useRef, useState } from "react"
+
 import { cn } from "@/lib/utils"
 
 type WatermarkedPhotoPreviewProps = React.ImgHTMLAttributes<HTMLImageElement>
 
-/**
- * Full-size photo preview with the "preview" notice at the bottom.
- * (develop removed the repeating logo pattern; on mobile the notice is two lines)
- */
+/** Keep the notice inside the image, including letterboxed previews. */
 export function WatermarkedPhotoPreview({
   className,
   alt,
   ...props
 }: WatermarkedPhotoPreviewProps) {
+  const imageRef = useRef<HTMLImageElement>(null)
+  const [imageSize, setImageSize] = useState({ width: 0, height: 0 })
+
+  useEffect(() => {
+    const img = imageRef.current
+    if (!img) return
+    const measure = () => {
+      if (!img.naturalWidth || !img.naturalHeight) return
+      const scale = Math.min(
+        img.clientWidth / img.naturalWidth,
+        img.clientHeight / img.naturalHeight
+      )
+      setImageSize({
+        width: img.naturalWidth * scale,
+        height: img.naturalHeight * scale,
+      })
+    }
+    const observer = new ResizeObserver(measure)
+    observer.observe(img)
+    img.addEventListener("load", measure)
+    return () => {
+      observer.disconnect()
+      img.removeEventListener("load", measure)
+    }
+  }, [])
+
   return (
     <div
       className={cn(
@@ -19,19 +44,22 @@ export function WatermarkedPhotoPreview({
       )}
     >
       <img
+        ref={imageRef}
         className="block max-h-full max-w-full object-contain"
         alt={alt}
         {...props}
       />
-      <div className="pointer-events-none absolute bottom-6 left-1/2 z-11 flex max-w-[80%] -translate-x-1/2 items-center justify-center opacity-60 max-md:max-w-[94%]">
-        <span className="text-center text-base leading-[1.35] font-semibold text-white [text-shadow:0_2px_4px_rgba(0,0,0,0.65)] max-md:text-[0.68rem]">
-          <span className="max-md:block max-md:whitespace-nowrap">
-            This image is a preview and may not
-          </span>
-          <span className="max-md:hidden"> </span>
-          <span className="max-md:block max-md:whitespace-nowrap">
-            be used or published without purchase
-          </span>
+      <div
+        data-preview-image-box
+        className="[container-type:inline-size] pointer-events-none absolute top-1/2 left-1/2 z-11 -translate-1/2"
+        style={{
+          ...imageSize,
+          visibility: imageSize.width ? "visible" : "hidden",
+        }}
+      >
+        <span className="absolute inset-x-[4%] bottom-[5%] text-center text-[clamp(8px,3cqw,16px)] leading-[1.35] font-semibold wrap-anywhere text-white opacity-60 [text-shadow:0_2px_4px_rgba(0,0,0,0.65)]">
+          This image is a preview and may not be used or published without
+          purchase
         </span>
       </div>
     </div>
