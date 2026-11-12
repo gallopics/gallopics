@@ -34,7 +34,7 @@ export function EventsPage() {
     eventsError,
     filteredEvents,
     eventSearchIndex,
-    eventMatchLabels,
+    eventMatches,
     isSearchingPhotoMetadata,
   } = useEventSearch(searchQuery)
 
@@ -71,7 +71,7 @@ export function EventsPage() {
   const search: EventSearchProps = {
     searchEvents: displayEvents,
     eventSearchIndex,
-    eventMatchLabels,
+    eventMatches,
     isSearching: isSearchingPhotoMetadata,
     onSearchChange: setSearchQuery,
   }
@@ -110,7 +110,7 @@ export function EventsPage() {
                 <FolderEventCard
                   key={event.id}
                   event={event}
-                  href={eventSearchLink(event.id, eventMatchLabels[event.id])}
+                  href={eventSearchLink(event.id, eventMatches[event.id])}
                 />
               ))}
             </div>

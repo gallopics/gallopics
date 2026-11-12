@@ -47,7 +47,7 @@ const iconButtonClass =
 export function Header({
   searchEvents,
   eventSearchIndex,
-  eventMatchLabels,
+  eventMatches,
   isSearching,
   onSearchChange,
 }: EventSearchProps = {}) {
@@ -61,14 +61,14 @@ export function Header({
     ? {
         searchEvents,
         eventSearchIndex,
-        eventMatchLabels,
+        eventMatches,
         isSearching,
         onSearchChange,
       }
     : {
         searchEvents: headerSearch.filteredEvents,
         eventSearchIndex: headerSearch.eventSearchIndex,
-        eventMatchLabels: headerSearch.eventMatchLabels,
+        eventMatches: headerSearch.eventMatches,
         isSearching: headerSearch.isSearchingPhotoMetadata,
         onSearchChange: setHeaderQuery,
       }
@@ -161,7 +161,7 @@ export function Header({
                 collapsible
                 eventOptions={search.searchEvents}
                 eventSearchIndex={search.eventSearchIndex}
-                eventMatchLabels={search.eventMatchLabels}
+                eventMatches={search.eventMatches}
                 isSearching={search.isSearching}
                 onSearchChange={search.onSearchChange}
               />

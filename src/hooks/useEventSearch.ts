@@ -5,6 +5,7 @@ import {
   type UseQueryResult,
 } from "@tanstack/react-query"
 
+import type { EventMatch } from "@/lib/eventSearchLink"
 import type { ApiPhoto } from "@/data/apiClient"
 import {
   eventPhotoSearchQueryOptions,
@@ -15,25 +16,19 @@ import type { EventData } from "@/types"
 interface PhotoSearchResult {
   query: string
   matchedIds: Record<string, true>
-  matchLabels: Record<string, string>
+  matches: Record<string, EventMatch>
   /** Per event: the query and the found photos' tag text, for the search bar */
   searchIndex: Record<string, string>
 }
 
 const NO_EVENTS: EventData[] = []
 const NO_MATCHES: Record<string, true> = {}
-const NO_LABELS: Record<string, string> = {}
+const NO_EVENT_MATCHES: Record<string, EventMatch> = {}
 const NO_SEARCH: PhotoSearchResult = {
   query: "",
   matchedIds: {},
-  matchLabels: {},
+  matches: {},
   searchIndex: {},
-}
-
-const TAG_LABELS: Record<string, string> = {
-  rider: "Rider",
-  horse: "Horse",
-  class: "Class",
 }
 
 /** How well a tag value matches the query (higher is better) */
@@ -48,25 +43,23 @@ function getMatchScore(value: string, lowerQuery: string) {
   return 0
 }
 
-/** e.g. "Rider: Anna Svensson" — the best matching tag of the found photos */
-function getBestMatchLabel(photos: ApiPhoto[], lowerQuery: string) {
-  const candidates = photos.flatMap((photo) => [
-    ...(photo.tags ?? []).map((tag) => ({
-      label: TAG_LABELS[tag.type] ?? tag.type,
-      value: tag.value,
-    })),
-    { label: "Photographer", value: photo.photographer_display_name || "" },
+/** The best matching tag (or photographer) of the found photos */
+function getBestMatch(
+  photos: ApiPhoto[],
+  lowerQuery: string
+): EventMatch | undefined {
+  const candidates: EventMatch[] = photos.flatMap((photo) => [
+    ...(photo.tags ?? []).map((tag) => ({ type: tag.type, value: tag.value })),
+    { type: "photographer", value: photo.photographer_display_name || "" },
   ])
 
-  const bestCandidate = candidates
+  return candidates
     .filter((candidate) => getMatchScore(candidate.value, lowerQuery) > 0)
     .sort(
       (a, b) =>
         getMatchScore(b.value, lowerQuery) -
           getMatchScore(a.value, lowerQuery) || a.value.length - b.value.length
     )[0]
-
-  return bestCandidate ? `${bestCandidate.label}: ${bestCandidate.value}` : ""
 }
 
 /** The matches of one finished search, from each event's found photos */
@@ -78,15 +71,15 @@ function toPhotoSearchResult(
   const result: PhotoSearchResult = {
     query,
     matchedIds: {},
-    matchLabels: {},
+    matches: {},
     searchIndex: {},
   }
 
   results.forEach(([eventId, photos]) => {
     if (photos.length === 0) return
     result.matchedIds[eventId] = true
-    const matchLabel = getBestMatchLabel(photos, lowerQuery)
-    if (matchLabel) result.matchLabels[eventId] = matchLabel
+    const match = getBestMatch(photos, lowerQuery)
+    if (match) result.matches[eventId] = match
     const photoText = photos
       .flatMap((photo) => [
         photo.photographer_display_name,
@@ -166,24 +159,24 @@ export function useEventSearch(searchQuery: string) {
   const photoMatchedEventIds = needsPhotoSearch
     ? photoSearch.matchedIds
     : NO_MATCHES
-  const eventMatchLabels = useMemo(() => {
-    if (!needsPhotoSearch) return NO_LABELS
+  /** Per event, the photo tag that matched; none when the event's own details match */
+  const eventMatches = useMemo(() => {
+    if (!needsPhotoSearch) return NO_EVENT_MATCHES
     const lowerQuery = trimmedQuery.toLowerCase()
     return Object.fromEntries(
-      events.map((event) => [
-        event.id,
-        [
+      events.flatMap((event) => {
+        const match = photoSearch.matches[event.id]
+        const eventDetailsMatch = [
           event.name,
           event.city,
           event.country,
           event.discipline,
           event.photographer?.name,
         ].some((value) => value?.toLowerCase().includes(lowerQuery))
-          ? ""
-          : (photoSearch.matchLabels[event.id] ?? ""),
-      ])
+        return match && !eventDetailsMatch ? [[event.id, match] as const] : []
+      })
     )
-  }, [events, needsPhotoSearch, photoSearch.matchLabels, trimmedQuery])
+  }, [events, needsPhotoSearch, photoSearch.matches, trimmedQuery])
   const eventSearchIndex = photoSearch.searchIndex
   const isSearchingPhotoMetadata =
     needsPhotoSearch && photoSearch.query !== trimmedQuery
@@ -217,7 +210,7 @@ export function useEventSearch(searchQuery: string) {
     eventsError,
     filteredEvents,
     eventSearchIndex,
-    eventMatchLabels,
+    eventMatches,
     isSearchingPhotoMetadata,
   }
 }
