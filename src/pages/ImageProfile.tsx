@@ -24,6 +24,7 @@ import {
   type ApiPhoto,
   type CheckoutItem,
 } from "@/data/apiClient"
+import { getPhotoTag } from "@/data/eventsApi"
 import { eventQueryOptions } from "@/data/queries/events"
 import {
   photoQueryOptions,
@@ -66,8 +67,8 @@ function DetailRow({
 const toPagePhoto = (photo: ApiPhoto): Photo => ({
   id: photo.id,
   src: getApiPhotoPreviewUrl(photo),
-  rider: photo.tags.find((tag) => tag.type === "rider")?.value || "",
-  horse: photo.tags.find((tag) => tag.type === "horse")?.value || "",
+  rider: getPhotoTag(photo, "rider") ?? "",
+  horse: getPhotoTag(photo, "horse") ?? "",
   event: photo.event_class_name || photo.class_name || "Event",
   eventId: photo.event_id,
   date: new Date(photo.created_at).toLocaleDateString(undefined, {
@@ -332,7 +333,7 @@ function ImageProfileContent({
                 <div className="flex w-full items-start justify-between gap-3 border-t border-black/5 px-6 py-4 max-md:px-4">
                   <div className="flex min-w-0 flex-1 flex-wrap items-start gap-2">
                     {/* No rider / horse pages yet: plain names */}
-                    {photo.rider && photo.rider !== "Unassigned" && (
+                    {photo.rider && (
                       <InfoChip
                         label="Rider"
                         name={photo.rider}

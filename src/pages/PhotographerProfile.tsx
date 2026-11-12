@@ -24,6 +24,7 @@ import {
   resolveApiAssetUrl,
   type ApiPhoto,
 } from "@/data/apiClient"
+import { getPhotoTag } from "@/data/eventsApi"
 import { eventQueryOptions } from "@/data/queries/events"
 import {
   highlightsQueryOptions,
@@ -194,10 +195,8 @@ export function PhotographerProfile() {
         return {
           id: photo.id,
           src: getApiPhotoPreviewUrl(photo),
-          rider:
-            photo.tags.find((tag) => tag.type === "rider")?.value || "Unknown",
-          horse:
-            photo.tags.find((tag) => tag.type === "horse")?.value || "Unknown",
+          rider: getPhotoTag(photo, "rider") ?? "",
+          horse: getPhotoTag(photo, "horse") ?? "",
           event: ev?.title || "Event",
           eventId: photo.event_id,
           date:
@@ -251,8 +250,8 @@ export function PhotographerProfile() {
         return {
           id: p.id,
           src: p.url,
-          rider: p.rider || "Unassigned",
-          horse: p.horse || p.fileName || "Unassigned",
+          rider: p.rider || "",
+          horse: p.horse || "",
           event: ev?.title || "Event",
           eventId: p.eventId,
           date:

@@ -26,12 +26,12 @@ import {
   getSessionToken,
   type ApiPhoto,
 } from "../data/apiClient"
+import { getPhotoTag } from "../data/eventsApi"
 import { invalidateEventPhotos } from "../data/queries/events"
 import {
   deletePhotosMutationOptions,
   getApiPhotoClassId,
   getApiPhotoClassName,
-  getApiPhotoTag,
   updateCachedPhotos,
 } from "../data/queries/photographer"
 import { useAuth } from "./AuthContext"
@@ -481,8 +481,8 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
         const photos: ApiPhoto[] = await response.json()
 
         const newPhotoList: Photo[] = photos.map((p, photoIndex) => {
-          const rider = getApiPhotoTag(p, "rider")
-          const horse = getApiPhotoTag(p, "horse")
+          const rider = getPhotoTag(p, "rider")
+          const horse = getPhotoTag(p, "horse")
 
           return {
             id: p.id || queuedFile.id || `api-${Date.now()}-${photoIndex}`,

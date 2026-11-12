@@ -22,6 +22,7 @@ import {
 } from "../apiClient"
 import {
   formatEventPeriod,
+  getPhotoTag,
   mapApiEventToEventData,
   normalizeCountry,
   type ApiEvent,
@@ -52,9 +53,6 @@ export const saveDefaultPricesMutationOptions = () =>
     },
   })
 
-export const getApiPhotoTag = (photo: ApiPhoto, type: string) =>
-  photo.tags.find((tag) => tag.type === type)?.value
-
 export const getApiPhotoClassId = (photo: ApiPhoto) =>
   photo.equipe_class_section_id ||
   photo.class_id ||
@@ -73,9 +71,9 @@ function mapApiPhotoToPgPhoto(photo: ApiPhoto): Photo {
     eventId: photo.event_id,
     status: photo.status === "ready" ? "uploadedUnpublished" : "processing",
     soldCount: 0,
-    rider: getApiPhotoTag(photo, "rider"),
+    rider: getPhotoTag(photo, "rider"),
     riderId: photo.equipe_rider_id || undefined,
-    horse: getApiPhotoTag(photo, "horse"),
+    horse: getPhotoTag(photo, "horse"),
     horseId: photo.equipe_horse_id || undefined,
     timestamp: new Date(photo.created_at).toLocaleTimeString("en-GB", {
       hour: "2-digit",
