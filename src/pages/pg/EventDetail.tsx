@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { Link, useLocation, useNavigate, useParams } from "react-router"
 import { useQuery } from "@tanstack/react-query"
 import {
@@ -9,7 +9,6 @@ import {
   Pencil,
   Trash2,
   UploadCloud,
-  X,
 } from "lucide-react"
 
 import { ALL_FOLDERS, getFolderValue, UNCATEGORISED } from "@/lib/photoFolders"
@@ -18,7 +17,7 @@ import { cn } from "@/lib/utils"
 import { useDeletePhotosWithUndo } from "@/hooks/useDeletePhotosWithUndo"
 import { useWorkspacePhotos } from "@/hooks/useWorkspaceData"
 import { useAuth } from "@/context/AuthContext"
-import type { Photo } from "@/context/PhotographerContext"
+import type { PgEvent, Photo } from "@/context/PhotographerContext"
 import { useWorkspace } from "@/context/WorkspaceContext"
 import type { ApiPhotoFolder } from "@/data/apiClient"
 import { eventQueryOptions } from "@/data/queries/events"
@@ -29,7 +28,8 @@ import {
   toPgEvent,
   toWorkspaceEvents,
 } from "@/data/queries/photographer"
-import { Button } from "@/components/ui/button"
+import type { Photo as CardPhoto } from "@/types"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -47,9 +47,26 @@ import { TitleHeader } from "@/components/TitleHeader"
 import { WorkspaceTabs } from "@/components/WorkspaceTabs"
 import { EventDetailsDialog } from "@/pages/pg/components/EventDetailsDialog"
 import { PhotoFolderBar } from "@/pages/pg/components/PhotoFolderBar"
+import { NO_TAG } from "@/pages/pg/photo-details/detailsForm"
 import { PhotoDetailsSheet } from "@/pages/pg/photo-details/PhotoDetailsSheet"
 
 const NO_FOLDERS: ApiPhotoFolder[] = []
+
+/** Statuses shown in the Uploads tab */
+const UPLOAD_STATUSES: Photo["status"][] = [
+  "uploading",
+  "processing",
+  "needsReview",
+  "uploadedUnpublished",
+]
+
+type ClassContext = { id: string; name: string }
+
+/** A class opened from the event page (?classSectionId / ?className); none matches all */
+const matchesClass = (photo: Photo, { id, name }: ClassContext) =>
+  (!id && !name) ||
+  (!!id && photo.classId === id) ||
+  (!!name && photo.className === name)
 
 /** Search in the photo grid: file name, photo ID or code (as on Sales) and the tags */
 const matchesPhotoSearch = (photo: Photo, term: string) =>
@@ -61,6 +78,56 @@ const matchesPhotoSearch = (photo: Photo, term: string) =>
     photo.horse,
     photo.className,
   ].some((value) => value?.toLowerCase().includes(term))
+
+/**
+ * The card's photo. The pgUpload card doesn't show the event, place or
+ * date fields; they're filled only because the shared type needs them.
+ */
+const toCardPhoto = (photo: Photo, event: PgEvent): CardPhoto => ({
+  id: photo.id,
+  src: photo.url,
+  rider: photo.rider || "",
+  horse: photo.horse || "",
+  event: event.title,
+  eventId: photo.eventId,
+  date: photo.uploadDate || "",
+  time: photo.timestamp || "",
+  city: event.city || "",
+  countryCode: "",
+  width: photo.width,
+  height: photo.height,
+  className: photo.className || "",
+  arena: event.venueName || "",
+  photographer: event.assignedPhotographers?.[0]?.name,
+  prices: photo.prices,
+  ownPrices: photo.ownPrices,
+})
+
+/** What the empty grid says: no search hit, an empty folder or no uploads */
+function emptyGridText(
+  searchTerm: string,
+  folder: string,
+  canUploadPhotos: boolean
+) {
+  if (searchTerm)
+    return {
+      title: "No results found",
+      description: `No photos match "${searchTerm}"`,
+    }
+  const title = "No photos here"
+  if (folder !== ALL_FOLDERS && folder !== UNCATEGORISED)
+    return {
+      title,
+      description:
+        "This folder is empty. Select photos and use Move to... to add them.",
+    }
+  return {
+    title,
+    description: canUploadPhotos
+      ? "This folder is empty. Upload photos to get started."
+      : "This event is read-only because the booking was cancelled.",
+  }
+}
 
 export function EventDetail() {
   const { eventId } = useParams<{ eventId: string }>()
@@ -121,9 +188,8 @@ export function EventDetail() {
   const publishedCount = allEventPhotos.filter(
     (photo) => photo.status === "uploadedUnpublished"
   ).length
-  const selectedClassContext = useMemo(() => {
+  const classContext = useMemo(() => {
     const params = new URLSearchParams(location.search)
-
     return {
       id: params.get("classSectionId") || params.get("classId") || "",
       equipeClassSectionId: params.get("equipeClassSectionId") || "",
@@ -131,57 +197,30 @@ export function EventDetail() {
       arenaName: params.get("arenaName") || "",
     }
   }, [location.search])
-
-  const hasSelectedClassContext = Boolean(
-    selectedClassContext.id || selectedClassContext.name
-  )
-
-  const handleBack = useCallback(() => {
-    navigate(`${basePath}/events`, { state: { tab: fromTab } })
-  }, [basePath, fromTab, navigate])
-
-  const matchesSelectedClass = useCallback(
-    (photo: Photo) => {
-      if (!hasSelectedClassContext) return true
-
-      return Boolean(
-        (selectedClassContext.id &&
-          photo.classId === selectedClassContext.id) ||
-        (selectedClassContext.name &&
-          photo.className === selectedClassContext.name)
-      )
-    },
-    [
-      hasSelectedClassContext,
-      selectedClassContext.id,
-      selectedClassContext.name,
-    ]
-  )
-
   const allPhotos = useMemo(
-    () => allEventPhotos.filter(matchesSelectedClass),
-    [allEventPhotos, matchesSelectedClass]
+    () => allEventPhotos.filter((photo) => matchesClass(photo, classContext)),
+    [allEventPhotos, classContext]
   )
 
-  // State
   const [activeFolder, setActiveFolder] = useState<string>(ALL_FOLDERS)
   const [activeChip, setActiveChip] = useState<string>("all")
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isPanelOpen, setIsPanelOpen] = useState(false)
+  const [activePanelTab, setActivePanelTab] = useState<"tags" | "price">("tags")
+  // The photo a card's edit button opened; unset, the panel edits the
+  // selection. Kept after closing, so the slide-out still shows it.
+  const [editedIds, setEditedIds] = useState<Set<string>>()
+  const panelIds = editedIds ?? selectedIds
+  // The photos to delete: the selection or one card. Kept after closing, so
+  // the dialog's title doesn't change while it fades out.
+  const [deleteIds, setDeleteIds] = useState<Set<string>>(new Set())
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
-  const [previewPhoto, setPreviewPhoto] = useState<{ src: string } | null>(null)
+  const [previewSrc, setPreviewSrc] = useState<string>()
   const [showInfoModal, setShowInfoModal] = useState(false)
 
   const uploadPhotos = useMemo(
-    () =>
-      allPhotos.filter((p) =>
-        [
-          "uploading",
-          "processing",
-          "needsReview",
-          "uploadedUnpublished",
-        ].includes(p.status)
-      ),
+    () => allPhotos.filter((p) => UPLOAD_STATUSES.includes(p.status)),
     [allPhotos]
   )
 
@@ -192,33 +231,27 @@ export function EventDetail() {
       ? activeFolder
       : ALL_FOLDERS
 
-  // Photos in the Uploads tab: all of them or one folder
+  // Photos in the Uploads tab: all of them or one folder, then the search
   const folderPhotos = useMemo(() => {
-    let photos: Photo[] =
+    let photos =
       currentFolder === ALL_FOLDERS
         ? uploadPhotos
         : uploadPhotos.filter((p) => getFolderValue(p) === currentFolder)
-
-    // Apply search filter if search term exists
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase().trim()
-      photos = photos.filter((p) => matchesPhotoSearch(p, term))
-    }
-
+    const term = searchTerm.toLowerCase().trim()
+    if (term) photos = photos.filter((p) => matchesPhotoSearch(p, term))
     return photos
   }, [currentFolder, searchTerm, uploadPhotos])
 
-  // Build chips for inside folder
+  // Tag filters from the photos in view
   const folderChips = useMemo(() => {
-    // Dynamically extract unique tags from currently displayed folder photos
     const uniqueClasses = Array.from(
       new Set(folderPhotos.map((p) => p.className).filter(Boolean))
     ) as string[]
     const uniqueRiders = Array.from(
-      new Set(folderPhotos.map((p) => p.rider).filter((r) => r && r !== "None"))
+      new Set(folderPhotos.map((p) => p.rider).filter((r) => r && r !== NO_TAG))
     ) as string[]
     const uniqueHorses = Array.from(
-      new Set(folderPhotos.map((p) => p.horse).filter((h) => h && h !== "None"))
+      new Set(folderPhotos.map((p) => p.horse).filter((h) => h && h !== NO_TAG))
     ) as string[]
 
     const allChips: {
@@ -235,7 +268,6 @@ export function EventDetail() {
       },
     ]
 
-    // Add dynamic Class chips
     uniqueClasses.sort().forEach((cls) => {
       allChips.push({
         id: `class-${cls}`,
@@ -245,7 +277,6 @@ export function EventDetail() {
       })
     })
 
-    // Add dynamic Rider chips
     uniqueRiders.sort().forEach((rider) => {
       allChips.push({
         id: `rider-${rider}`,
@@ -255,7 +286,6 @@ export function EventDetail() {
       })
     })
 
-    // Add dynamic Horse chips
     uniqueHorses.sort().forEach((horse) => {
       allChips.push({
         id: `horse-${horse}`,
@@ -268,7 +298,7 @@ export function EventDetail() {
     return allChips
   }, [folderPhotos])
 
-  // Search Options for Autocomplete
+  // Riders and horses offered by the search
   const searchOptions = useMemo(() => {
     if (!allPhotos.length) return []
     const options: ScopedSearchOption[] = []
@@ -276,7 +306,7 @@ export function EventDetail() {
     const uniqueHorses = new Set<string>()
 
     allPhotos.forEach((p) => {
-      if (p.rider && p.rider !== "None" && !uniqueRiders.has(p.rider)) {
+      if (p.rider && p.rider !== NO_TAG && !uniqueRiders.has(p.rider)) {
         uniqueRiders.add(p.rider)
         options.push({
           label: p.rider,
@@ -285,7 +315,7 @@ export function EventDetail() {
           subtitle: p.horse,
         })
       }
-      if (p.horse && p.horse !== "None" && !uniqueHorses.has(p.horse)) {
+      if (p.horse && p.horse !== NO_TAG && !uniqueHorses.has(p.horse)) {
         uniqueHorses.add(p.horse)
         options.push({
           label: p.horse,
@@ -314,27 +344,18 @@ export function EventDetail() {
     setIsPanelOpen(false)
   }
 
-  // Selection handlers
+  // A plain click selects only this photo (or clears it); Shift/Ctrl/Cmd adds or removes it
   const handleToggleSelect = (photo: Photo, multiSelect: boolean) => {
-    const newSelected = new Set(multiSelect ? selectedIds : [])
-
-    if (multiSelect) {
-      if (newSelected.has(photo.id)) newSelected.delete(photo.id)
-      else newSelected.add(photo.id)
-    } else {
-      if (newSelected.has(photo.id) && newSelected.size === 1) {
-        newSelected.clear()
-      } else {
-        newSelected.clear()
-        newSelected.add(photo.id)
-      }
-    }
-
-    setSelectedIds(newSelected)
-
-    if (newSelected.size === 0) {
-      // Panel closed logic handled manually or by clear
-    }
+    setSelectedIds((prev) => {
+      if (!multiSelect)
+        return prev.has(photo.id) && prev.size === 1
+          ? new Set()
+          : new Set([photo.id])
+      const next = new Set(prev)
+      if (next.has(photo.id)) next.delete(photo.id)
+      else next.add(photo.id)
+      return next
+    })
   }
 
   const handleClearSelection = () => {
@@ -342,83 +363,36 @@ export function EventDetail() {
     setIsPanelOpen(false)
   }
 
-  // Map PG Photo to UI Photo for PhotoCard
-  const mapToUiPhoto = (photo: Photo) => ({
-    id: photo.id,
-    src: photo.url,
-    rider: photo.rider || "",
-    horse: photo.horse || "",
-    event: event?.title || "Event",
-    eventId: photo.eventId,
-    date: photo.uploadDate || new Date().toISOString(),
-    time: photo.timestamp || "12:00",
-    city: event?.city || "Location",
-    countryCode: "SE",
-    width: photo.width,
-    height: photo.height,
-    className: photo.className || "photo-grid-item",
-    arena: event?.venueName || "Arena 1",
-    photographer: event?.assignedPhotographers?.[0]?.name,
-    prices: photo.prices,
-    ownPrices: photo.ownPrices,
-  })
+  const handleSelectAll = () =>
+    setSelectedIds(
+      (prev) => new Set([...prev, ...displayedPhotos.map((p) => p.id)])
+    )
 
-  // Selection Helpers
-  const isAllSelected =
-    displayedPhotos.length > 0 &&
-    displayedPhotos.every((p) => selectedIds.has(p.id))
-
-  const handleSelectAll = () => {
-    const newSet = new Set(selectedIds)
-    displayedPhotos.forEach((p) => newSet.add(p.id))
-    setSelectedIds(newSet)
-  }
-
-  const handleEditPhoto = (photo: Photo) => {
-    // Exclusive select + Open Panel
-    setSelectedIds(new Set([photo.id]))
+  /** Edit one photo from its card, without touching the selection */
+  const openEditor = (photo: Photo, tab: "tags" | "price") => {
+    setEditedIds(new Set([photo.id]))
+    setActivePanelTab(tab)
     setIsPanelOpen(true)
   }
 
-  const [confirmModal, setConfirmModal] = useState<{
-    type: "delete"
-    isOpen: boolean
-  }>({ type: "delete", isOpen: false })
-  const [activePanelTab, setActivePanelTab] = useState<"tags" | "price">("tags")
-
-  const handleEditPrice = (photo: Photo) => {
-    setSelectedIds(new Set([photo.id]))
-    setActivePanelTab("price")
-    setIsPanelOpen(true)
+  const askDelete = (ids: Set<string>) => {
+    setDeleteIds(ids)
+    setIsDeleteOpen(true)
   }
 
-  const handleDeleteSelection = () => {
-    if (selectedIds.size === 0) return
-    setConfirmModal({ type: "delete", isOpen: true })
-  }
-
-  const handleConfirmAction = () => {
-    const selectedPhotos = allPhotos.filter((p) => selectedIds.has(p.id))
-    const previousSelection = new Set(selectedIds)
-
-    setConfirmModal({ ...confirmModal, isOpen: false })
+  const handleConfirmDelete = () => {
+    const previousSelection = selectedIds
+    setIsDeleteOpen(false)
     setIsPanelOpen(false)
-
-    if (confirmModal.type === "delete") {
-      setSelectedIds(new Set())
-      // Undo puts them back and reselects them; the API delete waits for the toast
-      deletePhotosWithUndo(
-        selectedPhotos,
-        `${selectedIds.size} photo${selectedIds.size > 1 ? "s" : ""} deleted`,
-        () => setSelectedIds(previousSelection)
-      )
-    }
-  }
-
-  // Override edit photo to default to tags
-  const handleEditPhotoOverride = (photo: Photo) => {
-    handleEditPhoto(photo)
-    setActivePanelTab("tags")
+    setSelectedIds(
+      (prev) => new Set([...prev].filter((id) => !deleteIds.has(id)))
+    )
+    // Undo puts them back and restores the selection; the API delete waits for the toast
+    deletePhotosWithUndo(
+      allPhotos.filter((p) => deleteIds.has(p.id)),
+      `${deleteIds.size} photo${deleteIds.size > 1 ? "s" : ""} deleted`,
+      () => setSelectedIds(previousSelection)
+    )
   }
 
   // Guard after all hooks — safe to return early now
@@ -434,24 +408,20 @@ export function EventDetail() {
     )
 
   const showFilters = folderChips.length > 1 || !!searchTerm
+  const emptyGrid = emptyGridText(searchTerm, currentFolder, canUploadPhotos)
 
   const handleUpload = () => {
-    const params = new URLSearchParams({ eventId: event.id, from: "event" })
-    if (selectedClassContext.id) {
-      params.set("classSectionId", selectedClassContext.id)
-    }
-    if (selectedClassContext.equipeClassSectionId) {
-      params.set(
-        "equipeClassSectionId",
-        selectedClassContext.equipeClassSectionId
-      )
-    }
-    if (selectedClassContext.name) {
-      params.set("className", selectedClassContext.name)
-    }
-    if (selectedClassContext.arenaName) {
-      params.set("arenaName", selectedClassContext.arenaName)
-    }
+    // The class opened on the event page, so the upload is tagged with it
+    const params = new URLSearchParams(
+      Object.entries({
+        eventId: event.id,
+        from: "event",
+        classSectionId: classContext.id,
+        equipeClassSectionId: classContext.equipeClassSectionId,
+        className: classContext.name,
+        arenaName: classContext.arenaName,
+      }).filter(([, value]) => value)
+    )
     navigate(`${basePath}/upload?${params.toString()}`)
   }
 
@@ -481,16 +451,18 @@ export function EventDetail() {
         className="border-b-0"
         title={
           <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="size-6.5"
-              onClick={handleBack}
+            <Link
+              to={`${basePath}/events`}
+              state={{ tab: fromTab }}
+              className={cn(
+                buttonVariants({ variant: "ghost", size: "icon-sm" }),
+                "size-6.5"
+              )}
               title="Back to events"
               aria-label="Back to events"
             >
               <ArrowLeft className="size-4.5" />
-            </Button>
+            </Link>
             {event.title}
             <Button
               variant="ghost"
@@ -503,18 +475,19 @@ export function EventDetail() {
             </Button>
           </div>
         }
-        topSubtitle={event.dateRange}
+        // Indented past the back button, so the date lines up with the title
+        topSubtitle={<span className="pl-8.5">{event.dateRange}</span>}
         avatar={event.logo}
         avatarShape="square"
         rightContent={
           <ActionCluster>
             {basePath === "/pg" && (
-              <Button
-                variant="outline"
-                render={<Link to={`/event/${event.id}`} />}
+              <Link
+                to={`/event/${event.id}`}
+                className={buttonVariants({ variant: "outline" })}
               >
                 View public page
-              </Button>
+              </Link>
             )}
             <div className="flex flex-col items-start rounded-xl bg-muted px-4 py-2 whitespace-nowrap text-muted-foreground">
               <span className="text-[0.6875rem] leading-[1.2] font-semibold opacity-80">
@@ -617,8 +590,9 @@ export function EventDetail() {
                 className={cn(
                   // Wraps when the search and the counts don't fit on one row
                   "mb-3 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 py-3 max-md:gap-x-3",
+                  // Padding (and a matching negative margin) keeps the search off the bar's edge
                   selectedIds.size > 0 &&
-                    "sticky top-(--site-header-height) z-30 bg-background shadow-sm"
+                    "sticky top-(--site-header-height) z-30 -mx-3 bg-background px-3 shadow-sm"
                 )}
               >
                 {showFilters && (
@@ -652,7 +626,10 @@ export function EventDetail() {
                         variant="outline"
                         size="icon"
                         className={roundButton}
-                        onClick={() => setIsPanelOpen(true)}
+                        onClick={() => {
+                          setEditedIds(undefined)
+                          setIsPanelOpen(true)
+                        }}
                         title="Edit selection"
                         aria-label="Edit selection"
                       >
@@ -663,7 +640,7 @@ export function EventDetail() {
                         variant="destructive"
                         size="icon"
                         className={roundDanger}
-                        onClick={handleDeleteSelection}
+                        onClick={() => askDelete(selectedIds)}
                         title="Delete selection"
                         aria-label="Delete selection"
                       >
@@ -691,26 +668,14 @@ export function EventDetail() {
                       </div>
 
                       <div className="flex shrink-0 items-center gap-2 border-l pl-4">
-                        {isAllSelected ? (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="px-3 text-foreground"
-                            onClick={() => setSelectedIds(new Set())}
-                          >
-                            <X className="size-3.5" />
-                            Clear
-                          </Button>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="px-3 text-foreground"
-                            onClick={handleSelectAll}
-                          >
-                            Select all
-                          </Button>
-                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="px-3 text-foreground"
+                          onClick={handleSelectAll}
+                        >
+                          Select all
+                        </Button>
                       </div>
                     </>
                   )}
@@ -732,7 +697,6 @@ export function EventDetail() {
                 </>
               )}
               {displayedPhotos.map((photo) => {
-                const uiPhoto = mapToUiPhoto(photo)
                 const isSelected = selectedIds.has(photo.id)
 
                 return (
@@ -748,8 +712,7 @@ export function EventDetail() {
                     }
                   >
                     <PhotoCard
-                      photo={uiPhoto}
-                      onClick={() => {}}
+                      photo={toCardPhoto(photo, event)}
                       variant="pgUpload"
                       pgMeta={{
                         fileName: photo.fileName,
@@ -757,13 +720,10 @@ export function EventDetail() {
                         timestamp: photo.timestamp,
                         prices: photo.prices,
                       }}
-                      onRemove={() => {
-                        setSelectedIds(new Set([photo.id]))
-                        setConfirmModal({ type: "delete", isOpen: true })
-                      }}
-                      onEdit={() => handleEditPhotoOverride(photo)}
-                      onEditPrice={() => handleEditPrice(photo)}
-                      onPreview={() => setPreviewPhoto(uiPhoto)}
+                      onRemove={() => askDelete(new Set([photo.id]))}
+                      onEdit={() => openEditor(photo, "tags")}
+                      onEditPrice={() => openEditor(photo, "price")}
+                      onPreview={() => setPreviewSrc(photo.url)}
                     />
                     {renderSelectBox(photo, isSelected)}
                   </div>
@@ -774,17 +734,8 @@ export function EventDetail() {
             {!isLoadingPhotos && displayedPhotos.length === 0 && (
               <EmptyState
                 icon={<ImageOff />}
-                title={searchTerm ? "No results found" : "No photos here"}
-                description={
-                  searchTerm
-                    ? `No photos match "${searchTerm}"`
-                    : currentFolder !== ALL_FOLDERS &&
-                        currentFolder !== UNCATEGORISED
-                      ? "This folder is empty. Select photos and use Move to... to add them."
-                      : canUploadPhotos
-                        ? "This folder is empty. Upload photos to get started."
-                        : "This event is read-only because the booking was cancelled."
-                }
+                title={emptyGrid.title}
+                description={emptyGrid.description}
               />
             )}
           </div>
@@ -794,24 +745,28 @@ export function EventDetail() {
       {/* Selection panel — always mounted for the slide animation */}
       <PhotoDetailsSheet
         isOpen={isPanelOpen}
-        selectedIds={selectedIds}
+        selectedIds={panelIds}
         allPhotos={allPhotos}
         activeTab={activePanelTab}
         onClose={() => setIsPanelOpen(false)}
-        // Moved photos may have left the folder on screen
-        onMoved={() => setSelectedIds(new Set())}
+        // Moved photos may have left the folder on screen: unselect them
+        onMoved={() =>
+          setSelectedIds(
+            (prev) => new Set([...prev].filter((id) => !panelIds.has(id)))
+          )
+        }
       />
 
       <PhotoPreviewDialog
-        src={previewPhoto?.src}
-        onClose={() => setPreviewPhoto(null)}
+        src={previewSrc}
+        onClose={() => setPreviewSrc(undefined)}
       />
 
       <ConfirmDialog
-        open={confirmModal.isOpen}
-        onCancel={() => setConfirmModal({ ...confirmModal, isOpen: false })}
-        onConfirm={handleConfirmAction}
-        title={`Delete photo${selectedIds.size > 1 ? "s" : ""}?`}
+        open={isDeleteOpen}
+        onCancel={() => setIsDeleteOpen(false)}
+        onConfirm={handleConfirmDelete}
+        title={`Delete photo${deleteIds.size > 1 ? "s" : ""}?`}
         description="This will remove the selected photo(s) from the event. You can undo it for a few seconds afterwards."
         confirmLabel="Delete"
       />
@@ -851,7 +806,7 @@ function EventDetailSkeleton({ withLogo }: { withLogo: boolean }) {
         topSubtitle={
           <>
             <span className="sr-only">Loading event…</span>
-            <Skeleton aria-hidden="true" className={cn(bar, "w-24")} />
+            <Skeleton aria-hidden="true" className={cn(bar, "ml-8.5 w-24")} />
           </>
         }
         avatar={
