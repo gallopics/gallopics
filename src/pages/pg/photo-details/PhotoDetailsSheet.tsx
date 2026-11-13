@@ -1,64 +1,15 @@
-import { useEffect, useMemo, useState } from "react"
-import { useMutation, useQuery } from "@tanstack/react-query"
-import {
-  ChevronLeft,
-  ChevronRight,
-  Clock,
-  HelpCircle,
-  Info,
-  MoreVertical,
-  Pencil,
-  Plus,
-  Save,
-  Trash2,
-  X,
-} from "lucide-react"
+import { useId, useMemo, useState } from "react"
+import { useQuery } from "@tanstack/react-query"
+import { FolderInput, Save, Trash2 } from "lucide-react"
 
-import {
-  getPriceError,
-  LINKED_PRICES,
-  MAX_PRICE_SEK,
-  MIN_PRICE_SEK,
-  QUALITY_TIERS,
-  type OwnPhotoPrices,
-  type QualityTierId,
-} from "@/constants/qualityTiers"
-import { notify, type NotifyType } from "@/lib/notify"
-import {
-  FOLDER_NAME_MAX_LENGTH,
-  getFolderErrorMessage,
-  getFolderNameError,
-  getFolderValue,
-  UNCATEGORISED,
-  UNCATEGORISED_LABEL,
-} from "@/lib/photoFolders"
-import { cn } from "@/lib/utils"
+import { QUALITY_TIERS, type QualityTierId } from "@/constants/qualityTiers"
+import { notify } from "@/lib/notify"
 import { useDeletePhotosWithUndo } from "@/hooks/useDeletePhotosWithUndo"
 import type { Photo } from "@/context/PhotographerContext"
-import type { ApiPhotoFolder } from "@/data/apiClient"
-import type { ApiClassSectionStart } from "@/data/eventsApi"
 import { classStartsQueryOptions } from "@/data/queries/events"
-import {
-  createFolderMutationOptions,
-  defaultPricesQueryOptions,
-  foldersQueryOptions,
-  movePhotosToFolderMutationOptions,
-  PhotoPricesSaveError,
-  savePhotoDetailsMutationOptions,
-  savePhotoPricesMutationOptions,
-} from "@/data/queries/photographer"
-import { salesQueryOptions } from "@/data/queries/sales"
+import { defaultPricesQueryOptions } from "@/data/queries/photographer"
 import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogBody,
-  DialogCancel,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
+import { FieldError } from "@/components/ui/field"
 import {
   Sheet,
   SheetBody,
@@ -68,676 +19,108 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Textarea } from "@/components/ui/textarea"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
-import { ModernDropdown } from "@/components/ModernDropdown"
 
-export type PanelToastType = "success" | "moved" | "warning" | "danger"
+import { PriceFields, TagFields } from "./DetailsFields"
+import { MovePhotosDialog } from "./MovePhotosDialog"
+import { PhotoHeader } from "./PhotoHeader"
+import { PricingInfo } from "./PricingInfo"
+import { useDetailsForm } from "./useDetailsForm"
 
-const PANEL_TOAST_TYPES: Record<PanelToastType, NotifyType> = {
-  success: "success",
-  moved: "success",
-  warning: "info",
-  danger: "error",
-}
+type PanelTab = "tags" | "price"
 
 interface PhotoDetailsSheetProps {
   isOpen: boolean
   selectedIds: Set<string>
   allPhotos: Photo[]
   onClose: () => void
-  activeTab?: "tags" | "price"
-  currentTab?: "uploads" | "published" | "archive"
-  onShowToast?: (msg: string, type: PanelToastType, onUndo?: () => void) => void
-  /** After photos moved to another folder */
+  activeTab?: PanelTab
   onMoved?: () => void
 }
 
-const NO_STARTS: Array<{
-  riderName?: string | null
-  horseName?: string | null
-}> = []
-
-const toClassStarts = (starts: ApiClassSectionStart[]) =>
-  starts.map((start) => ({
-    riderName: start.rider_name,
-    horseName: start.horse_name,
-  }))
-
-const NO_FOLDERS: ApiPhotoFolder[] = []
-
-/** Typed prices in SEK; "" when the selected photos' prices differ (multi) */
-type PriceFields = Record<QualityTierId, string>
-
-const toPriceFields = (photos: Photo[]): PriceFields =>
-  Object.fromEntries(
-    QUALITY_TIERS.map((tier) => {
-      const values = new Set(
-        photos.map((photo) => photo.ownPrices?.[tier.id] ?? "default")
-      )
-      return [tier.id, values.size === 1 ? String([...values][0]) : ""]
+/**
+ * Edit tags and prices of the selected photos. Each opening starts a fresh
+ * form; closing keeps it mounted for the slide-out.
+ */
+export function PhotoDetailsSheet(props: PhotoDetailsSheetProps) {
+  const [session, setSession] = useState({ count: 0, open: props.isOpen })
+  if (props.isOpen !== session.open) {
+    setSession({
+      count: session.count + (props.isOpen ? 1 : 0),
+      open: props.isOpen,
     })
-  ) as PriceFields
+  }
+  return <DetailsSheet key={session.count} {...props} />
+}
 
-export function PhotoDetailsSheet({
+function DetailsSheet({
   isOpen,
   selectedIds,
   allPhotos,
-  onClose: propsOnClose,
-  activeTab: activeTabProp,
-  currentTab,
-  onShowToast,
+  onClose,
+  activeTab,
   onMoved,
 }: PhotoDetailsSheetProps) {
-  const deletePhotosWithUndo = useDeletePhotosWithUndo()
-  const savePhotoDetails = useMutation(savePhotoDetailsMutationOptions())
-  const updatePhotoMetadata = (photoIds: string[], details: Partial<Photo>) =>
-    savePhotoDetails.mutateAsync({ photoIds, details })
-  const savePhotoPrices = useMutation(savePhotoPricesMutationOptions())
-  const defaultPrices = useQuery({
-    ...defaultPricesQueryOptions(),
-    enabled: isOpen,
-  })
-
-  // Derived Selection
-  const selectedPhotos = useMemo(() => {
-    return allPhotos.filter((p) => selectedIds.has(p.id))
-  }, [selectedIds, allPhotos])
-
-  const isSingle = selectedPhotos.length === 1
-  const count = selectedPhotos.length
-  const firstPhoto = selectedPhotos[0]
-
-  // State for Edits (Tags)
-  const [rider, setRider] = useState<string>("")
-  const [horse, setHorse] = useState<string>("")
-  const [cls, setCls] = useState<string>("")
-  const [isGeneric, setIsGeneric] = useState(false)
-  const [title, setTitle] = useState("")
-  const [description, setDescription] = useState("")
-  const [viewMode, setViewMode] = useState<"edit" | "summary">("edit")
-  const [editFromSummary, setEditFromSummary] = useState(false)
-
-  // State for Edits (Price)
-  const [prices, setPrices] = useState<PriceFields>(() => toPriceFields([]))
-
-  // Panel Tab State
-  const [panelTab, setPanelTab] = useState<"tags" | "price">("tags")
-
-  // Info Panel State
-  const [isInfoOpen, setIsInfoOpen] = useState(false)
-
-  // Original State for dirty check
-  const [originalState, setOriginalState] = useState<{
-    rider: string
-    horse: string
-    cls: string
-    isGeneric: boolean
-    title: string
-    description: string
-    prices: PriceFields
-  } | null>(null)
-
-  // Modal State
-  const [isMoveModalOpen, setIsMoveModalOpen] = useState(false)
-  const [targetFolder, setTargetFolder] = useState<string>("")
-  const [isCreatingFolder, setIsCreatingFolder] = useState(false)
-  const [newFolderName, setNewFolderName] = useState("")
-
-  // The photographer's folders in this event (all selected photos share it)
-  const foldersQuery = useQuery({
-    ...foldersQueryOptions(firstPhoto?.eventId ?? ""),
-    enabled: isOpen && !!firstPhoto?.eventId,
-  })
-  const folders = foldersQuery.data ?? NO_FOLDERS
-  const createFolder = useMutation(createFolderMutationOptions())
-  const movePhotos = useMutation(movePhotosToFolderMutationOptions())
-
-  // Confirmation Modals State
-  const [confirmModal, setConfirmModal] = useState<{
-    type: "delete" | "close"
-    isOpen: boolean
-  }>({ type: "close", isOpen: false })
-
-  const selectedClassId = useMemo(() => {
-    const ids = new Set(
-      selectedPhotos
-        .map((photo) => photo.classId)
-        .filter((value): value is string => Boolean(value))
-    )
-    return ids.size === 1 ? Array.from(ids)[0] : ""
-  }, [selectedPhotos])
-
-  // Riders and horses starting in the selected photos' class
-  const classStartsQuery = useQuery({
-    ...classStartsQueryOptions(selectedClassId),
-    enabled: isOpen && !!selectedClassId,
-    select: toClassStarts,
-  })
-  // The sales API returns the platform commission used for payouts
-  const salesQuery = useQuery({
-    ...salesQueryOptions(),
-    enabled: isOpen && isInfoOpen,
-  })
-  const commissionPercent = salesQuery.data?.commission_percent
-  const classStarts =
-    isOpen && selectedClassId && classStartsQuery.data
-      ? classStartsQuery.data
-      : NO_STARTS
-
-  const riderOptions = useMemo(() => {
-    const names = new Set<string>()
-    classStarts.forEach((start) => {
-      if (start.riderName) names.add(start.riderName)
-    })
-    selectedPhotos.forEach((photo) => {
-      if (photo.rider && photo.rider !== "None") names.add(photo.rider)
-    })
-
-    return Array.from(names)
-      .sort((a, b) => a.localeCompare(b))
-      .map((name) => ({ label: name, value: name }))
-  }, [classStarts, selectedPhotos])
-
-  const horseOptions = useMemo(() => {
-    const names = new Set<string>()
-    classStarts.forEach((start) => {
-      if (start.horseName) names.add(start.horseName)
-    })
-    selectedPhotos.forEach((photo) => {
-      if (photo.horse && photo.horse !== "None") names.add(photo.horse)
-    })
-
-    return Array.from(names)
-      .sort((a, b) => a.localeCompare(b))
-      .map((name) => ({ label: name, value: name }))
-  }, [classStarts, selectedPhotos])
-
-  // Toasts: "global" ones go to the parent when it handles them
-  const triggerToast = (
-    msg: string,
-    type: PanelToastType,
-    _context: "global" | "panel",
-    undo?: () => void
-  ) => {
-    if (_context === "global" && onShowToast) {
-      onShowToast(msg, type, undo)
-      return
-    }
-    notify(msg, PANEL_TOAST_TYPES[type], undo)
-  }
-
-  // An empty field with several photos keeps each photo's own price
-  const priceErrors = Object.fromEntries(
-    QUALITY_TIERS.map((tier) => [
-      tier.id,
-      prices[tier.id] === "default" || (!isSingle && prices[tier.id] === "")
-        ? null
-        : getPriceError(prices[tier.id]),
-    ])
-  ) as Record<QualityTierId, string | null>
-  const hasPriceError = QUALITY_TIERS.some((tier) => priceErrors[tier.id])
-
-  // Sync State on Selection Change
-  useEffect(() => {
-    if (isOpen && activeTabProp) {
-      setPanelTab(activeTabProp)
-    }
-  }, [isOpen, activeTabProp])
-
-  useEffect(() => {
-    if (selectedPhotos.length > 0) {
-      const p = selectedPhotos[0]
-
-      // Metadata State
-      const displayTitle = /^Photo \d+$/.test(p.title || "")
-        ? ""
-        : p.title || ""
-
-      const priceFields = toPriceFields(selectedPhotos)
-      setPrices(priceFields)
-
-      // Special case logic for Multi selection:
-      if (selectedPhotos.length > 1) {
-        setRider("")
-        setHorse("")
-        setCls("")
-        setIsGeneric(false)
-        setTitle("")
-        setDescription("")
-
-        setOriginalState({
-          rider: "",
-          horse: "",
-          cls: "",
-          isGeneric: false,
-          title: "",
-          description: "",
-          prices: priceFields,
-        })
-        setViewMode("edit")
-      } else {
-        // Single
-        setRider(p.rider || "None")
-        setHorse(p.horse || "None")
-        setCls(p.className || "None")
-        setIsGeneric(p.isGeneric || false)
-        setTitle(displayTitle)
-        setDescription(p.description || "")
-
-        setOriginalState({
-          rider: p.rider || "None",
-          horse: p.horse || "None",
-          cls: p.className || "None",
-          isGeneric: p.isGeneric || false,
-          title: displayTitle,
-          description: p.description || "",
-          prices: priceFields,
-        })
-
-        if (p.isGeneric && (displayTitle || p.description)) {
-          setViewMode("summary")
-        } else {
-          setViewMode("edit")
-        }
-      }
-    }
-  }, [selectedPhotos])
-
-  // Computed Dirty
-  const [touched, setTouched] = useState(false)
-
-  const { detailsDirty, priceDirty } = useMemo(() => {
-    if (!originalState) return { detailsDirty: false, priceDirty: false }
-
-    // Price check
-    const priceDirty = QUALITY_TIERS.some(
-      (tier) => prices[tier.id] !== originalState.prices[tier.id]
-    )
-
-    // Tags and Mode check
-    let tagsDirty = false
-    let modeDirty = false
-
-    if (isSingle) {
-      tagsDirty =
-        rider !== originalState.rider ||
-        horse !== originalState.horse ||
-        cls !== originalState.cls
-      modeDirty = isGeneric !== originalState.isGeneric
-      if (isGeneric) {
-        // If currently generic, check title/description
-        tagsDirty =
-          tagsDirty ||
-          title !== originalState.title ||
-          description !== originalState.description
-      }
-    } else {
-      // For multi-selection, we rely on the 'touched' state for tags.
-      // If any tag field was edited, 'touched' would be true.
-      // If the current values are different from the original (which would be empty for multi-edit), it's dirty.
-      // This is a simplified check for multi-select tags.
-      tagsDirty = touched && (!!rider || !!horse || !!cls || isGeneric)
-    }
-
-    return { detailsDirty: tagsDirty || modeDirty, priceDirty }
-  }, [
-    rider,
-    horse,
-    cls,
-    isGeneric,
-    title,
-    description,
-    prices,
-    originalState,
-    isSingle,
-    touched,
-  ])
-  const isDirty = detailsDirty || priceDirty
-
-  // Only the tiers whose price was changed (an empty multi field keeps them)
-  const changedPrices = useMemo(() => {
-    const changed: Partial<OwnPhotoPrices> = {}
-    if (!originalState) return changed
-    QUALITY_TIERS.forEach((tier) => {
-      const value = prices[tier.id]
-      if (value !== "" && value !== originalState.prices[tier.id]) {
-        changed[tier.id] = value === "default" ? null : Number(value)
-      }
-    })
-    return changed
-  }, [prices, originalState])
-
-  // Handlers
-  const handleChange = (field: string, value: string) => {
-    setTouched(true)
-    if (field === "rider") setRider(value)
-    if (field === "horse") setHorse(value)
-    if (field === "cls") setCls(value)
-    if (field === "title") setTitle(value)
-    if (field === "description") setDescription(value)
-  }
-
-  const handlePriceChange = (tierId: QualityTierId, value: string) => {
-    setPrices((prev) => ({ ...prev, [tierId]: value.trim() }))
-  }
-
-  const isDefaultPrices = QUALITY_TIERS.every(
-    (tier) => prices[tier.id] === "default"
+  const formId = useId()
+  const photos = useMemo(
+    () => allPhotos.filter((photo) => selectedIds.has(photo.id)),
+    [allPhotos, selectedIds]
   )
-
-  /** Restore each photo's previous prices after a failed save. */
-  const restorePrices = (
-    previous: Array<{ id: string; prices: OwnPhotoPrices }>
-  ) => {
-    const idsByPrices = new Map<string, string[]>()
-    previous.forEach(({ id, prices: photoPrices }) => {
-      const key = JSON.stringify(photoPrices)
-      idsByPrices.set(key, [...(idsByPrices.get(key) ?? []), id])
-    })
-    idsByPrices.forEach((photoIds, key) => {
-      void savePhotoPrices
-        .mutateAsync({ photoIds, prices: JSON.parse(key) as OwnPhotoPrices })
-        .catch(() => undefined)
-    })
-  }
-
-  const enterEditMode = () => {
-    setViewMode("edit")
-    setEditFromSummary(true)
-  }
-
-  const onCloseSafe = () => {
-    if (isDirty) {
-      setConfirmModal({ type: "close", isOpen: true })
-    } else {
-      propsOnClose()
-    }
-  }
-
-  const confirmCloseDiscard = () => {
-    setTouched(false)
-    setConfirmModal({ type: "close", isOpen: false })
-    propsOnClose()
-  }
-
-  const handleSave = async () => {
-    // The errors show on the Price tab only
-    if (hasPriceError) {
-      setPanelTab("price")
-      return
-    }
-    const ids = selectedPhotos.map((p) => p.id)
-    const prevMetadata = selectedPhotos.map((p) => ({
-      id: p.id,
-      rider: p.rider,
-      horse: p.horse,
-      className: p.className,
-      isGeneric: p.isGeneric,
-      title: p.title,
-      description: (p as any).description,
-    }))
-    const previousPrices = selectedPhotos.map((p) => ({
-      id: p.id,
-      prices: p.ownPrices ?? LINKED_PRICES,
-    }))
-    const hasPriceChanges = Object.keys(changedPrices).length > 0
-
-    const updates: Partial<Photo> & {
-      description?: string
-      isGeneric?: boolean
-    } = {}
-
-    // Tag Updates
-    if (isSingle) {
-      updates.rider = rider === "None" ? "" : rider
-      updates.horse = horse === "None" ? "" : horse
-      updates.className = cls === "None" ? "" : cls
-      updates.isGeneric = isGeneric
-      if (isGeneric) {
-        updates.title = title
-        updates.description = description
-      }
-    } else {
-      if (rider) updates.rider = rider === "None" ? "" : rider
-      if (horse) updates.horse = horse === "None" ? "" : horse
-      if (cls) updates.className = cls === "None" ? "" : cls
-      if (isGeneric) {
-        updates.isGeneric = true
-        updates.rider = ""
-        updates.horse = ""
-        updates.className = ""
-      }
-    }
-
-    const restoreDetails = () => {
-      prevMetadata.forEach((meta) => {
-        void updatePhotoMetadata([meta.id], {
-          rider: meta.rider,
-          horse: meta.horse,
-          className: meta.className,
-          isGeneric: meta.isGeneric,
-          title: meta.title || "",
-          description: meta.description || "",
-        }).catch(() => undefined)
-      })
-    }
-    // Prices first: the API saves all of them or none, so a refusal changes nothing
-    let pricesSaved = false
-    let detailsSent = false
-    try {
-      if (hasPriceChanges) {
-        await savePhotoPrices.mutateAsync({
-          photoIds: ids,
-          prices: changedPrices,
-        })
-        pricesSaved = true
-      }
-      if (detailsDirty) {
-        detailsSent = true
-        await updatePhotoMetadata(ids, updates)
-      }
-      triggerToast("Changes saved", "success", "panel")
-    } catch (error) {
-      if (detailsSent) restoreDetails()
-      // Many photos are saved in several requests, so some may have new prices already
-      const savedIds = new Set(
-        pricesSaved
-          ? ids
-          : error instanceof PhotoPricesSaveError
-            ? error.savedPhotoIds
-            : []
-      )
-      restorePrices(previousPrices.filter((p) => savedIds.has(p.id)))
-      triggerToast("Unable to save changes", "danger", "panel")
-      return
-    }
-
-    setOriginalState({
-      rider,
-      horse,
-      cls,
-      isGeneric,
-      title,
-      description,
-      prices,
-    })
-    setTouched(false)
-
-    if (isSingle && isGeneric && (title || description)) {
-      setViewMode("summary")
-    }
-    setEditFromSummary(false)
-  }
-
-  const handleCancel = () => {
-    if (originalState) {
-      setRider(originalState.rider)
-      setHorse(originalState.horse)
-      setCls(originalState.cls)
-      setIsGeneric(originalState.isGeneric)
-      setTitle(originalState.title)
-      setDescription(originalState.description)
-
-      setPrices(originalState.prices)
-
-      setTouched(false)
-      if (
-        originalState.isGeneric &&
-        (originalState.title || originalState.description)
-      ) {
-        setViewMode("summary")
-      } else {
-        setViewMode("edit")
-      }
-      setEditFromSummary(false)
-    }
-    propsOnClose()
-  }
-
-  const handleDeleteInit = () => {
-    setConfirmModal({ type: "delete", isOpen: true })
-  }
-
-  const confirmDelete = () => {
-    const photos = [...selectedPhotos]
-
-    setConfirmModal({ type: "delete", isOpen: false })
-    propsOnClose()
-
-    // The API delete waits for the toast, so Undo really keeps them
-    deletePhotosWithUndo(photos, "Photo deleted", () =>
-      triggerToast("Delete undone", "moved", "global")
-    )
-  }
-
-  const handleMoveInit = () => {
-    setIsMoveModalOpen(true)
-    setTargetFolder("")
-    setIsCreatingFolder(false)
-    setNewFolderName("")
-  }
-
-  const handleMoveConfirm = async () => {
-    if (!firstPhoto) return
-    const photos = selectedPhotos
-
-    let target: { id: string | null; name: string } | undefined
-    if (isCreatingFolder) {
-      try {
-        const folder = await createFolder.mutateAsync({
-          eventId: firstPhoto.eventId,
-          name: newFolderName.trim(),
-        })
-        target = { id: folder.id, name: folder.name }
-      } catch (error) {
-        triggerToast(
-          getFolderErrorMessage(error, "Unable to create the folder"),
-          "danger",
-          "panel"
-        )
-        return
-      }
-    } else if (targetFolder === UNCATEGORISED) {
-      target = { id: null, name: UNCATEGORISED_LABEL }
-    } else {
-      target = folders.find((f) => f.id === targetFolder)
-    }
-    if (!target) return
-
-    setIsMoveModalOpen(false)
-    propsOnClose()
-
-    try {
-      await movePhotos.mutateAsync({
-        photoIds: photos.map((p) => p.id),
-        folderId: target.id,
-      })
-    } catch {
-      triggerToast("Unable to move the photos", "danger", "global")
-      return
-    }
-    onMoved?.()
-
-    // Each photo goes back to the folder it came from
-    const undoAction = () => {
-      const byFolder = new Map<string, string[]>()
-      photos.forEach((p) => {
-        const value = getFolderValue(p)
-        byFolder.set(value, [...(byFolder.get(value) ?? []), p.id])
-      })
-      Promise.all(
-        Array.from(byFolder, ([value, photoIds]) =>
-          movePhotos.mutateAsync({
-            photoIds,
-            folderId: value === UNCATEGORISED ? null : value,
-          })
-        )
-      )
-        .then(() => triggerToast("Move undone", "moved", "global"))
-        .catch(() =>
-          triggerToast("Unable to undo the move", "danger", "global")
-        )
-    }
-
-    triggerToast(
-      `Moved ${photos.length === 1 ? "photo" : `${photos.length} photos`} to ${target.name}`,
-      "moved",
-      "global",
-      undoAction
-    )
-  }
-
-  // The folder all selected photos are in (null when they differ)
-  const currentFolder = useMemo(() => {
-    if (selectedPhotos.length === 0) return null
-    const first = getFolderValue(selectedPhotos[0])
-    return selectedPhotos.every((p) => getFolderValue(p) === first)
-      ? first
-      : null
-  }, [selectedPhotos])
-
-  const newFolderError = newFolderName
-    ? getFolderNameError(newFolderName, folders)
-    : null
-  const folderOptions = [
-    { value: UNCATEGORISED, label: UNCATEGORISED_LABEL },
-    ...folders.map((f) => ({ value: f.id, label: f.name })),
+  const [panelTab, setPanelTab] = useState<PanelTab>(activeTab ?? "tags")
+  const { form, isSingle, isDirty, isSubmitting, result } = useDetailsForm(
+    photos,
+    // Only prices can be invalid
+    () => setPanelTab("price")
+  )
+  const [infoOpen, setInfoOpen] = useState(false)
+  const [moveOpen, setMoveOpen] = useState(false)
+  const [confirmation, setConfirmation] = useState<"delete" | "close" | null>(
+    null
+  )
+  const deletePhotos = useDeletePhotosWithUndo()
+  const defaults = useQuery({ ...defaultPricesQueryOptions(), enabled: isOpen })
+  const classIds = [
+    ...new Set(photos.map((photo) => photo.classId).filter(Boolean)),
   ]
-  const canConfirmMove = isCreatingFolder
-    ? !!newFolderName && !newFolderError && !createFolder.isPending
-    : !!targetFolder
-
-  const confirmCopy = {
-    delete: {
-      title: "Delete photo?",
-      description:
-        "This will remove the photo from this event. You can undo right after deleting.",
-      label: "Delete",
-      tone: "danger",
-      onConfirm: confirmDelete,
-    },
-    close: {
-      title: "Discard changes?",
-      description:
-        "You have unsaved changes. Are you sure you want to discard them?",
-      label: "Discard",
-      tone: "danger",
-      onConfirm: confirmCloseDiscard,
-    },
-  } as const
-  const confirm = confirmCopy[confirmModal.type]
-
+  const classId = classIds.length === 1 ? classIds[0]! : ""
+  const starts = useQuery({
+    ...classStartsQueryOptions(classId),
+    enabled: isOpen && !!classId,
+  })
+  const classNames = new Set(photos.map((photo) => photo.className || ""))
+  const className =
+    classNames.size === 1 ? [...classNames][0] : isSingle ? "" : "Mixed"
+  const defaultCounts = Object.fromEntries(
+    QUALITY_TIERS.map(({ id }) => [
+      id,
+      photos.filter((photo) => photo.ownPrices?.[id] == null).length,
+    ])
+  ) as Record<QualityTierId, number>
+  const close = () => {
+    if (isSubmitting) return
+    if (isDirty) setConfirmation("close")
+    else onClose()
+  }
+  const discard = () => {
+    setConfirmation(null)
+    onClose()
+  }
+  const confirmDelete = () => {
+    setConfirmation(null)
+    onClose()
+    deletePhotos(photos, "Photo deleted", () =>
+      notify("Delete undone", "success")
+    )
+  }
   return (
     <Sheet
       open={isOpen}
       disablePointerDismissal
-      onOpenChange={(open, details) => {
-        if (!open) {
-          if (isDirty) details.cancel()
-          onCloseSafe()
+      onOpenChange={(next, details) => {
+        if (!next) {
+          if (isDirty || isSubmitting) details.cancel()
+          close()
         }
       }}
     >
@@ -748,643 +131,163 @@ export function PhotoDetailsSheet({
             Edit tags and prices for the selected photos.
           </SheetDescription>
         </SheetHeader>
-
         <SheetBody className="relative min-h-0 leading-[1.3]">
-          {!isSingle && count > 0 && (
-            <div className="mb-8">
-              <SectionLabel>Multiple selection ({count})</SectionLabel>
+          {!isSingle && photos.length > 0 && (
+            <div className="mb-8 text-[0.6875rem] font-semibold tracking-[0.06em] text-muted-foreground/70 uppercase">
+              Multiple selection ({photos.length})
             </div>
           )}
-
-          {isSingle && firstPhoto && (
-            <div className="mb-4 flex items-start gap-4">
-              <img
-                src={firstPhoto.url}
-                alt=""
-                className="size-20 rounded-lg bg-muted object-cover"
-              />
-              <div className="min-w-0 flex-1">
-                <div
-                  className="mb-1 truncate text-sm font-semibold text-foreground"
-                  title={firstPhoto.fileName}
+          {isSingle && <PhotoHeader photo={photos[0]} />}
+          {photos.length > 0 && (
+            <form
+              id={formId}
+              onSubmit={(e) => {
+                e.preventDefault()
+                void form.handleSubmit()
+              }}
+            >
+              <fieldset disabled={isSubmitting} className="min-w-0">
+                <Tabs
+                  value={panelTab}
+                  onValueChange={(next) => setPanelTab(next as PanelTab)}
                 >
-                  {firstPhoto.fileName}
-                </div>
-                <div className="mb-2 inline-block rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
-                  {firstPhoto.photoCode || firstPhoto.id}
-                </div>
-                <div className="flex items-center gap-1.5 text-[0.8125rem] text-muted-foreground">
-                  <Clock className="size-3.5" />
-                  <span>
-                    {firstPhoto.uploadDate &&
-                      `${new Date(firstPhoto.uploadDate).toLocaleDateString(
-                        "en-GB",
-                        { day: "numeric", month: "short", year: "numeric" }
-                      )} • `}
-                    {firstPhoto.timestamp}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {(isSingle || count > 0) && (
-            <div className="mb-8">
-              <Tabs
-                value={panelTab}
-                onValueChange={(next) => setPanelTab(next as "tags" | "price")}
-              >
-                <TabsList variant="line" className="mb-6 gap-4">
-                  <TabsTrigger value="tags" className={compactTab}>
-                    Tags
-                  </TabsTrigger>
-                  <TabsTrigger value="price" className={compactTab}>
-                    Price
-                  </TabsTrigger>
-                </TabsList>
-              </Tabs>
-
-              {panelTab === "tags" && (
-                <>
-                  {/* develop: "Refresh tags" button removed */}
-                  <div className="mb-3 flex items-center justify-between">
-                    <SectionLabel>What do you see in the image</SectionLabel>
-                  </div>
-
-                  {viewMode === "edit" ? (
-                    <>
-                      {!isGeneric ? (
-                        <>
-                          <FormGroup label="Rider">
-                            <ModernDropdown
-                              showSearch
-                              value={rider}
-                              onChange={(val) => handleChange("rider", val)}
-                              options={[
-                                { label: "None", value: "None" },
-                                ...riderOptions,
-                              ]}
-                              placeholder={
-                                isSingle
-                                  ? "Select Rider..."
-                                  : rider
-                                    ? "Mixed (Overwriting)"
-                                    : "Mixed (Keep existing)"
-                              }
-                              className={selectClass}
-                            />
-                          </FormGroup>
-
-                          <FormGroup label="Horse">
-                            <ModernDropdown
-                              showSearch
-                              value={horse}
-                              onChange={(val) => handleChange("horse", val)}
-                              options={[
-                                { label: "None", value: "None" },
-                                ...horseOptions,
-                              ]}
-                              placeholder={
-                                isSingle
-                                  ? "Select Horse..."
-                                  : "Mixed (Keep existing)"
-                              }
-                              className={selectClass}
-                            />
-                          </FormGroup>
-
-                          <FormGroup label="Class">
-                            {/* develop: class comes from Equipe and is read-only */}
-                            <div className="w-full rounded-lg border bg-muted px-3 py-2 text-[15px] text-foreground">
-                              {cls && cls !== "None"
-                                ? cls
-                                : "No class selected"}
-                            </div>
-                          </FormGroup>
-                        </>
-                      ) : (
-                        <div className="mb-6 py-3 text-xs text-muted-foreground/60 italic">
-                          No rider, horse, or class info.
-                        </div>
-                      )}
-
-                      {/* develop: the "generic photo" checkbox and OR divider are hidden */}
-                      {isGeneric && (
-                        <div className="mt-4 rounded-lg bg-muted p-4">
-                          <FormGroup label="Title">
-                            <Input
-                              className="h-10"
-                              value={title}
-                              onChange={(e) =>
-                                handleChange("title", e.target.value)
-                              }
-                              maxLength={20}
-                              placeholder="Pricing ceremony"
-                            />
-                          </FormGroup>
-                          <FormGroup label="Description" className="mb-0">
-                            <Textarea
-                              className="min-h-20"
-                              value={description}
-                              onChange={(e) =>
-                                handleChange("description", e.target.value)
-                              }
-                              maxLength={30}
-                              rows={2}
-                            />
-                          </FormGroup>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    /* Summary mode (saved generic photo) */
-                    <div className="mt-4 rounded-lg bg-muted p-4">
-                      <div className="mb-2 flex items-start justify-between">
-                        <SectionLabel className="text-muted-foreground">
-                          Generic photo
-                        </SectionLabel>
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          onClick={enterEditMode}
-                          title="Edit"
-                          aria-label="Edit"
-                          className="text-muted-foreground/60 hover:bg-transparent"
-                        >
-                          <Pencil className="size-3.5" />
-                        </Button>
-                      </div>
-                      {title && (
-                        <div className="mb-1 text-sm font-medium text-foreground">
-                          {title}
-                        </div>
-                      )}
-                      {description && (
-                        <div className="text-[0.8125rem] leading-[1.4] text-muted-foreground">
-                          {description}
-                        </div>
-                      )}
+                  <TabsList variant="line" className="mb-6 gap-4">
+                    <TabsTrigger value="tags" className={tabClass}>
+                      Tags
+                    </TabsTrigger>
+                    <TabsTrigger value="price" className={tabClass}>
+                      Price
+                    </TabsTrigger>
+                  </TabsList>
+                </Tabs>
+                {panelTab === "tags" ? (
+                  <>
+                    <div className="mb-3 text-[0.6875rem] font-semibold tracking-[0.06em] text-muted-foreground/70 uppercase">
+                      What do you see in the image
                     </div>
-                  )}
-                </>
-              )}
-
-              {panelTab === "price" && (
-                <div>
-                  <div className="mb-3 flex items-center justify-between">
-                    <SectionLabel>Price per quality</SectionLabel>
-                    <RoundIconButton
-                      onClick={() => setIsInfoOpen(!isInfoOpen)}
-                      title="Pricing Info"
-                      aria-label="Pricing info"
-                    >
-                      <Info />
-                    </RoundIconButton>
-                  </div>
-
-                  {QUALITY_TIERS.map((tier) => {
-                    const error = priceErrors[tier.id]
-                    return (
-                      <FormGroup key={tier.id} label={tier.label}>
-                        <div className="relative">
-                          <Input
-                            className="h-10 pr-12"
-                            type="text"
-                            inputMode="numeric"
-                            aria-label={`${tier.label} price (SEK)`}
-                            aria-invalid={!!error}
-                            value={
-                              prices[tier.id] === "default"
-                                ? ""
-                                : prices[tier.id]
-                            }
-                            onChange={(e) =>
-                              handlePriceChange(tier.id, e.target.value)
-                            }
-                            placeholder={
-                              prices[tier.id] === "default"
-                                ? String(
-                                    (defaultPrices.data?.effective[tier.id] ??
-                                      tier.price * 100) / 100
-                                  )
-                                : isSingle
-                                  ? ""
-                                  : "Mixed"
-                            }
-                          />
-                          <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-sm text-muted-foreground">
-                            SEK
-                          </span>
-                        </div>
-                        <div
-                          className={cn(
-                            "mt-1 text-xs leading-[1.4]",
-                            error ? "text-destructive" : "text-muted-foreground"
-                          )}
-                        >
-                          {error ??
-                            (prices[tier.id] === "default"
-                              ? "Uses default price. Updates when your default changes."
-                              : !isSingle && prices[tier.id] === ""
-                                ? `Mixed prices: ${selectedPhotos.filter((photo) => photo.ownPrices?.[tier.id] == null).length} use default price.`
-                                : tier.description)}
-                        </div>
-                        <Button
-                          variant="link"
-                          size="xs"
-                          className="mt-1 h-auto px-0"
-                          disabled={prices[tier.id] === "default"}
-                          onClick={() =>
-                            setPrices((current) => ({
-                              ...current,
-                              [tier.id]: "default",
-                            }))
-                          }
-                        >
-                          Use default price
-                        </Button>
-                      </FormGroup>
-                    )
-                  })}
-
-                  <div className="text-xs leading-normal text-muted-foreground/70">
-                    {!isSingle &&
-                      "Leave a field empty to keep each photo's own price. "}
-                    Whole SEK, {MIN_PRICE_SEK} to{" "}
-                    {MAX_PRICE_SEK.toLocaleString("sv-SE")} SEK.
-                  </div>
-                  <Button
-                    variant="link"
-                    size="xs"
-                    className="mt-2 h-auto px-0"
-                    disabled={isDefaultPrices}
-                    onClick={() =>
-                      setPrices(
-                        Object.fromEntries(
-                          QUALITY_TIERS.map((tier) => [tier.id, "default"])
-                        ) as PriceFields
-                      )
-                    }
-                  >
-                    Use default prices
-                  </Button>
-                </div>
-              )}
-            </div>
+                    <TagFields
+                      form={form}
+                      isSingle={isSingle}
+                      riderNames={[
+                        ...(starts.data ?? []).map((start) => start.rider_name),
+                        ...photos.map((photo) => photo.rider),
+                      ]}
+                      horseNames={[
+                        ...(starts.data ?? []).map((start) => start.horse_name),
+                        ...photos.map((photo) => photo.horse),
+                      ]}
+                      className={className}
+                    />
+                  </>
+                ) : (
+                  <PriceFields
+                    form={form}
+                    isSingle={isSingle}
+                    effectivePrices={defaults.data?.effective}
+                    defaultCounts={defaultCounts}
+                    onInfo={() => setInfoOpen(true)}
+                  />
+                )}
+              </fieldset>
+            </form>
           )}
         </SheetBody>
-
-        {/* Footer */}
-        <SheetFooter
-          className={cn(
-            "justify-between border-muted",
-            (isDirty || editFromSummary) && "justify-end"
+        <SheetFooter className="flex-col items-stretch border-muted">
+          {result && "error" in result && (
+            <FieldError errors={[{ message: result.error }]} />
           )}
-        >
-          {isDirty || editFromSummary ? (
-            <>
-              <Button
-                variant="outline"
-                size="md"
-                className={panelSecondary}
-                onClick={handleCancel}
-              >
-                Cancel
-              </Button>
-              <Button
-                size="md"
-                className="min-w-25"
-                onClick={handleSave}
-                disabled={hasPriceError && panelTab === "price"}
-              >
-                <Save /> Save changes
-              </Button>
-            </>
-          ) : (
-            <>
-              {/* develop: Publish / Unpublish removed */}
-              <div className="flex gap-2">
-                {currentTab !== "published" && (
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className={cn(
-                      panelSecondary,
-                      "size-10 min-w-0 hover:text-destructive"
-                    )}
-                    title="Delete"
-                    aria-label="Delete"
-                    onClick={handleDeleteInit}
-                  >
-                    <Trash2 className="size-4.5" />
-                  </Button>
-                )}
+          <div aria-live="polite" aria-atomic="true">
+            {isSubmitting ? (
+              <p role="status" className="text-xs text-muted-foreground">
+                Saving…
+              </p>
+            ) : (
+              result &&
+              "saved" in result &&
+              !isDirty && (
+                <p role="status" className="text-xs text-muted-foreground">
+                  Changes saved
+                </p>
+              )
+            )}
+          </div>
+          <div className="flex items-center gap-3">
+            {isDirty || isSubmitting ? (
+              <div className="ml-auto flex gap-3">
                 <Button
+                  type="button"
                   variant="outline"
-                  size="icon"
-                  className={cn(panelSecondary, "size-10 min-w-0")}
-                  title="Move to..."
-                  aria-label="Move to..."
-                  onClick={handleMoveInit}
+                  size="md"
+                  className="min-w-25 text-muted-foreground"
+                  disabled={isSubmitting}
+                  onClick={discard}
                 >
-                  <MoreVertical className="size-4.5" />
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  form={formId}
+                  size="md"
+                  className="min-w-25"
+                  disabled={isSubmitting}
+                >
+                  <Save />
+                  {isSubmitting ? "Saving…" : "Save changes"}
                 </Button>
               </div>
-            </>
-          )}
-        </SheetFooter>
-
-        {/* Info overlay (covers the whole panel) */}
-        {isInfoOpen && (
-          <div className="absolute inset-0 z-10 flex animate-in flex-col bg-card duration-200 fade-in-0">
-            <PanelHeader
-              title="Info"
-              onClose={onCloseSafe}
-              onBack={() => setIsInfoOpen(false)}
-            />
-
-            <div className="flex-1 overflow-y-auto p-6 leading-[1.3]">
-              <div className="mb-6">
-                <div className="mb-4 text-sm font-semibold text-foreground">
-                  Quality info
-                </div>
-                <div className="flex flex-col gap-4">
-                  {[
-                    ["Web quality", "Best for screen and social media."],
-                    ["High quality", "Best for print and large displays."],
-                    ["Commercial use", "Best for print and large displays."],
-                  ].map(([name, text]) => (
-                    <div key={name}>
-                      <div className="mb-0.5 text-sm font-medium text-foreground">
-                        {name}
-                      </div>
-                      <div className="text-[0.8125rem] text-muted-foreground">
-                        {text}
-                      </div>
-                    </div>
-                  ))}
-                  <div className="text-xs leading-normal text-muted-foreground/70">
-                    Gallopics automatically delivers the right resolution—no
-                    extra prep needed.
-                  </div>
-                </div>
+            ) : (
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="size-10 text-muted-foreground hover:text-destructive"
+                  aria-label="Delete"
+                  onClick={() => setConfirmation("delete")}
+                >
+                  <Trash2 />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="md"
+                  className="text-muted-foreground"
+                  onClick={() => setMoveOpen(true)}
+                >
+                  <FolderInput />
+                  Move to folder
+                </Button>
               </div>
-
-              <div className="mb-6 border-b border-muted" />
-
-              <div className="mb-6">
-                <div className="mb-4 text-sm font-semibold text-foreground">
-                  Earnings split
-                </div>
-                <div className="flex flex-col gap-2">
-                  {(
-                    [
-                      [
-                        "Photographer",
-                        commissionPercent === undefined
-                          ? undefined
-                          : 100 - commissionPercent,
-                      ],
-                      ["Gallopics", commissionPercent],
-                    ] as const
-                  ).map(([name, share]) => (
-                    <div key={name} className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">{name}</span>
-                      <span className="font-semibold text-foreground">
-                        {share !== undefined ? (
-                          `${share}%`
-                        ) : salesQuery.isError ? (
-                          "—"
-                        ) : (
-                          <Skeleton className="inline-block h-[0.8em] w-8 align-middle" />
-                        )}
-                      </span>
-                    </div>
-                  ))}
-                  <div className="mt-2 text-[0.8125rem] leading-normal text-muted-foreground/70">
-                    Taxes depend on your status (freelancer vs business).
-                    Receipts are generated automatically.
-                  </div>
-                </div>
-              </div>
-
-              <div className="mb-6 border-b border-muted" />
-
-              <div className="flex flex-col gap-3">
-                {[
-                  { label: "Terms of Service", Icon: ChevronRight },
-                  { label: "Privacy Policy", Icon: ChevronRight },
-                  { label: "FAQ", Icon: HelpCircle },
-                ].map(({ label, Icon }) => (
-                  <a
-                    key={label}
-                    href="#"
-                    className="flex items-center justify-between py-1 text-[0.8125rem] text-foreground transition-colors hover:text-primary"
-                  >
-                    {label} <Icon className="size-3.75 text-border" />
-                  </a>
-                ))}
-              </div>
-            </div>
+            )}
           </div>
+        </SheetFooter>
+        {infoOpen && (
+          <PricingInfo onBack={() => setInfoOpen(false)} onClose={close} />
         )}
       </SheetContent>
-
-      <Dialog
-        open={isMoveModalOpen}
-        onOpenChange={(open) => {
-          if (!open) setIsMoveModalOpen(false)
-        }}
-      >
-        <DialogContent className="sm:max-w-100">
-          <DialogHeader>
-            <DialogTitle>Move to other folder</DialogTitle>
-          </DialogHeader>
-          <DialogBody>
-            {!isCreatingFolder ? (
-              <FormGroup label="Select Folder" className="mb-0">
-                <ModernDropdown
-                  value={targetFolder}
-                  onChange={(val) => {
-                    if (val === NEW_FOLDER) {
-                      setIsCreatingFolder(true)
-                      setTargetFolder("")
-                    } else {
-                      setTargetFolder(val)
-                    }
-                  }}
-                  options={[
-                    ...folderOptions.map((option) => ({
-                      ...option,
-                      disabled: option.value === currentFolder,
-                      subtext:
-                        option.value === currentFolder
-                          ? "Current folder"
-                          : undefined,
-                    })),
-                    {
-                      label: "Create new folder...",
-                      value: NEW_FOLDER,
-                      icon: <Plus className="size-3.5 text-primary" />,
-                    },
-                  ]}
-                  placeholder="Select folder..."
-                />
-              </FormGroup>
-            ) : (
-              <FormGroup label="New Folder Name" className="mb-0">
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Enter name..."
-                    value={newFolderName}
-                    maxLength={FOLDER_NAME_MAX_LENGTH}
-                    aria-invalid={!!newFolderError || undefined}
-                    onChange={(e) => setNewFolderName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && canConfirmMove) {
-                        e.preventDefault()
-                        void handleMoveConfirm()
-                      }
-                    }}
-                    autoFocus
-                  />
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className={cn(panelSecondary, "min-w-0")}
-                    aria-label="Back to folder list"
-                    onClick={() => setIsCreatingFolder(false)}
-                  >
-                    <X />
-                  </Button>
-                </div>
-                {newFolderError && (
-                  <p className="mt-1.5 text-xs text-destructive">
-                    {newFolderError}
-                  </p>
-                )}
-              </FormGroup>
-            )}
-          </DialogBody>
-          <DialogFooter>
-            <DialogCancel />
-            <Button
-              onClick={() => void handleMoveConfirm()}
-              disabled={!canConfirmMove}
-            >
-              Confirm
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
+      <MovePhotosDialog
+        open={moveOpen}
+        onOpenChange={setMoveOpen}
+        photos={photos}
+        onClosePanel={onClose}
+        onMoved={onMoved}
+      />
       <ConfirmDialog
-        open={confirmModal.isOpen}
-        onCancel={() => setConfirmModal({ ...confirmModal, isOpen: false })}
-        onConfirm={confirm.onConfirm}
-        title={confirm.title}
-        description={confirm.description}
-        confirmLabel={confirm.label}
-        tone={confirm.tone}
+        open={confirmation !== null}
+        onCancel={() => setConfirmation(null)}
+        onConfirm={confirmation === "delete" ? confirmDelete : discard}
+        title={confirmation === "delete" ? "Delete photo?" : "Discard changes?"}
+        description={
+          confirmation === "delete"
+            ? "This will remove the photo from this event. You can undo right after deleting."
+            : "You have unsaved changes. Are you sure you want to discard them?"
+        }
+        confirmLabel={confirmation === "delete" ? "Delete" : "Discard"}
+        tone="danger"
       />
     </Sheet>
   )
 }
 
-const NEW_FOLDER = "__new__"
-
-// Old .pg-panel-btn.secondary: white, gray text, gray hover (no brand tint)
-const panelSecondary = "min-w-25 text-muted-foreground"
-
-const selectClass = "h-10 min-h-10 py-0 data-[size=default]:h-10"
-
-// Old .pg-panel-compact-tab: smaller underline tabs
-const compactTab =
+const tabClass =
   "group-data-[variant=line]/tabs-list:px-0 group-data-[variant=line]/tabs-list:py-2 group-data-[variant=line]/tabs-list:text-sm"
-
-function PanelHeader({
-  title,
-  onClose,
-  onBack,
-}: {
-  title: string
-  onClose: () => void
-  onBack?: () => void
-}) {
-  return (
-    <div className="flex h-16 shrink-0 items-center justify-between border-b border-muted px-6">
-      <div className="flex items-center gap-3">
-        {onBack && (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            className="-ml-2 text-foreground"
-            onClick={onBack}
-            aria-label="Back"
-          >
-            <ChevronLeft className="size-5" />
-          </Button>
-        )}
-        <span className="text-base font-semibold text-foreground">{title}</span>
-      </div>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        onClick={onClose}
-        title="Close"
-        aria-label="Close"
-      >
-        <X className="size-5" />
-      </Button>
-    </div>
-  )
-}
-
-function SectionLabel({
-  className,
-  children,
-}: {
-  className?: string
-  children: React.ReactNode
-}) {
-  return (
-    <span
-      className={cn(
-        "text-[0.6875rem] leading-none font-semibold tracking-[0.06em] text-muted-foreground/70 uppercase",
-        className
-      )}
-    >
-      {children}
-    </span>
-  )
-}
-
-function FormGroup({
-  label,
-  className,
-  children,
-}: {
-  label: string
-  className?: string
-  children: React.ReactNode
-}) {
-  return (
-    <div className={cn("mb-5", className)}>
-      <div className="mb-1.5 text-xs font-semibold text-muted-foreground">
-        {label}
-      </div>
-      {children}
-    </div>
-  )
-}
-
-function RoundIconButton(props: React.ComponentProps<typeof Button>) {
-  return (
-    <Button
-      variant="secondary"
-      size="icon-xs"
-      className="text-muted-foreground/70 [&_svg:not([class*='size-'])]:size-3.5"
-      {...props}
-    />
-  )
-}

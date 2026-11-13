@@ -3,6 +3,7 @@ import { Link } from "react-router"
 import { useQuery } from "@tanstack/react-query"
 import { DollarSign, LayoutGrid, List } from "lucide-react"
 
+import { shortPhotoId } from "@/lib/shortPhotoId"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/context/AuthContext"
 import { useWorkspace } from "@/context/WorkspaceContext"
@@ -93,8 +94,6 @@ const statValueSkeleton = (
 )
 /** Bar heights (% of the chart) while the sales load */
 const CHART_SKELETON_HEIGHTS = [30, 45, 25, 60, 40, 70, 35, 50, 65, 30, 55, 40]
-
-const photoCode = (photoId: string) => `#${photoId.slice(0, 8).toUpperCase()}`
 
 const qualityLabel = (quality: string) =>
   QUALITY_SERIES.find((q) => q.key === quality)?.label ?? quality
@@ -196,9 +195,9 @@ export function SoldPhotos() {
 
   const searchOptions = useMemo<ScopedSearchOption[]>(
     () =>
-      Array.from(new Set(allSales.map((sale) => photoCode(sale.photo_id)))).map(
-        (code) => ({ label: code, value: code, type: "id" as const })
-      ),
+      Array.from(
+        new Set(allSales.map((sale) => shortPhotoId(sale.photo_id)))
+      ).map((code) => ({ label: code, value: code, type: "id" as const })),
     [allSales]
   )
 
@@ -625,13 +624,9 @@ export function SoldPhotos() {
                   key={sale.photo_id}
                   photo={toUiPhoto(sale, count)}
                   onClick={(p) => setPreviewSrc(p.src)}
-                  variant="pgPublished"
+                  variant="pgSold"
                   selectable={false}
-                  showEdit={false}
-                  pgMeta={{
-                    photoCode: photoCode(sale.photo_id),
-                    soldCount: count,
-                  }}
+                  pgMeta={{ soldCount: count }}
                 />
               ))}
             </MasonryGrid>
@@ -685,7 +680,7 @@ export function SoldPhotos() {
                         </TableCell>
                         <TableCell className={cellClass}>
                           <div className="truncate font-semibold text-foreground">
-                            {photoCode(sale.photo_id)}
+                            {shortPhotoId(sale.photo_id)}
                           </div>
                           {sale.class_name && (
                             <div

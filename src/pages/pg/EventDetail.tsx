@@ -1,11 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { useLocation, useNavigate, useParams } from "react-router"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@tanstack/react-query"
 import {
   AlertCircle,
-  Archive,
   ArrowLeft,
-  Globe,
   ImageOff,
   Info,
   Pencil,
@@ -14,13 +12,8 @@ import {
   X,
 } from "lucide-react"
 
-import { hasCustomPrices } from "@/constants/qualityTiers"
-import {
-  ALL_FOLDERS,
-  getFolderValue,
-  UNCATEGORISED,
-  UNCATEGORISED_LABEL,
-} from "@/lib/photoFolders"
+import { ALL_FOLDERS, getFolderValue, UNCATEGORISED } from "@/lib/photoFolders"
+import { shortPhotoId } from "@/lib/shortPhotoId"
 import { cn } from "@/lib/utils"
 import { useDeletePhotosWithUndo } from "@/hooks/useDeletePhotosWithUndo"
 import { useWorkspacePhotos } from "@/hooks/useWorkspaceData"
@@ -33,7 +26,6 @@ import {
   bookingsQueryOptions,
   foldersQueryOptions,
   myPhotosQueryOptions,
-  resolveCachedDuplicate,
   toPgEvent,
   toWorkspaceEvents,
 } from "@/data/queries/photographer"
@@ -54,21 +46,14 @@ import { EventDetailsDialog } from "@/pages/pg/components/EventDetailsDialog"
 import { PhotoFolderBar } from "@/pages/pg/components/PhotoFolderBar"
 import { PhotoDetailsSheet } from "@/pages/pg/photo-details/PhotoDetailsSheet"
 
-// Tab type
-type TabType = "uploads" | "published" | "archive"
-
-// Uploads filter: a folder value (ALL_FOLDERS, UNCATEGORISED, a folder id) or the duplicates view
-const DUPLICATES = "duplicates"
-type PublishedFolderType = "selling_photos" | "unsold"
-
 const NO_FOLDERS: ApiPhotoFolder[] = []
 
-/** Search in the photo grid: file name, photo code / ID and the tags */
+/** Search in the photo grid: file name, photo ID or code (as on Sales) and the tags */
 const matchesPhotoSearch = (photo: Photo, term: string) =>
   [
     photo.fileName,
-    photo.photoCode,
     photo.id,
+    shortPhotoId(photo.id),
     photo.rider,
     photo.horse,
     photo.className,
@@ -82,7 +67,6 @@ export function EventDetail() {
   const fromTab = (location.state as any)?.fromTab
   const { basePath } = useWorkspace()
   const { isPhotographer } = useAuth()
-  const queryClient = useQueryClient()
   const deletePhotosWithUndo = useDeletePhotosWithUndo()
   const bookingsQuery = useQuery({
     ...bookingsQueryOptions(),
@@ -132,8 +116,7 @@ export function EventDetail() {
   )
   // The photographer's own public (ready) photos
   const publishedCount = allEventPhotos.filter(
-    (photo) =>
-      photo.status === "uploadedUnpublished" || photo.status === "published"
+    (photo) => photo.status === "uploadedUnpublished"
   ).length
   const selectedClassContext = useMemo(() => {
     const state = location.state as
@@ -205,10 +188,7 @@ export function EventDetail() {
   )
 
   // State
-  const [activeTab, setActiveTab] = useState<TabType>("uploads")
   const [activeFolder, setActiveFolder] = useState<string>(ALL_FOLDERS)
-  const [activePublishedFolder] =
-    useState<PublishedFolderType>("selling_photos")
   const [activeChip, setActiveChip] = useState<string>("all")
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isPanelOpen, setIsPanelOpen] = useState(false)
@@ -216,52 +196,6 @@ export function EventDetail() {
   const [previewPhoto, setPreviewPhoto] = useState<any | null>(null)
   const [showInfoModal, setShowInfoModal] = useState(false)
 
-  const processedDupIds = useRef<Set<string>>(new Set())
-
-  // Deep link effect: Scroll to duplicate group
-  useEffect(() => {
-    const params = new URLSearchParams(location.search)
-    const dupId = params.get("dup")
-
-    if (dupId && !processedDupIds.current.has(dupId)) {
-      processedDupIds.current.add(dupId)
-
-      // Force switch to duplicate view
-      if (activeTab !== "uploads") setActiveTab("uploads")
-      if (activeFolder !== DUPLICATES) setActiveFolder(DUPLICATES)
-
-      // Wait for render/transition
-      setTimeout(() => {
-        const el = document.getElementById(`dup-group-${dupId}`)
-        if (el) {
-          el.scrollIntoView({ behavior: "smooth", block: "center" })
-          el.classList.add("highlight-duplicate-group")
-          setTimeout(() => {
-            el.classList.remove("highlight-duplicate-group")
-            // Clear the param after highlight so navigation isn't locked
-            // We use the current location to avoid stale closures, but params are from render
-            const currentParams = new URLSearchParams(window.location.search)
-            currentParams.delete("dup")
-            navigate({ search: currentParams.toString() }, { replace: true })
-          }, 2000)
-        }
-      }, 300)
-    }
-  }, [location.search, activeFolder, activeTab, navigate])
-
-  // Reset active chip to 'all' when switching folders/buckets
-  useEffect(() => {
-    setActiveChip("all")
-  }, [activeFolder])
-
-  // Reset selection when switching tabs
-  useEffect(() => {
-    setSelectedIds(new Set())
-    setIsPanelOpen(false)
-    setActiveChip("all")
-  }, [activeTab])
-
-  // Photos by tab
   const uploadPhotos = useMemo(
     () =>
       allPhotos.filter((p) =>
@@ -275,164 +209,19 @@ export function EventDetail() {
     [allPhotos]
   )
 
-  const publishedPhotosRaw = useMemo(() => {
-    return allPhotos.filter((p) => p.status === "published")
-  }, [allPhotos])
-
-  const publishedPhotosByBucket = useMemo(() => {
-    if (activePublishedFolder === "selling_photos") {
-      return publishedPhotosRaw.filter((p) => p.soldCount > 0)
-    }
-    return publishedPhotosRaw.filter((p) => p.soldCount === 0)
-  }, [publishedPhotosRaw, activePublishedFolder])
-
-  const publishedFolderCounts = useMemo(() => {
-    const selling = publishedPhotosRaw.filter((p) => p.soldCount > 0)
-    return {
-      selling_photos: selling.length,
-      totalSales: selling.reduce((sum, p) => sum + p.soldCount, 0),
-      unsold: publishedPhotosRaw.filter((p) => p.soldCount === 0).length,
-    }
-  }, [publishedPhotosRaw])
-
-  const publishedChips = useMemo(() => {
-    const photos = publishedPhotosByBucket
-
-    const allChips = [
-      { id: "all", label: "All", count: photos.length, filterFn: () => true },
-      {
-        id: "generic",
-        label: "Generic",
-        count: photos.filter((p) => p.isGeneric).length,
-        filterFn: (p: Photo) => p.isGeneric,
-      },
-      {
-        id: "default-prices",
-        label: "Default prices",
-        count: photos.filter((p) => !hasCustomPrices(p.ownPrices)).length,
-        filterFn: (p: Photo) => !hasCustomPrices(p.ownPrices),
-      },
-      {
-        id: "own-prices",
-        label: "Own prices",
-        count: photos.filter((p) => hasCustomPrices(p.ownPrices)).length,
-        filterFn: (p: Photo) => hasCustomPrices(p.ownPrices),
-      },
-    ]
-
-    return allChips
-  }, [publishedPhotosByBucket])
-
-  const filteredPublishedPhotos = useMemo(() => {
-    let photos = publishedPhotosByBucket
-
-    // Apply search filter if search term exists
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase().trim()
-      photos = photos.filter((p) => matchesPhotoSearch(p, term))
-    }
-
-    const chip = publishedChips.find((c) => c.id === activeChip)
-    if (!chip || activeChip === "all") return photos
-    return photos.filter(chip.filterFn)
-  }, [publishedPhotosByBucket, activeChip, publishedChips, searchTerm])
-
-  const archivedPhotosRaw = useMemo(() => {
-    return allPhotos.filter((p) => p.status === "archived")
-  }, [allPhotos])
-
-  const archivedPhotosByBucket = useMemo(() => {
-    if (activePublishedFolder === "selling_photos") {
-      return archivedPhotosRaw.filter((p) => p.soldCount > 0)
-    }
-    return archivedPhotosRaw.filter((p) => p.soldCount === 0)
-  }, [archivedPhotosRaw, activePublishedFolder])
-
-  const archivedChips = useMemo(() => {
-    const photos = archivedPhotosByBucket
-
-    const allChips = [
-      { id: "all", label: "All", count: photos.length, filterFn: () => true },
-      {
-        id: "generic",
-        label: "Generic",
-        count: photos.filter((p) => p.isGeneric).length,
-        filterFn: (p: Photo) => p.isGeneric,
-      },
-      {
-        id: "default-prices",
-        label: "Default prices",
-        count: photos.filter((p) => !hasCustomPrices(p.ownPrices)).length,
-        filterFn: (p: Photo) => !hasCustomPrices(p.ownPrices),
-      },
-      {
-        id: "own-prices",
-        label: "Own prices",
-        count: photos.filter((p) => hasCustomPrices(p.ownPrices)).length,
-        filterFn: (p: Photo) => hasCustomPrices(p.ownPrices),
-      },
-    ]
-
-    return allChips
-  }, [archivedPhotosByBucket])
-
-  const filteredArchivedPhotos = useMemo(() => {
-    let photos = archivedPhotosByBucket
-
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase().trim()
-      photos = photos.filter((p) => matchesPhotoSearch(p, term))
-    }
-
-    const chip = archivedChips.find((c) => c.id === activeChip)
-    if (!chip || activeChip === "all") return photos
-    return photos.filter(chip.filterFn)
-  }, [archivedPhotosByBucket, activeChip, archivedChips, searchTerm])
-
-  const tabCounts = useMemo(() => {
-    return {
-      uploads: uploadPhotos.length,
-      published: allPhotos.filter((p) => p.status === "published").length,
-      archive: allPhotos.filter((p) => p.status === "archived").length,
-    }
-  }, [uploadPhotos, allPhotos])
-
-  // Compute valid duplicates (Cross-reference all uploads)
-  // Only groups with 2+ instances are considered valid duplicates
-  const validDuplicateIds = useMemo(() => {
-    const groups = new Map<string, Photo[]>()
-    uploadPhotos.forEach((p) => {
-      if (p.isDuplicate && !p.duplicateResolved) {
-        const key = p.duplicateGroupId || p.url
-        if (!groups.has(key)) groups.set(key, [])
-        groups.get(key)!.push(p)
-      }
-    })
-
-    const validIds = new Set<string>()
-    for (const photos of groups.values()) {
-      if (photos.length >= 2) {
-        photos.forEach((p) => validIds.add(p.id))
-      }
-    }
-    return validIds
-  }, [uploadPhotos])
-
   // A folder deleted elsewhere (e.g. another tab) falls back to All
   const currentFolder =
-    [ALL_FOLDERS, UNCATEGORISED, DUPLICATES].includes(activeFolder) ||
+    [ALL_FOLDERS, UNCATEGORISED].includes(activeFolder) ||
     folders.some((folder) => folder.id === activeFolder)
       ? activeFolder
       : ALL_FOLDERS
 
-  // Photos in the Uploads tab: all of them, one folder or the duplicates
+  // Photos in the Uploads tab: all of them or one folder
   const folderPhotos = useMemo(() => {
     let photos: Photo[] =
-      currentFolder === DUPLICATES
-        ? uploadPhotos.filter((p) => validDuplicateIds.has(p.id))
-        : currentFolder === ALL_FOLDERS
-          ? uploadPhotos
-          : uploadPhotos.filter((p) => getFolderValue(p) === currentFolder)
+      currentFolder === ALL_FOLDERS
+        ? uploadPhotos
+        : uploadPhotos.filter((p) => getFolderValue(p) === currentFolder)
 
     // Apply search filter if search term exists
     if (searchTerm.trim()) {
@@ -441,15 +230,10 @@ export function EventDetail() {
     }
 
     return photos
-  }, [currentFolder, searchTerm, uploadPhotos, validDuplicateIds])
+  }, [currentFolder, searchTerm, uploadPhotos])
 
-  // Determine if we're in duplicates folder
-  const isDuplicatesFolder = currentFolder === DUPLICATES
-
-  // Build chips for inside folder (NOT for duplicates folder)
+  // Build chips for inside folder
   const folderChips = useMemo(() => {
-    if (isDuplicatesFolder) return []
-
     // Dynamically extract unique tags from currently displayed folder photos
     const uniqueClasses = Array.from(
       new Set(folderPhotos.map((p) => p.className).filter(Boolean))
@@ -501,7 +285,7 @@ export function EventDetail() {
     })
 
     return allChips
-  }, [folderPhotos, isDuplicatesFolder])
+  }, [folderPhotos])
 
   // Search Options for Autocomplete
   const searchOptions = useMemo(() => {
@@ -529,83 +313,25 @@ export function EventDetail() {
           subtitle: p.rider,
         })
       }
-
-      // ADDED: Photo Search Functionality (Search by ID/Code)
-      if (p.photoCode) {
-        options.push({
-          label: `#${p.photoCode}`,
-          value: p.photoCode,
-          type: "photo",
-          // Format: "IMG_2024.jpg • Rider Name"
-          subtitle: `${p.fileName}${p.rider ? ` • ${p.rider}` : ""}`,
-        })
-      }
     })
     return options
   }, [allPhotos])
 
-  // Get filtered photos based on active chip AND search term
   // folderPhotos are already searched; here only the chip
-  const filteredFolderPhotos = useMemo(() => {
-    // Duplicates folder shows all duplicates (no chip filtering)
-    if (isDuplicatesFolder) return folderPhotos
-
+  const displayedPhotos = useMemo(() => {
     const chip = folderChips.find((c) => c.id === activeChip)
     if (!chip || activeChip === "all") return folderPhotos
 
     return folderPhotos.filter(chip.filterFn)
-  }, [folderPhotos, activeChip, folderChips, isDuplicatesFolder])
-
-  // Get display photos based on current tab
-  const displayedPhotos = useMemo(() => {
-    if (activeTab === "uploads") return filteredFolderPhotos
-    if (activeTab === "published") return filteredPublishedPhotos
-    if (activeTab === "archive") return filteredArchivedPhotos
-    return []
-  }, [
-    activeTab,
-    filteredFolderPhotos,
-    filteredPublishedPhotos,
-    filteredArchivedPhotos,
-  ])
-
-  // Group duplicates by duplicateGroupId (or URL if missing)
-  const duplicateGroups = useMemo(() => {
-    if (!isDuplicatesFolder) return new Map<string, Photo[]>()
-
-    const groups = new Map<string, Photo[]>()
-    displayedPhotos.forEach((p) => {
-      const key = p.duplicateGroupId || p.url
-      if (!groups.has(key)) groups.set(key, [])
-      groups.get(key)!.push(p)
-    })
-
-    // Logic already filtered by strict validDuplicateIds, but grouping here ensures structure
-    // No extra filtering needed for size < 2 if validDuplicateIds already enforces it,
-    // but keeping the loop or just relying on validDuplicateIds is fine.
-    // We'll trust validDuplicateIds.
-    return groups
-  }, [displayedPhotos, isDuplicatesFolder])
-
-  // Folder name on duplicate cards
-  const folderNames = useMemo(
-    () => new Map(folders.map((folder) => [folder.id, folder.name])),
-    [folders]
-  )
-  const getFolderName = (photo: Photo) =>
-    (photo.folderId && folderNames.get(photo.folderId)) || UNCATEGORISED_LABEL
+  }, [folderPhotos, activeChip, folderChips])
 
   const handleFolderChange = (folder: string) => {
     if (folder === currentFolder) return
     setActiveFolder(folder)
+    setActiveChip("all")
     setSelectedIds(new Set())
     setIsPanelOpen(false)
   }
-
-  // Reset chip selection when folder changes
-  useEffect(() => {
-    setActiveChip("all")
-  }, [activeFolder])
 
   // Selection handlers
   const handleToggleSelect = (photo: Photo, multiSelect: boolean) => {
@@ -635,29 +361,12 @@ export function EventDetail() {
     setIsPanelOpen(false)
   }
 
-  // Duplicate actions
-  const handleRemove = (photoId: string) => {
-    resolveCachedDuplicate(queryClient, photoId, "remove")
-  }
-
-  // Legacy handler for MasonryGrid fallback
-  const handleKeep = (photoId: string) => {
-    resolveCachedDuplicate(queryClient, photoId, "keep")
-  }
-
-  // Manage handler for cards in other views
-  const handleManageDuplicate = (groupId?: string) => {
-    if (!groupId) return
-    navigate(`?dup=${groupId}`, { replace: true })
-  }
-
   // Map PG Photo to UI Photo for PhotoCard
   const mapToUiPhoto = (photo: Photo) => ({
     id: photo.id,
     src: photo.url,
-    rider: photo.rider || "Unknown",
-    house: photo.horse || "Unknown",
-    horse: photo.horse || "Unknown", // Fix typo fallback
+    rider: photo.rider || "",
+    horse: photo.horse || "",
     event: event?.title || "Event",
     eventId: photo.eventId,
     date: photo.uploadDate || new Date().toISOString(),
@@ -668,8 +377,6 @@ export function EventDetail() {
     height: photo.height,
     className: photo.className || "photo-grid-item",
     arena: event?.venueName || "Arena 1",
-    isDuplicate: validDuplicateIds.has(photo.id),
-    duplicateGroupId: photo.duplicateGroupId,
     photographer: event?.assignedPhotographers?.[0]?.name,
     prices: photo.prices,
     ownPrices: photo.ownPrices,
@@ -745,19 +452,7 @@ export function EventDetail() {
       />
     )
 
-  const showFilters =
-    (activeTab === "uploads" &&
-      !isDuplicatesFolder &&
-      (folderChips.length > 1 || !!searchTerm)) ||
-    (activeTab === "published" && publishedChips.length > 0) ||
-    (activeTab === "archive" && archivedChips.length > 0)
-
-  const activeChips =
-    activeTab === "uploads"
-      ? folderChips
-      : activeTab === "published"
-        ? publishedChips
-        : archivedChips
+  const showFilters = folderChips.length > 1 || !!searchTerm
 
   const handleUpload = () => {
     const params = new URLSearchParams({ eventId: event.id, from: "event" })
@@ -861,14 +556,14 @@ export function EventDetail() {
                   <>
                     Uploads
                     <span className="inline-flex h-4.5 min-w-5 items-center justify-center rounded-full border border-transparent bg-background px-1.5 text-xs font-bold text-muted-foreground in-data-active:border-primary/20 in-data-active:bg-primary/10 in-data-active:text-primary">
-                      {tabCounts.uploads}
+                      {uploadPhotos.length}
                     </span>
                   </>
                 ),
               },
             ]}
-            value={activeTab}
-            onChange={setActiveTab}
+            value="uploads"
+            onChange={() => undefined}
           />
 
           {/* Brand pill at the old 36px height; hidden when the booking was cancelled */}
@@ -886,24 +581,23 @@ export function EventDetail() {
       </div>
 
       <div className="container pt-6">
-        {activeTab === "uploads" &&
-          (uploadPhotos.length > 0 || folders.length > 0) && (
-            <PhotoFolderBar
-              eventId={event.id}
-              folders={folders}
-              photos={uploadPhotos}
-              eventPhotos={allEventPhotos}
-              value={currentFolder}
-              onChange={handleFolderChange}
-            />
-          )}
+        {(uploadPhotos.length > 0 || folders.length > 0) && (
+          <PhotoFolderBar
+            eventId={event.id}
+            folders={folders}
+            photos={uploadPhotos}
+            eventPhotos={allEventPhotos}
+            value={currentFolder}
+            onChange={handleFolderChange}
+          />
+        )}
         {/* Phones: the tag filters become one scrolling row above the photos */}
         <div className="flex items-start gap-8 max-md:flex-col max-md:items-stretch max-md:gap-0">
           {/* Left sidebar: tag filters */}
           {showFilters && (
             <div className="w-55 shrink-0 self-start pt-3 max-md:w-full">
               <div className="flex w-full flex-col items-stretch gap-2 pr-2 max-md:flex-row max-md:overflow-x-auto max-md:pr-0 max-md:pb-1">
-                {activeChips.map((chip) => (
+                {folderChips.map((chip) => (
                   <FilterChip
                     key={chip.id}
                     // Full-width rows, count on the right; long names wrap to two lines
@@ -987,18 +681,16 @@ export function EventDetail() {
                         <Pencil className="size-4.5" />
                       </Button>
 
-                      {activeTab === "uploads" || activeTab === "archive" ? (
-                        <Button
-                          variant="destructive"
-                          size="icon"
-                          className={roundDanger}
-                          onClick={handleDeleteSelection}
-                          title="Delete selection"
-                          aria-label="Delete selection"
-                        >
-                          <Trash2 className="size-4.5" />
-                        </Button>
-                      ) : null}
+                      <Button
+                        variant="destructive"
+                        size="icon"
+                        className={roundDanger}
+                        onClick={handleDeleteSelection}
+                        title="Delete selection"
+                        aria-label="Delete selection"
+                      >
+                        <Trash2 className="size-4.5" />
+                      </Button>
 
                       <Separator
                         orientation="vertical"
@@ -1048,202 +740,72 @@ export function EventDetail() {
               </div>
             )}
 
-            {activeTab === "uploads" && isDuplicatesFolder ? (
-              // Duplicates view (grouped)
-              <div className="pb-25">
-                {Array.from(duplicateGroups.entries()).map(
-                  ([groupId, photos]) => {
-                    const firstPhoto = photos[0]
-
-                    return (
-                      <div
-                        key={groupId}
-                        id={`dup-group-${groupId}`}
-                        className="mb-8 rounded-xl border-2 border-transparent bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.05)] transition-all duration-500 [&.highlight-duplicate-group]:border-primary [&.highlight-duplicate-group]:shadow-[0_0_0_4px] [&.highlight-duplicate-group]:shadow-primary/15"
-                      >
-                        <div className="mb-4 flex items-center gap-2 text-base font-semibold">
-                          Duplicate: {firstPhoto.fileName}{" "}
-                          <span className="font-normal text-muted-foreground">
-                            ({photos.length} instances)
-                          </span>
-                        </div>
-                        <div className="flex gap-4 overflow-x-auto pb-2">
-                          {photos.map((photo) => {
-                            const isSelected = selectedIds.has(photo.id)
-                            return (
-                              <div
-                                key={photo.id}
-                                className="relative w-65 shrink-0"
-                              >
-                                <div
-                                  className={cn(
-                                    selectableCard,
-                                    isSelected && selectedCard
-                                  )}
-                                  onClick={(e) =>
-                                    handleToggleSelect(
-                                      photo,
-                                      e.shiftKey || e.metaKey || e.ctrlKey
-                                    )
-                                  }
-                                >
-                                  <PhotoCard
-                                    photo={mapToUiPhoto(photo)}
-                                    onClick={() => {}}
-                                    variant="pgDuplicate"
-                                    pgMeta={{
-                                      fileName: photo.fileName,
-                                      photoCode: photo.photoCode,
-                                      uploadDate: photo.uploadDate,
-                                      timestamp: photo.timestamp,
-                                      folderName: getFolderName(photo),
-                                    }}
-                                    onKeep={() => handleKeep(photo.id)}
-                                    onRemove={() => handleRemove(photo.id)}
-                                  />
-                                  {renderSelectBox(photo, isSelected)}
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )
-                  }
-                )}
-                {duplicateGroups.size === 0 && (
-                  <div className="py-16 text-center text-sm text-muted-foreground">
-                    No duplicates found.
-                  </div>
-                )}
-              </div>
-            ) : (
-              // develop: plain grid instead of masonry (Safari fix)
-              <div
-                aria-busy={isLoadingPhotos || undefined}
-                className={photoGridClass}
-              >
-                {isLoadingPhotos && (
-                  <>
-                    <span className="sr-only">Loading photos…</span>
-                    {Array.from({ length: 8 }).map((_, index) => (
-                      <PhotoCardSkeleton key={index} pg />
-                    ))}
-                  </>
-                )}
-                {displayedPhotos.map((photo) => {
-                  const uiPhoto = mapToUiPhoto(photo)
-                  const isSelected = selectedIds.has(photo.id)
-
-                  const cardVariant =
-                    activeTab === "uploads"
-                      ? isDuplicatesFolder
-                        ? "pgDuplicate"
-                        : "pgUpload"
-                      : activeTab === "published"
-                        ? "pgPublished"
-                        : "pgArchived"
-
-                  return (
-                    <div
-                      key={photo.id}
-                      id={`photo-${photo.id}`}
-                      className={cn(selectableCard, isSelected && selectedCard)}
-                      onClick={(e) =>
-                        handleToggleSelect(
-                          photo,
-                          e.shiftKey || e.metaKey || e.ctrlKey
-                        )
-                      }
-                    >
-                      <PhotoCard
-                        photo={uiPhoto}
-                        onClick={() => {}}
-                        variant={cardVariant}
-                        pgMeta={{
-                          fileName: photo.fileName,
-                          photoCode: photo.photoCode,
-                          uploadDate: photo.uploadDate,
-                          timestamp: photo.timestamp,
-                          prices: isDuplicatesFolder ? undefined : photo.prices,
-                          folderName: getFolderName(photo),
-                          soldCount:
-                            activeTab === "published" || activeTab === "archive"
-                              ? photo.soldCount
-                              : 0,
-                          totalBucketSales:
-                            activeTab === "published" &&
-                            activePublishedFolder === "selling_photos"
-                              ? publishedFolderCounts.totalSales
-                              : 0,
-                        }}
-                        onKeep={
-                          isDuplicatesFolder
-                            ? () => handleKeep(photo.id)
-                            : undefined
-                        }
-                        onRemove={() => {
-                          if (isDuplicatesFolder) {
-                            handleRemove(photo.id)
-                          } else if (activeTab !== "published") {
-                            setSelectedIds(new Set([photo.id]))
-                            setConfirmModal({ type: "delete", isOpen: true })
-                          }
-                        }}
-                        onManageDuplicate={() =>
-                          handleManageDuplicate(photo.duplicateGroupId)
-                        }
-                        onEdit={() => handleEditPhotoOverride(photo)}
-                        onEditPrice={() => handleEditPrice(photo)}
-                        onPreview={() => setPreviewPhoto(uiPhoto)}
-                      />
-                      {renderSelectBox(photo, isSelected)}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-
-            {activeTab === "uploads" &&
-              !isDuplicatesFolder &&
-              !isLoadingPhotos &&
-              displayedPhotos.length === 0 && (
-                <EmptyState
-                  icon={<ImageOff />}
-                  title={searchTerm ? "No results found" : "No photos here"}
-                  description={
-                    searchTerm
-                      ? `No photos match "${searchTerm}"`
-                      : currentFolder !== ALL_FOLDERS &&
-                          currentFolder !== UNCATEGORISED
-                        ? "This folder is empty. Select photos and use Move to... to add them."
-                        : canUploadPhotos
-                          ? "This folder is empty. Upload photos to get started."
-                          : "This event is read-only because the booking was cancelled."
-                  }
-                />
+            {/* develop: plain grid instead of masonry (Safari fix) */}
+            <div
+              aria-busy={isLoadingPhotos || undefined}
+              className={photoGridClass}
+            >
+              {isLoadingPhotos && (
+                <>
+                  <span className="sr-only">Loading photos…</span>
+                  {Array.from({ length: 8 }).map((_, index) => (
+                    <PhotoCardSkeleton key={index} pg />
+                  ))}
+                </>
               )}
-            {activeTab === "published" && displayedPhotos.length === 0 && (
+              {displayedPhotos.map((photo) => {
+                const uiPhoto = mapToUiPhoto(photo)
+                const isSelected = selectedIds.has(photo.id)
+
+                return (
+                  <div
+                    key={photo.id}
+                    id={`photo-${photo.id}`}
+                    className={cn(selectableCard, isSelected && selectedCard)}
+                    onClick={(e) =>
+                      handleToggleSelect(
+                        photo,
+                        e.shiftKey || e.metaKey || e.ctrlKey
+                      )
+                    }
+                  >
+                    <PhotoCard
+                      photo={uiPhoto}
+                      onClick={() => {}}
+                      variant="pgUpload"
+                      pgMeta={{
+                        fileName: photo.fileName,
+                        uploadDate: photo.uploadDate,
+                        timestamp: photo.timestamp,
+                        prices: photo.prices,
+                      }}
+                      onRemove={() => {
+                        setSelectedIds(new Set([photo.id]))
+                        setConfirmModal({ type: "delete", isOpen: true })
+                      }}
+                      onEdit={() => handleEditPhotoOverride(photo)}
+                      onEditPrice={() => handleEditPrice(photo)}
+                      onPreview={() => setPreviewPhoto(uiPhoto)}
+                    />
+                    {renderSelectBox(photo, isSelected)}
+                  </div>
+                )
+              })}
+            </div>
+
+            {!isLoadingPhotos && displayedPhotos.length === 0 && (
               <EmptyState
-                icon={<Globe />}
-                title={
-                  searchTerm ? "No results found" : "Nothing published yet"
-                }
+                icon={<ImageOff />}
+                title={searchTerm ? "No results found" : "No photos here"}
                 description={
                   searchTerm
-                    ? `No published photos match "${searchTerm}"`
-                    : "Publish photos from the Uploads tab to make them available for buyers."
-                }
-              />
-            )}
-            {activeTab === "archive" && displayedPhotos.length === 0 && (
-              <EmptyState
-                icon={<Archive />}
-                title={searchTerm ? "No results found" : "Archive is empty"}
-                description={
-                  searchTerm
-                    ? `No archived photos match "${searchTerm}"`
-                    : "Unpublished photos will appear here."
+                    ? `No photos match "${searchTerm}"`
+                    : currentFolder !== ALL_FOLDERS &&
+                        currentFolder !== UNCATEGORISED
+                      ? "This folder is empty. Select photos and use Move to... to add them."
+                      : canUploadPhotos
+                        ? "This folder is empty. Upload photos to get started."
+                        : "This event is read-only because the booking was cancelled."
                 }
               />
             )}
@@ -1257,7 +819,6 @@ export function EventDetail() {
         selectedIds={selectedIds}
         allPhotos={allPhotos}
         activeTab={activePanelTab}
-        currentTab={activeTab}
         onClose={() => setIsPanelOpen(false)}
         // Moved photos may have left the folder on screen
         onMoved={() => setSelectedIds(new Set())}

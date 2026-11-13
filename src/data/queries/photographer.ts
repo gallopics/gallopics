@@ -82,12 +82,10 @@ function mapApiPhotoToPgPhoto(photo: ApiPhoto): Photo {
     width: 600,
     height: 800,
     fileName: photo.file_name || undefined,
-    photoCode: "",
     uploadDate: photo.created_at,
     folderId: photo.folder_id || undefined,
     classId: getApiPhotoClassId(photo),
     className: getApiPhotoClassName(photo),
-    isDuplicate: false,
     prices: toSekPrices(photo.prices),
     ownPrices: toSekOwnPrices(photo.own_prices ?? LINKED_PRICES),
   }
@@ -178,6 +176,8 @@ export const photographerKeys = {
   profile: () => [...photographerKeys.all, "me"] as const,
   bookings: () => [...photographerKeys.all, "bookings"] as const,
   photos: () => [...photographerKeys.all, "photos"] as const,
+  /** Local removals pending Undo or a reset of the photo cache */
+  hiddenPhotos: () => [...photographerKeys.all, "hidden-photos"] as const,
   defaultPrices: () => [...photographerKeys.all, "default-prices"] as const,
   highlights: () => [...photographerKeys.all, "highlights"] as const,
   /** Their own folders in one event */
@@ -198,14 +198,22 @@ export const bookingsQueryOptions = () =>
   })
 
 /**
- * All the photographer's photos. The studio also edits fields the API does not
- * store yet (duplicates), and those edits live only in this cache,
- * so it is never refetched in the background; uploads and deletes update it.
+ * All the photographer's photos. Uploads, saves and deletes update the list,
+ * so it is not refetched in the background. Photos waiting for a delete (Undo
+ * toast) stay out of a refetch.
  */
 export const myPhotosQueryOptions = () =>
   queryOptions({
     queryKey: photographerKeys.photos(),
-    queryFn: () => fetchAllMyPhotos(),
+    queryFn: async ({ client }) => {
+      if (client.getQueryData(photographerKeys.photos()) === undefined)
+        client.removeQueries({ queryKey: photographerKeys.hiddenPhotos() })
+      const photos = await fetchAllMyPhotos()
+      const hidden = new Set(
+        client.getQueryData<string[]>(photographerKeys.hiddenPhotos())
+      )
+      return photos.filter((photo) => !hidden.has(photo.id))
+    },
     staleTime: Infinity,
   })
 
@@ -237,10 +245,9 @@ const isUuid = (value: string) =>
     value
   )
 
-/** The tags the API stores for a photo (generic photos have none) */
+/** The tags the API stores for a photo */
 const buildTags = (photo: Photo) => {
   const tags: Array<{ type: string; value: string }> = []
-  if (photo.isGeneric) return tags
   if (photo.rider) tags.push({ type: "rider", value: photo.rider })
   if (photo.horse) tags.push({ type: "horse", value: photo.horse })
   if (photo.className) tags.push({ type: "class", value: photo.className })
@@ -261,50 +268,44 @@ export function updateCachedPhotos(
   )
 }
 
+/** Put the photos the API returned after a save into the cached list */
+function setSavedPhotos(client: QueryClient, saved: ApiPhoto[]) {
+  const byId = new Map(saved.map((photo) => [photo.id, photo]))
+  updateCachedPhotos(client, (prev) =>
+    prev.map((p) => {
+      const photo = byId.get(p.id)
+      return photo ? mapApiPhotoToPgPhoto(photo) : p
+    })
+  )
+}
+
+/** After a failed save, some photos may still have changed on the server */
+const refetchMyPhotos = (client: QueryClient) =>
+  void client.invalidateQueries({ queryKey: photographerKeys.photos() })
+
+export function hideCachedPhotos(client: QueryClient, photoIds: string[]) {
+  const key = photographerKeys.hiddenPhotos()
+  const hidden = new Set(client.getQueryData<string[]>(key))
+  photoIds.forEach((id) => hidden.add(id))
+  client.setQueryDefaults(key, { gcTime: Infinity })
+  client.setQueryData(key, [...hidden])
+  updateCachedPhotos(client, (prev) => prev.filter((p) => !hidden.has(p.id)))
+}
+
+function unhidePhotoIds(client: QueryClient, photoIds: Set<string>) {
+  client.setQueryData<string[]>(photographerKeys.hiddenPhotos(), (prev) =>
+    prev?.filter((id) => !photoIds.has(id))
+  )
+}
+
 /** Put photos back in the list (Undo); local only */
 export function restoreCachedPhotos(client: QueryClient, photos: Photo[]) {
   const ids = new Set(photos.map((p) => p.id))
+  unhidePhotoIds(client, ids)
   updateCachedPhotos(client, (prev) => [
     ...prev.filter((p) => !ids.has(p.id)),
     ...photos,
   ])
-}
-
-/** Keep or drop one copy of a duplicate; local only */
-export function resolveCachedDuplicate(
-  client: QueryClient,
-  photoId: string,
-  action: "keep" | "remove"
-) {
-  const photos = getCachedPhotos(client)
-  const photo = photos.find((p) => p.id === photoId)
-  if (!photo) return
-
-  if (action === "remove") {
-    // Removing this one may leave a single copy, which then is no duplicate
-    const others = photos.filter(
-      (p) => p.url === photo.url && p.isDuplicate && p.id !== photoId
-    )
-    const survivorId = others.length === 1 ? others[0].id : null
-    updateCachedPhotos(client, (prev) =>
-      prev
-        .filter((p) => p.id !== photoId)
-        .map((p) =>
-          p.id === survivorId
-            ? { ...p, isDuplicate: false, duplicateResolved: true }
-            : p
-        )
-    )
-  } else {
-    // Keep this one and drop the other copies (same url)
-    updateCachedPhotos(client, (prev) =>
-      prev
-        .filter(
-          (p) => p.id === photoId || !(p.url === photo.url && p.isDuplicate)
-        )
-        .map((p) => (p.id === photoId ? { ...p, duplicateResolved: true } : p))
-    )
-  }
 }
 
 /**
@@ -320,12 +321,11 @@ export const deletePhotosMutationOptions = () =>
       await client.cancelQueries({ queryKey: photographerKeys.photos() })
       const removed =
         hidden ?? getCachedPhotos(client).filter((p) => photoIds.includes(p.id))
-      updateCachedPhotos(client, (prev) =>
-        prev.filter((p) => !photoIds.includes(p.id))
-      )
+      hideCachedPhotos(client, photoIds)
       return { removed }
     },
     onError: (error, _variables, result, { client }) => {
+      unhidePhotoIds(client, new Set(result?.removed.map((photo) => photo.id)))
       // Put back the ones that are still missing
       updateCachedPhotos(client, (prev) => {
         const remainingIds = new Set(prev.map((p) => p.id))
@@ -357,30 +357,36 @@ export const deletePhotosMutationOptions = () =>
 export const savePhotoDetailsMutationOptions = () =>
   mutationOptions({
     mutationKey: [...photographerKeys.photos(), "update"],
-    onMutate: async (
+    mutationFn: async (
       { photoIds, details }: { photoIds: string[]; details: Partial<Photo> },
       { client }
     ) => {
-      await client.cancelQueries({ queryKey: photographerKeys.photos() })
-      updateCachedPhotos(client, (prev) =>
-        prev.map((p) => (photoIds.includes(p.id) ? { ...p, ...details } : p))
-      )
-    },
-    // Runs after onMutate, so the cached photos already have the new details
-    mutationFn: async ({ photoIds }, { client }) => {
       const photos = getCachedPhotos(client).filter(
         (p) => photoIds.includes(p.id) && isUuid(p.id)
       )
-      await Promise.all(
+      // Finish every write before the caller starts restoring a partial save.
+      const results = await Promise.allSettled(
         photos.map((photo) =>
-          api.updatePhoto(photo.id, { tags: buildTags(photo) })
+          api.updatePhoto(photo.id, {
+            tags: buildTags({ ...photo, ...details }),
+          })
         )
       )
-      return photos.map((photo) => photo.eventId)
+      const failed = results.find((result) => result.status === "rejected")
+      if (failed) throw failed.reason
+      return results.flatMap((result) =>
+        result.status === "fulfilled" ? [result.value] : []
+      )
     },
-    onSuccess: (eventIds, _variables, _result, { client }) => {
-      invalidateEventPhotos(client, eventIds)
+    onSuccess: (saved, _variables, _result, { client }) => {
+      setSavedPhotos(client, saved)
+      invalidateEventPhotos(
+        client,
+        saved.map((photo) => photo.event_id)
+      )
     },
+    onError: (_error, _variables, _result, { client }) =>
+      refetchMyPhotos(client),
   })
 
 /** Most photos the API takes in one bulk update (prices, folder) */
@@ -425,20 +431,7 @@ export const savePhotoPricesMutationOptions = () =>
       return updated
     },
     onSuccess: (updated, _variables, _result, { client }) => {
-      const pricesById = new Map(
-        updated.map((photo) => [
-          photo.id,
-          {
-            prices: toSekPrices(photo.prices),
-            ownPrices: toSekOwnPrices(photo.own_prices ?? LINKED_PRICES),
-          },
-        ])
-      )
-      updateCachedPhotos(client, (prev) =>
-        prev.map((p) =>
-          pricesById.has(p.id) ? { ...p, ...pricesById.get(p.id) } : p
-        )
-      )
+      setSavedPhotos(client, updated)
       invalidateEventPhotos(
         client,
         updated.map((photo) => photo.event_id)
@@ -446,6 +439,8 @@ export const savePhotoPricesMutationOptions = () =>
       // The public photo page shows them too
       void client.invalidateQueries({ queryKey: photoKeys.all })
     },
+    onError: (_error, _variables, _result, { client }) =>
+      refetchMyPhotos(client),
   })
 
 /** Shown at once; the old list comes back if the API refuses */

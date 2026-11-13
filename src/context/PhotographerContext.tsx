@@ -80,13 +80,7 @@ export interface Photo {
   id: string
   url: string
   eventId: string
-  status:
-    | "uploading"
-    | "processing"
-    | "needsReview"
-    | "uploadedUnpublished"
-    | "published"
-    | "archived"
+  status: "uploading" | "processing" | "needsReview" | "uploadedUnpublished"
   soldCount: number
   /* Metadata */
   rider?: string
@@ -96,19 +90,12 @@ export interface Photo {
   timestamp?: string
   width: number
   height: number
-  title?: string
-  description?: string
-  isGeneric?: boolean
   /* New fields for Uploads tab */
   fileName?: string
-  photoCode?: string // e.g. "PHT-9X2A1"
   uploadDate?: string // ISO date string
   folderId?: string // The photographer's own folder (empty = Uncategorised)
   classId?: string
   className?: string
-  isDuplicate?: boolean
-  duplicateResolved?: boolean // True after "Keep" action resolves duplicates
-  duplicateGroupId?: string // Identifies which duplicate group this instance belongs to
   prices?: PhotoPrices // in SEK
   ownPrices?: OwnPhotoPrices // null tiers follow defaults
 }
@@ -132,17 +119,6 @@ interface PhotographerContextType {
     fileId: string,
     options?: { deleteUploaded?: boolean }
   ) => Promise<boolean>
-}
-
-const generatePhotoCode = () => {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-  return (
-    "PHT-" +
-    Array.from(
-      { length: 5 },
-      () => chars[Math.floor(Math.random() * chars.length)]
-    ).join("")
-  )
 }
 
 const isUuid = (value: string) =>
@@ -505,7 +481,6 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
             width: 600,
             height: 800,
             fileName: file.name,
-            photoCode: generatePhotoCode(),
             uploadDate: new Date().toISOString(),
             classId:
               getApiPhotoClassId(p) ||

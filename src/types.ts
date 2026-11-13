@@ -21,8 +21,6 @@ export interface Photo {
   /** Price per quality tier, in SEK */
   prices?: PhotoPrices
   ownPrices?: OwnPhotoPrices
-  isDuplicate?: boolean
-  duplicateGroupId?: string
 }
 
 export interface FilterState {

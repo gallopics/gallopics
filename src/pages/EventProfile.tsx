@@ -680,7 +680,6 @@ export function EventProfile() {
           }
           allPhotos={myEventPhotos}
           activeTab="tags"
-          currentTab="uploads"
           onClose={() => setPhotoToEditId(null)}
         />
       )}

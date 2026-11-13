@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Link } from "react-router"
-import { Check, Pencil, Plus, RotateCcw, Share2, Trash2 } from "lucide-react"
+import { Check, Pencil, Plus, Share2, Trash2 } from "lucide-react"
 
 import {
   getDefaultCartTier,
@@ -18,8 +18,8 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { WatermarkedThumbnail } from "@/components/WatermarkedThumbnail"
 
-type PhotoCardVariant =
-  "default" | "pgUpload" | "pgDuplicate" | "pgPublished" | "pgArchived"
+/** pgUpload: the studio's own photos (edit/delete); pgSold: the Sales page */
+type PhotoCardVariant = "default" | "pgUpload" | "pgSold"
 
 interface PhotoCardProps {
   photo: Photo
@@ -36,22 +36,14 @@ interface PhotoCardProps {
   /** Extra details for the photographer (pg*) variants */
   pgMeta?: {
     fileName?: string
-    photoCode?: string
     uploadDate?: string
     timestamp?: string
     /** The photo's prices in SEK; shown as "from … SEK" (opens Edit price) */
     prices?: PhotoPrices
     ownPrices?: OwnPhotoPrices
     soldCount?: number
-    totalBucketSales?: number
-    /** pgDuplicate: other places this photo appears in */
-    alsoIn?: string[]
-    /** pgDuplicate: where this copy is stored */
-    folderName?: string
   }
-  onKeep?: () => void
   onRemove?: () => void
-  onManageDuplicate?: () => void
   onEdit?: (photo: Photo) => void
   onPreview?: (photo: Photo) => void
   onEditPrice?: (photo?: Photo) => void
@@ -80,12 +72,7 @@ export function GlassButton({
   )
 }
 
-const PG_VARIANTS: PhotoCardVariant[] = [
-  "pgUpload",
-  "pgDuplicate",
-  "pgPublished",
-  "pgArchived",
-]
+const PG_VARIANTS: PhotoCardVariant[] = ["pgUpload", "pgSold"]
 
 export function PhotoCard({
   photo,
@@ -95,9 +82,7 @@ export function PhotoCard({
   onAddToCart,
   variant = "default",
   pgMeta,
-  onKeep,
   onRemove,
-  onManageDuplicate,
   onEdit,
   onPreview,
   onEditPrice,
@@ -106,15 +91,10 @@ export function PhotoCard({
   showShareActions = true,
 }: PhotoCardProps) {
   const [isLoaded, setIsLoaded] = useState(false)
-  const [dupHover, setDupHover] = useState(false)
   const { addToCart, removeFromCartByPhotoId, isInCart } = useCart()
 
   const isAdded = isInCart(photo.id)
   const isPG = PG_VARIANTS.includes(variant)
-  const hasPgActions =
-    variant === "pgUpload" ||
-    variant === "pgPublished" ||
-    variant === "pgArchived"
 
   const handleToggleCart = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -197,18 +177,6 @@ export function PhotoCard({
           )}
         />
 
-        {variant !== "pgDuplicate" && photo.isDuplicate && (
-          <Badge
-            variant="destructive"
-            onMouseEnter={() => setDupHover(true)}
-            onMouseLeave={() => setDupHover(false)}
-            onClick={stop(onManageDuplicate)}
-            className="absolute right-2.5 bottom-2.5 z-30 h-auto min-w-15 cursor-pointer rounded-sm border-destructive/25 bg-[#fef2f2] px-2 py-0.75 text-[0.65rem] font-bold tracking-[0.02em] uppercase shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-          >
-            {dupHover ? "Manage" : "Duplicate"}
-          </Badge>
-        )}
-
         {variant === "default" && (
           <>
             {/* Darken slightly on hover */}
@@ -261,7 +229,7 @@ export function PhotoCard({
         )}
 
         {/* Shown on hover; always on touch screens, which have no hover */}
-        {hasPgActions && (
+        {variant === "pgUpload" && (
           <div className="pointer-events-none absolute top-3 right-3 z-30 flex flex-col gap-2 opacity-0 transition-all duration-200 group-hover/photo:pointer-events-auto group-hover/photo:opacity-100 pointer-coarse:pointer-events-auto pointer-coarse:opacity-100">
             {showEdit && (
               <GlassButton
@@ -273,37 +241,13 @@ export function PhotoCard({
               </GlassButton>
             )}
             <GlassButton
-              title={
-                variant === "pgPublished" ? "Unpublish photo" : "Delete photo"
-              }
-              aria-label={
-                variant === "pgPublished" ? "Unpublish photo" : "Delete photo"
-              }
+              title="Delete photo"
+              aria-label="Delete photo"
               onClick={stop(onRemove)}
               className="hover:bg-destructive/12 hover:text-destructive"
             >
-              {variant === "pgPublished" ? <RotateCcw /> : <Trash2 />}
+              <Trash2 />
             </GlassButton>
-          </div>
-        )}
-
-        {variant === "pgDuplicate" && (
-          <div className="pointer-events-none absolute inset-x-3 bottom-3 flex translate-y-2 gap-2 opacity-0 transition-all duration-200 group-hover/photo:pointer-events-auto group-hover/photo:translate-y-0 group-hover/photo:opacity-100 pointer-coarse:pointer-events-auto pointer-coarse:translate-y-0 pointer-coarse:opacity-100">
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={stop(onKeep)}
-              className="flex-1 rounded-lg border-black/10 bg-white/95 hover:border-black/10 hover:bg-white hover:shadow-[0_2px_8px_rgba(0,0,0,0.15)]"
-            >
-              Keep
-            </Button>
-            <Button
-              size="sm"
-              onClick={stop(onRemove)}
-              className="flex-1 rounded-lg bg-destructive/90 text-white hover:bg-destructive hover:shadow-[0_2px_8px_rgba(239,68,68,0.3)]"
-            >
-              Remove
-            </Button>
           </div>
         )}
       </div>
@@ -352,25 +296,9 @@ function PhotoCardFooter({
   const matchedRider = isMatchedValue(photo.rider) ? photo.rider : undefined
   const matchedHorse = isMatchedValue(photo.horse) ? photo.horse : undefined
 
-  if (variant === "pgDuplicate") {
-    return (
-      <div className="flex w-full items-center justify-between gap-2 bg-card p-3">
-        <span className="flex-1 truncate text-xs leading-[1.4] font-semibold">
-          {pgMeta.fileName || "Untitled"}
-        </span>
-        {pgMeta.folderName && (
-          <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[0.625rem] font-bold tracking-[0.02em] text-muted-foreground uppercase">
-            {pgMeta.folderName}
-          </span>
-        )}
-      </div>
-    )
-  }
-
-  // Uploads, published, archived: file name + sold count + lowest price
+  // File name (or rider/horse) + sold count + lowest price
   const { prices } = pgMeta
   const soldCount = pgMeta.soldCount || 0
-  const totalBucketSales = pgMeta.totalBucketSales || 0
   const priceSummary =
     prices &&
     `${hasCustomPrices(pgMeta.ownPrices ?? photo.ownPrices) ? "Own prices" : "Default prices"}: ${QUALITY_TIERS.map(
@@ -394,7 +322,7 @@ function PhotoCardFooter({
         {soldCount > 0 && (
           <Badge
             variant="success"
-            title={`Sold: ${soldCount} · Total sales: ${totalBucketSales}`}
+            title={`Sold: ${soldCount}`}
             className="h-auto rounded-sm border-success/20 bg-success/8 px-1.5 py-0.5 text-[0.6875rem] leading-none font-bold"
           >
             {soldCount}

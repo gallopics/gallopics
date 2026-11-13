@@ -30,6 +30,8 @@ export interface DropdownOption {
 }
 
 interface ModernDropdownProps {
+  id?: string
+  onBlur?: () => void
   label?: string
   value: string
   options: DropdownOption[]
@@ -110,6 +112,8 @@ function OptionContent({
 }
 
 export function ModernDropdown({
+  id,
+  onBlur,
   value,
   options,
   onChange,
@@ -159,6 +163,8 @@ export function ModernDropdown({
         disabled={disabled}
       >
         <ComboboxTrigger
+          id={id}
+          onBlur={onBlur}
           className={cn(
             "flex h-11 w-full items-center justify-between gap-2 rounded-md border border-border bg-card px-4 text-sm text-foreground transition-all outline-none hover:border-muted-foreground/50 focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/8 disabled:opacity-50 data-popup-open:border-ring data-popup-open:ring-4 data-popup-open:ring-ring/8",
             isPill && pillTrigger,
@@ -197,6 +203,8 @@ export function ModernDropdown({
       disabled={disabled}
     >
       <SelectTrigger
+        id={id}
+        onBlur={onBlur}
         size={isPill ? "sm" : "default"}
         className={cn(
           "w-full",

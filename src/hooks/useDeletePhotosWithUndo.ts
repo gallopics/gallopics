@@ -5,8 +5,8 @@ import type { Photo } from "@/context/PhotographerContext"
 import { ApiError } from "@/data/apiClient"
 import {
   deletePhotosMutationOptions,
+  hideCachedPhotos,
   restoreCachedPhotos,
-  updateCachedPhotos,
 } from "@/data/queries/photographer"
 
 /**
@@ -21,9 +21,7 @@ export function useDeletePhotosWithUndo() {
   return (photos: Photo[], message: string, onUndo?: () => void) => {
     if (photos.length === 0) return
     const photoIds = photos.map((photo) => photo.id)
-    updateCachedPhotos(queryClient, (prev) =>
-      prev.filter((photo) => !photoIds.includes(photo.id))
-    )
+    hideCachedPhotos(queryClient, photoIds)
 
     let undone = false
     notify(
