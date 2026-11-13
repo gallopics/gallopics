@@ -518,7 +518,11 @@ export function EventProfile() {
                       <PhotoCardSkeleton key={`event-skeleton-${index}`} />
                     ))
                   : activePhotos.map((photo) => (
-                      <div key={photo.id} className="group/item relative">
+                      // isolate: the buttons' z-index stays inside the card, under the sticky header
+                      <div
+                        key={photo.id}
+                        className="group/item relative isolate"
+                      >
                         <PhotoCard
                           photo={photo}
                           // Manage view: edit/delete replace the share and cart buttons
@@ -534,7 +538,7 @@ export function EventProfile() {
                           onClick={setPreviewPhoto}
                         />
                         {isPhotographerMyEventView && (
-                          <div className="absolute top-3 right-3 z-40 flex flex-col gap-2">
+                          <div className="absolute top-3 right-3 z-30 flex flex-col gap-2">
                             <GlassButton
                               title="Edit rider and horse"
                               aria-label="Edit rider and horse"
