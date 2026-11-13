@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react"
-import { useLocation, useNavigate, useParams } from "react-router"
+import { Link, useLocation, useNavigate, useParams } from "react-router"
 import { useQuery } from "@tanstack/react-query"
 import {
   AlertCircle,
@@ -39,7 +39,10 @@ import { FilterChip } from "@/components/FilterChip"
 import { ActionCluster } from "@/components/HeaderActions"
 import { PhotoCard, PhotoCardSkeleton } from "@/components/PhotoCard"
 import { PhotoPreviewDialog } from "@/components/PhotoPreviewDialog"
-import { ScopedSearchBar } from "@/components/ScopedSearchBar"
+import {
+  ScopedSearchBar,
+  type ScopedSearchOption,
+} from "@/components/ScopedSearchBar"
 import { TitleHeader } from "@/components/TitleHeader"
 import { WorkspaceTabs } from "@/components/WorkspaceTabs"
 import { EventDetailsDialog } from "@/pages/pg/components/EventDetailsDialog"
@@ -64,7 +67,7 @@ export function EventDetail() {
   const navigate = useNavigate()
 
   const location = useLocation()
-  const fromTab = (location.state as any)?.fromTab
+  const fromTab = (location.state as { fromTab?: string } | null)?.fromTab
   const { basePath } = useWorkspace()
   const { isPhotographer } = useAuth()
   const deletePhotosWithUndo = useDeletePhotosWithUndo()
@@ -119,50 +122,23 @@ export function EventDetail() {
     (photo) => photo.status === "uploadedUnpublished"
   ).length
   const selectedClassContext = useMemo(() => {
-    const state = location.state as
-      | {
-          selectedClassId?: string
-          selectedEquipeClassSectionId?: string
-          selectedClassName?: string
-          selectedArenaName?: string
-        }
-      | null
-      | undefined
     const params = new URLSearchParams(location.search)
 
     return {
-      id:
-        state?.selectedClassId ||
-        params.get("classSectionId") ||
-        params.get("classId") ||
-        "",
-      equipeClassSectionId:
-        state?.selectedEquipeClassSectionId ||
-        params.get("equipeClassSectionId") ||
-        "",
-      name: state?.selectedClassName || params.get("className") || "",
-      arenaName: state?.selectedArenaName || params.get("arenaName") || "",
+      id: params.get("classSectionId") || params.get("classId") || "",
+      equipeClassSectionId: params.get("equipeClassSectionId") || "",
+      name: params.get("className") || "",
+      arenaName: params.get("arenaName") || "",
     }
-  }, [location.search, location.state])
+  }, [location.search])
 
   const hasSelectedClassContext = Boolean(
     selectedClassContext.id || selectedClassContext.name
   )
 
   const handleBack = useCallback(() => {
-    if (hasSelectedClassContext && eventId) {
-      navigate(`/event/${eventId}`, {
-        state: {
-          from: "/pg/events",
-          fromTab: fromTab || "my",
-          eventTab: "classes",
-        },
-      })
-      return
-    }
-
     navigate(`${basePath}/events`, { state: { tab: fromTab } })
-  }, [basePath, eventId, fromTab, hasSelectedClassContext, navigate])
+  }, [basePath, fromTab, navigate])
 
   const matchesSelectedClass = useCallback(
     (photo: Photo) => {
@@ -193,7 +169,7 @@ export function EventDetail() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [isPanelOpen, setIsPanelOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
-  const [previewPhoto, setPreviewPhoto] = useState<any | null>(null)
+  const [previewPhoto, setPreviewPhoto] = useState<{ src: string } | null>(null)
   const [showInfoModal, setShowInfoModal] = useState(false)
 
   const uploadPhotos = useMemo(
@@ -245,7 +221,12 @@ export function EventDetail() {
       new Set(folderPhotos.map((p) => p.horse).filter((h) => h && h !== "None"))
     ) as string[]
 
-    const allChips: any[] = [
+    const allChips: {
+      id: string
+      label: string
+      count: number
+      filterFn: (photo: Photo) => boolean
+    }[] = [
       {
         id: "all",
         label: "All",
@@ -290,7 +271,7 @@ export function EventDetail() {
   // Search Options for Autocomplete
   const searchOptions = useMemo(() => {
     if (!allPhotos.length) return []
-    const options: any[] = []
+    const options: ScopedSearchOption[] = []
     const uniqueRiders = new Set<string>()
     const uniqueHorses = new Set<string>()
 
@@ -505,12 +486,8 @@ export function EventDetail() {
               size="icon-sm"
               className="size-6.5"
               onClick={handleBack}
-              title={
-                hasSelectedClassContext ? "Back to classes" : "Back to events"
-              }
-              aria-label={
-                hasSelectedClassContext ? "Back to classes" : "Back to events"
-              }
+              title="Back to events"
+              aria-label="Back to events"
             >
               <ArrowLeft className="size-4.5" />
             </Button>
@@ -531,6 +508,14 @@ export function EventDetail() {
         avatarShape="square"
         rightContent={
           <ActionCluster>
+            {basePath === "/pg" && (
+              <Button
+                variant="outline"
+                render={<Link to={`/event/${event.id}`} />}
+              >
+                View public page
+              </Button>
+            )}
             <div className="flex flex-col items-start rounded-xl bg-muted px-4 py-2 whitespace-nowrap text-muted-foreground">
               <span className="text-[0.6875rem] leading-[1.2] font-semibold opacity-80">
                 Published
@@ -607,12 +592,6 @@ export function EventDetail() {
                         className="flex min-w-0 items-center gap-1.5"
                         title={String(chip.label)}
                       >
-                        {chip.color && (
-                          <span
-                            className="size-2 shrink-0 rounded-full"
-                            style={{ background: chip.color }}
-                          />
-                        )}
                         <span className="line-clamp-2 leading-[1.3]">
                           {chip.label}
                         </span>
@@ -623,7 +602,6 @@ export function EventDetail() {
                       setActiveChip(activeChip === chip.id ? "all" : chip.id)
                     }
                     variant="filterCount"
-                    accent={chip.id === "missing-tags" ? "red" : undefined}
                     count={chip.count}
                   />
                 ))}

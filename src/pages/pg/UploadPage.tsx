@@ -97,10 +97,6 @@ export function UploadPage() {
     if (from === "event" && urlEventId) {
       // Explicitly go back to the event we came from
       navigate(`${basePath}/events/${urlEventId}`)
-    } else if (from === "eventProfile" && urlEventId) {
-      navigate(`/event/${urlEventId}`, {
-        state: { from: "/pg/events", fromTab: "my" },
-      })
     } else if (from === "sidebar") {
       // Usually means we came from "anywhere", so events list is a safe home
       navigate(`${basePath}/events`)
