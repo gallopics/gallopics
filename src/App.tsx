@@ -57,7 +57,9 @@ const EventsList = lazy(() =>
   import("@/pages/pg/EventsList").then((m) => ({ default: m.EventsList }))
 )
 const EventDetail = lazy(() =>
-  import("@/pages/pg/EventDetail").then((m) => ({ default: m.EventDetail }))
+  import("@/pages/pg/event-detail/EventDetail").then((m) => ({
+    default: m.EventDetail,
+  }))
 )
 const AdminEventDetail = lazy(() =>
   import("@/pages/pg/AdminEventDetail").then((m) => ({

@@ -27,7 +27,7 @@ import {
   normalizeCountry,
   type ApiEvent,
 } from "../eventsApi"
-import { eventKeys, invalidateEventPhotos } from "./events"
+import { eventKeys, eventQueryOptions, invalidateEventPhotos } from "./events"
 import { photoKeys, publicPhotographerKeys } from "./photos"
 
 const PHOTOS_PAGE_SIZE = 100
@@ -102,7 +102,7 @@ async function fetchAllMyPhotos() {
 }
 
 /** An event from the events API as the studio pages show it */
-export const toPgEvent = (
+const toPgEvent = (
   eventId: string,
   event: ApiEvent,
   canUploadPhotos = false
@@ -139,6 +139,16 @@ export const toPgEvent = (
     canUploadPhotos,
   }
 }
+
+/**
+ * An event from the events API in the studio's shape. Shares the cache of
+ * `eventQueryOptions` (the public pages use it raw); `select` only reshapes it.
+ */
+export const pgEventQueryOptions = (eventId: string) =>
+  queryOptions({
+    ...eventQueryOptions(eventId),
+    select: (event) => toPgEvent(eventId, event),
+  })
 
 /** A booked event as the studio pages show it (`select` for `bookings`) */
 export const toWorkspaceEvents = (bookings: ApiEvent[]): PgEvent[] =>
