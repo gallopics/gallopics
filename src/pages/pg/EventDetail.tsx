@@ -52,7 +52,7 @@ import { TitleHeader } from "@/components/TitleHeader"
 import { WorkspaceTabs } from "@/components/WorkspaceTabs"
 import { EventDetailsDialog } from "@/pages/pg/components/EventDetailsDialog"
 import { PhotoFolderBar } from "@/pages/pg/components/PhotoFolderBar"
-import { PgSelectionPanel } from "@/pages/pg/PgSelectionPanel"
+import { PhotoDetailsSheet } from "@/pages/pg/photo-details/PhotoDetailsSheet"
 
 // Tab type
 type TabType = "uploads" | "published" | "archive"
@@ -1252,7 +1252,7 @@ export function EventDetail() {
       </div>
 
       {/* Selection panel — always mounted for the slide animation */}
-      <PgSelectionPanel
+      <PhotoDetailsSheet
         isOpen={isPanelOpen}
         selectedIds={selectedIds}
         allPhotos={allPhotos}

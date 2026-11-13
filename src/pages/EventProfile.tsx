@@ -61,7 +61,7 @@ import {
 import { PhotoPreviewDialog } from "@/components/PhotoPreviewDialog"
 import { ScopedSearchBar } from "@/components/ScopedSearchBar"
 import { TitleHeader } from "@/components/TitleHeader"
-import { PgSelectionPanel } from "@/pages/pg/PgSelectionPanel"
+import { PhotoDetailsSheet } from "@/pages/pg/photo-details/PhotoDetailsSheet"
 
 // develop: plain grid instead of masonry (Safari fix)
 const photoGridClass =
@@ -673,7 +673,7 @@ export function EventProfile() {
       />
 
       {isPhotographerMyEventView && eventId && (
-        <PgSelectionPanel
+        <PhotoDetailsSheet
           isOpen={Boolean(photoToEditId)}
           selectedIds={
             photoToEditId ? new Set([photoToEditId]) : new Set<string>()

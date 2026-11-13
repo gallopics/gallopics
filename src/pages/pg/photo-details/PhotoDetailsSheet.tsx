@@ -83,7 +83,7 @@ const PANEL_TOAST_TYPES: Record<PanelToastType, NotifyType> = {
   danger: "error",
 }
 
-interface PgSelectionPanelProps {
+interface PhotoDetailsSheetProps {
   isOpen: boolean
   selectedIds: Set<string>
   allPhotos: Photo[]
@@ -121,7 +121,7 @@ const toPriceFields = (photos: Photo[]): PriceFields =>
     })
   ) as PriceFields
 
-export function PgSelectionPanel({
+export function PhotoDetailsSheet({
   isOpen,
   selectedIds,
   allPhotos,
@@ -130,7 +130,7 @@ export function PgSelectionPanel({
   currentTab,
   onShowToast,
   onMoved,
-}: PgSelectionPanelProps) {
+}: PhotoDetailsSheetProps) {
   const deletePhotosWithUndo = useDeletePhotosWithUndo()
   const savePhotoDetails = useMutation(savePhotoDetailsMutationOptions())
   const updatePhotoMetadata = (photoIds: string[], details: Partial<Photo>) =>
