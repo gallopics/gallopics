@@ -485,23 +485,22 @@ export const api = {
       { auth: true }
     ),
 
-  updatePhoto: (
-    photoId: string,
-    data: {
-      visibility?: string
-      tags?: Array<{ type: string; value: string }>
+  /**
+   * The same details for several of the photographer's photos, saved whole or
+   * not at all. Fields left out stay; rider/horse "" removes the tag.
+   */
+  updatePhotos: (
+    photoIds: string[],
+    changes: {
+      rider?: string
+      horse?: string
+      /** öre; tiers left out keep theirs */
+      prices?: Partial<OwnPhotoPrices>
     }
   ) =>
-    request<ApiPhoto>(
-      `/api/v1/photographer/photos/${encodeURIComponent(photoId)}`,
-      { method: "PATCH", body: JSON.stringify(data), auth: true }
-    ),
-
-  /** The same prices (öre) for several of the photographer's photos; tiers left out keep theirs */
-  updatePhotoPrices: (photoIds: string[], prices: Partial<OwnPhotoPrices>) =>
-    request<ApiPhoto[]>("/api/v1/photographer/photos/prices", {
+    request<ApiPhoto[]>("/api/v1/photographer/photos", {
       method: "PATCH",
-      body: JSON.stringify({ photo_ids: photoIds, prices }),
+      body: JSON.stringify({ photo_ids: photoIds, ...changes }),
       auth: true,
     }),
 

@@ -9,13 +9,8 @@ import {
 import { useMutation } from "@tanstack/react-query"
 import { FolderInput, Save, Trash2 } from "lucide-react"
 
-import { LINKED_PRICES, type OwnPhotoPrices } from "@/constants/qualityTiers"
 import type { Photo } from "@/context/PhotographerContext"
-import {
-  PhotoPricesSaveError,
-  savePhotoDetailsMutationOptions,
-  savePhotoPricesMutationOptions,
-} from "@/data/queries/photographer"
+import { savePhotosMutationOptions } from "@/data/queries/photographer"
 import { Button } from "@/components/ui/button"
 import { FieldError } from "@/components/ui/field"
 import { SheetBody, SheetFooter } from "@/components/ui/sheet"
@@ -36,13 +31,12 @@ export type PanelTab = "tags" | "price"
 export type PanelStatus = { isDirty: boolean; isSubmitting: boolean }
 export const IDLE: PanelStatus = { isDirty: false, isSubmitting: false }
 
-type SaveResult = { saved: true } | { error: string }
-
 /**
  * The Sheet's content for one opening: Base UI mounts it on open and unmounts
  * it after the slide-out, so each opening starts a fresh form.
- * Prices are saved first, then tags; if a step fails, the photos that already
- * changed are put back and the draft stays for a retry.
+ * Tags and prices go in one request that the API saves whole or not at all,
+ * so a failed save leaves the photos as they were and the draft stays for a
+ * retry.
  */
 export function DetailsPanel({
   photos,
@@ -69,44 +63,8 @@ export function DetailsPanel({
   // The values of the last save. Cache refreshes don't change them, so an
   // edit in progress is never replaced.
   const [saved, setSaved] = useState(() => detailsValues(photos))
-  const [result, setResult] = useState<SaveResult>()
-  const saveTags = useMutation(savePhotoDetailsMutationOptions())
-  const savePrices = useMutation(savePhotoPricesMutationOptions())
+  const save = useMutation(savePhotosMutationOptions())
   const schema = useMemo(() => detailsSchema(isSingle), [isSingle])
-
-  /** Put back the photos' values from before the save; false if some failed */
-  const restore = async (pricedIds: string[], tagsSent: boolean) => {
-    const priceGroups = new Map<
-      string,
-      { photoIds: string[]; prices: OwnPhotoPrices }
-    >()
-    for (const photo of photos.filter((p) => pricedIds.includes(p.id))) {
-      const prices = photo.ownPrices ?? LINKED_PRICES
-      const key = JSON.stringify(prices)
-      const group = priceGroups.get(key) ?? { photoIds: [], prices }
-      group.photoIds.push(photo.id)
-      priceGroups.set(key, group)
-    }
-    const results = await Promise.allSettled([
-      ...Array.from(priceGroups.values(), (group) =>
-        savePrices.mutateAsync(group)
-      ),
-      ...(tagsSent ? photos : []).map((photo) =>
-        saveTags.mutateAsync({
-          photoIds: [photo.id],
-          details: { rider: photo.rider ?? "", horse: photo.horse ?? "" },
-        })
-      ),
-    ])
-    return results.every((r) => r.status === "fulfilled")
-  }
-
-  const fail = (restored: boolean) =>
-    setResult({
-      error: restored
-        ? "Unable to save changes. Please try again."
-        : "Unable to save changes. Some changes could not be restored. Please retry.",
-    })
 
   const form = useForm({
     defaultValues: saved,
@@ -114,27 +72,25 @@ export function DetailsPanel({
     // Only prices can be invalid
     onSubmitInvalid: () => setTab("price"),
     onSubmit: async ({ value, formApi }) => {
-      setResult(undefined)
-      const photoIds = photos.map((photo) => photo.id)
       const prices = changedPrices(value, saved)
-      const tags = changedTags(value, saved)
-      const hasPrices = Object.keys(prices).length > 0
-      try {
-        if (hasPrices) await savePrices.mutateAsync({ photoIds, prices })
-      } catch (error) {
-        const partly =
-          error instanceof PhotoPricesSaveError ? error.savedPhotoIds : []
-        return fail(await restore(partly, false))
+      const changes = {
+        ...changedTags(value, saved),
+        ...(Object.keys(prices).length > 0 && { prices }),
       }
-      try {
-        if (Object.keys(tags).length)
-          await saveTags.mutateAsync({ photoIds, details: tags })
-      } catch {
-        return fail(await restore(hasPrices ? photoIds : [], true))
+      if (Object.keys(changes).length > 0) {
+        try {
+          const photoIds = photos.map((photo) => photo.id)
+          await save.mutateAsync({ photoIds, changes })
+        } catch {
+          // save.isError shows the message; the draft stays for a retry
+          return
+        }
+      } else {
+        // Nothing to send; clear an earlier error
+        save.reset()
       }
       setSaved(value)
       formApi.reset(value)
-      setResult({ saved: true })
     },
   })
   const isDirty = useSelector(form.store, (state) => !state.isDefaultValue)
@@ -194,8 +150,10 @@ export function DetailsPanel({
         )}
       </SheetBody>
       <SheetFooter className="flex-col items-stretch border-muted">
-        {result && "error" in result && (
-          <FieldError errors={[{ message: result.error }]} />
+        {save.isError && (
+          <FieldError
+            errors={[{ message: "Unable to save changes. Please try again." }]}
+          />
         )}
         <div aria-live="polite" aria-atomic="true">
           {isSubmitting ? (
@@ -203,8 +161,7 @@ export function DetailsPanel({
               Saving…
             </p>
           ) : (
-            result &&
-            "saved" in result &&
+            save.isSuccess &&
             !isDirty && (
               <p role="status" className="text-xs text-muted-foreground">
                 Changes saved

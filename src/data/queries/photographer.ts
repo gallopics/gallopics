@@ -255,15 +255,6 @@ const isUuid = (value: string) =>
     value
   )
 
-/** The tags the API stores for a photo */
-const buildTags = (photo: Photo) => {
-  const tags: Array<{ type: string; value: string }> = []
-  if (photo.rider) tags.push({ type: "rider", value: photo.rider })
-  if (photo.horse) tags.push({ type: "horse", value: photo.horse })
-  if (photo.className) tags.push({ type: "class", value: photo.className })
-  return tags
-}
-
 const getCachedPhotos = (client: QueryClient) =>
   client.getQueryData<Photo[]>(photographerKeys.photos()) ?? []
 
@@ -360,33 +351,44 @@ export const deletePhotosMutationOptions = () =>
     },
   })
 
+/** Most photos the API takes in one bulk update (details, folder) */
+const BULK_UPDATE_SIZE = 1000
+
+/** What one save sets on every photo; fields left out stay, "" removes a tag */
+export interface PhotoChanges {
+  rider?: string
+  horse?: string
+  /** SEK; tiers left out keep their price */
+  prices?: Partial<OwnPhotoPrices>
+}
+
 /**
- * Change photos' details at once. Only the tags (rider, horse, class) are saved
- * by the API so far; the other fields stay in the cache.
+ * Tags and prices for several photos in one request. The API saves it whole
+ * or not at all, and replaces only rider/horse, so the class and start
+ * number tags from auto-matching stay.
  */
-export const savePhotoDetailsMutationOptions = () =>
+export const savePhotosMutationOptions = () =>
   mutationOptions({
     mutationKey: [...photographerKeys.photos(), "update"],
-    mutationFn: async (
-      { photoIds, details }: { photoIds: string[]; details: Partial<Photo> },
-      { client }
-    ) => {
-      const photos = getCachedPhotos(client).filter(
-        (p) => photoIds.includes(p.id) && isUuid(p.id)
-      )
-      // Finish every write before the caller starts restoring a partial save.
-      const results = await Promise.allSettled(
-        photos.map((photo) =>
-          api.updatePhoto(photo.id, {
-            tags: buildTags({ ...photo, ...details }),
-          })
-        )
-      )
-      const failed = results.find((result) => result.status === "rejected")
-      if (failed) throw failed.reason
-      return results.flatMap((result) =>
-        result.status === "fulfilled" ? [result.value] : []
-      )
+    mutationFn: async ({
+      photoIds,
+      changes: { prices, ...tags },
+    }: {
+      photoIds: string[]
+      changes: PhotoChanges
+    }) => {
+      const ids = photoIds.filter(isUuid)
+      const changes = {
+        ...tags,
+        ...(prices && { prices: toApiPrices(prices) }),
+      }
+      const saved: ApiPhoto[] = []
+      // Only selections over the API's limit need more than one request
+      for (let i = 0; i < ids.length; i += BULK_UPDATE_SIZE) {
+        const batch = ids.slice(i, i + BULK_UPDATE_SIZE)
+        saved.push(...(await api.updatePhotos(batch, changes)))
+      }
+      return saved
     },
     onSuccess: (saved, _variables, _result, { client }) => {
       setSavedPhotos(client, saved)
@@ -394,61 +396,10 @@ export const savePhotoDetailsMutationOptions = () =>
         client,
         saved.map((photo) => photo.event_id)
       )
-    },
-    onError: (_error, _variables, _result, { client }) =>
-      refetchMyPhotos(client),
-  })
-
-/** Most photos the API takes in one bulk update (prices, folder) */
-const BULK_UPDATE_SIZE = 1000
-
-/** A price update that failed after earlier batches were saved */
-export class PhotoPricesSaveError extends Error {
-  /** Photos whose new prices were saved before the failure */
-  readonly savedPhotoIds: string[]
-
-  constructor(savedPhotoIds: string[], cause: unknown) {
-    super("Unable to save all prices", { cause })
-    this.savedPhotoIds = savedPhotoIds
-  }
-}
-
-/** Set prices (SEK) for photos at once; tiers left out keep their price */
-export const savePhotoPricesMutationOptions = () =>
-  mutationOptions({
-    mutationKey: [...photographerKeys.photos(), "prices"],
-    mutationFn: async ({
-      photoIds,
-      prices,
-    }: {
-      photoIds: string[]
-      prices: Partial<OwnPhotoPrices>
-    }) => {
-      const ids = photoIds.filter(isUuid)
-      const apiPrices = toApiPrices(prices)
-      const updated: ApiPhoto[] = []
-      for (let i = 0; i < ids.length; i += BULK_UPDATE_SIZE) {
-        const batch = ids.slice(i, i + BULK_UPDATE_SIZE)
-        try {
-          updated.push(...(await api.updatePhotoPrices(batch, apiPrices)))
-        } catch (error) {
-          throw new PhotoPricesSaveError(
-            updated.map((photo) => photo.id),
-            error
-          )
-        }
-      }
-      return updated
-    },
-    onSuccess: (updated, _variables, _result, { client }) => {
-      setSavedPhotos(client, updated)
-      invalidateEventPhotos(
-        client,
-        updated.map((photo) => photo.event_id)
-      )
       // The public photo page shows them too
       void client.invalidateQueries({ queryKey: photoKeys.all })
     },
+    // An earlier batch of a very large selection may have been saved
     onError: (_error, _variables, _result, { client }) =>
       refetchMyPhotos(client),
   })
