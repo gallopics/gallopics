@@ -2,16 +2,14 @@ import { z } from "zod"
 
 import {
   getPriceError,
-  MAX_PRICE_SEK,
-  MIN_PRICE_SEK,
+  LINKED_PRICE,
+  PRICE_ERROR,
   QUALITY_TIERS,
   type OwnPhotoPrices,
   type QualityTierId,
 } from "@/constants/qualityTiers"
 import type { Photo } from "@/context/PhotographerContext"
 
-/** A price field linked to the photographer's default price (saved as null) */
-export const LINKED_PRICE = "default"
 /** A tag cleared on purpose (one photo) */
 export const NO_TAG = "None"
 
@@ -40,10 +38,6 @@ export function detailsValues(photos: Photo[]): DetailsValues {
     ) as DetailsValues["prices"],
   }
 }
-
-// One message for every invalid price: the Sheet shows the allowed range
-// only here, not as a hint under each field
-const PRICE_ERROR = `Enter a price in whole SEK, ${MIN_PRICE_SEK} to ${MAX_PRICE_SEK.toLocaleString("sv-SE")} SEK`
 
 const priceSchema = (isSingle: boolean) =>
   z.string().superRefine((value, ctx) => {

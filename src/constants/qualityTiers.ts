@@ -55,6 +55,10 @@ export const QUALITY_TIERS: QualityTier[] = [
 /** Limits for a photographer's own prices, in whole SEK */
 export const MIN_PRICE_SEK = 49
 export const MAX_PRICE_SEK = 10_000
+/** Every invalid price shows this, so the allowed range is only shown here */
+export const PRICE_ERROR = `Enter a price in whole SEK, ${MIN_PRICE_SEK} to ${MAX_PRICE_SEK.toLocaleString("sv-SE")} SEK`
+/** A price field that follows a default instead of its own price (saved as null) */
+export const LINKED_PRICE = "default"
 
 export const DEFAULT_PRICES = Object.fromEntries(
   QUALITY_TIERS.map((tier) => [tier.id, tier.price])

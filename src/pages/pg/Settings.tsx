@@ -1,11 +1,15 @@
-import { useState } from "react"
+import { useEffect, useId } from "react"
+import { useLocation } from "react-router"
 import { useUser } from "@clerk/clerk-react"
+import { useForm, useSelector } from "@tanstack/react-form"
 import { useMutation, useQuery } from "@tanstack/react-query"
+import { z } from "zod"
 
 import {
+  DEFAULT_PRICES,
   getPriceError,
+  PRICE_ERROR,
   QUALITY_TIERS,
-  toSekPrices,
   type OwnPhotoPrices,
   type QualityTierId,
 } from "@/constants/qualityTiers"
@@ -17,8 +21,20 @@ import {
   saveDefaultPricesMutationOptions,
 } from "@/data/queries/photographer"
 import { Button } from "@/components/ui/button"
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  InputGroupText,
+} from "@/components/ui/input-group"
 import { PageState } from "@/components/PageState"
 import { ProfileFields, useProfileForm } from "@/components/ProfileForm"
 import { TitleHeader } from "@/components/TitleHeader"
@@ -29,6 +45,8 @@ import {
 
 function ProfileSection() {
   const form = useProfileForm()
+  const { user: account } = useUser()
+  const id = useId()
   return (
     <WorkspaceCard>
       <h2 className="mb-6 text-xl font-semibold">Profile</h2>
@@ -42,105 +60,167 @@ function ProfileSection() {
       >
         {form.isSaving ? "Saving..." : "Save profile"}
       </Button>
+      {/* Sign-in details come from Clerk and can't be edited here */}
+      <div className="mt-8 border-t pt-6">
+        <h3 className="mb-4 font-semibold">Account</h3>
+        <FieldGroup className="grid gap-4 md:grid-cols-2">
+          <Field>
+            <FieldLabel htmlFor={`${id}-username`}>Username</FieldLabel>
+            <Input
+              id={`${id}-username`}
+              disabled
+              value={account?.username ?? ""}
+              placeholder="Not set"
+            />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor={`${id}-email`}>Email</FieldLabel>
+            <Input
+              id={`${id}-email`}
+              disabled
+              value={account?.primaryEmailAddress?.emailAddress ?? ""}
+              placeholder="Not set"
+            />
+          </Field>
+        </FieldGroup>
+      </div>
     </WorkspaceCard>
   )
 }
 
+const priceSchema = z.string().refine((value) => !getPriceError(value), {
+  message: PRICE_ERROR,
+})
+const pricesSchema = z.object(
+  Object.fromEntries(QUALITY_TIERS.map((tier) => [tier.id, priceSchema])) as {
+    [id in QualityTierId]: typeof priceSchema
+  }
+)
+
+/**
+ * The photographer's default prices. A tier without one uses the standard
+ * price, and a price equal to the standard one is saved as "none": that is
+ * how a photographer goes back to the standard price.
+ */
 function PricingFields({ data }: { data: PhotographerPricing }) {
-  const [fields, setFields] = useState<Record<QualityTierId, string>>(
-    () =>
-      Object.fromEntries(
-        QUALITY_TIERS.map((tier) => [
-          tier.id,
-          data.defaults[tier.id] == null
-            ? ""
-            : String((data.defaults[tier.id] ?? 0) / 100),
-        ])
-      ) as Record<QualityTierId, string>
-  )
+  const id = useId()
   const save = useMutation(saveDefaultPricesMutationOptions())
-  const errors = QUALITY_TIERS.map((tier) =>
-    fields[tier.id] ? getPriceError(fields[tier.id]) : null
-  )
-  const effective = toSekPrices(data.effective)
-  const hasDefaults = QUALITY_TIERS.some(
-    (tier) => data.defaults[tier.id] != null
-  )
+  const form = useForm({
+    defaultValues: Object.fromEntries(
+      QUALITY_TIERS.map(({ id }) => [
+        id,
+        String((data.defaults[id] ?? DEFAULT_PRICES[id] * 100) / 100),
+      ])
+    ) as Record<QualityTierId, string>,
+    validators: { onChange: pricesSchema },
+    onSubmit: async ({ value }) => {
+      const prices = Object.fromEntries(
+        QUALITY_TIERS.map(({ id }) => {
+          const price = Number(value[id])
+          return [id, price === DEFAULT_PRICES[id] ? null : price]
+        })
+      ) as OwnPhotoPrices
+      try {
+        await save.mutateAsync(prices)
+        notify("Prices saved", "success")
+      } catch {
+        // save.isError shows the message below the form
+      }
+    },
+  })
+  const triedToSave = useSelector(form.store, (s) => s.submissionAttempts > 0)
+  const isSubmitting = useSelector(form.store, (s) => s.isSubmitting)
+
   return (
-    <>
+    <form
+      noValidate
+      onSubmit={(e) => {
+        e.preventDefault()
+        void form.handleSubmit()
+      }}
+    >
       <p className="mb-5 text-sm text-muted-foreground">
-        {hasDefaults
-          ? "Photos without their own price follow these prices."
-          : "Gallopics default prices apply until you set your own."}{" "}
-        Leave a field empty to use the Gallopics default for that quality.
+        Photos without their own price use these prices.
       </p>
-      <form
-        onSubmit={async (event) => {
-          event.preventDefault()
-          if (errors.some(Boolean)) return
-          const prices = Object.fromEntries(
-            QUALITY_TIERS.map((tier) => [
-              tier.id,
-              fields[tier.id] ? Number(fields[tier.id]) : null,
-            ])
-          ) as OwnPhotoPrices
-          try {
-            await save.mutateAsync(prices)
-            notify("Prices saved", "success")
-          } catch {
-            /* The error stays visible below the form. */
-          }
-        }}
+      <fieldset
+        disabled={isSubmitting}
+        className="grid min-w-0 gap-5 lg:grid-cols-3"
       >
-        <div className="grid gap-5 md:grid-cols-3">
-          {QUALITY_TIERS.map((tier, index) => (
-            <div key={tier.id}>
-              <Label htmlFor={`default-${tier.id}`} className="mb-2">
-                {tier.label} (SEK)
-              </Label>
-              <Input
-                id={`default-${tier.id}`}
-                inputMode="numeric"
-                value={fields[tier.id]}
-                placeholder={String(tier.price)}
-                disabled={save.isPending}
-                aria-invalid={!!errors[index]}
-                onChange={(event) =>
-                  setFields((current) => ({
-                    ...current,
-                    [tier.id]: event.target.value.trim(),
-                  }))
-                }
-              />
-              <p
-                className={`mt-1 text-xs ${errors[index] ? "text-destructive" : "text-muted-foreground"}`}
-              >
-                {errors[index] ?? `Current price: ${effective[tier.id]} SEK`}
-              </p>
-            </div>
-          ))}
-        </div>
-        {save.isError && (
-          <p role="alert" className="mt-4 text-sm text-destructive">
-            Could not save prices. Please try again.
-          </p>
-        )}
-        <Button
-          type="submit"
-          className="mt-6"
-          disabled={save.isPending || errors.some(Boolean)}
-        >
-          {save.isPending ? "Saving..." : "Save prices"}
-        </Button>
-      </form>
-    </>
+        {QUALITY_TIERS.map((tier) => (
+          <form.Field key={tier.id} name={tier.id}>
+            {(field) => {
+              // Shown after leaving the field or trying to save, not while typing
+              const isInvalid =
+                (field.state.meta.isBlurred || triedToSave) &&
+                !field.state.meta.isValid
+              // The standard price, shown only once it differs, so the way
+              // back to it is clear
+              const isStandard =
+                field.state.value === `${DEFAULT_PRICES[tier.id]}`
+              const fieldId = `${id}-${tier.id}`
+              const helpId = `${fieldId}-help`
+              return (
+                <Field className="gap-1.5" data-invalid={isInvalid}>
+                  <FieldLabel htmlFor={fieldId}>{tier.label}</FieldLabel>
+                  <InputGroup className="h-10">
+                    <InputGroupInput
+                      id={fieldId}
+                      name={field.name}
+                      inputMode="numeric"
+                      aria-invalid={isInvalid}
+                      aria-describedby={
+                        isInvalid || !isStandard ? helpId : undefined
+                      }
+                      value={field.state.value}
+                      onChange={(e) =>
+                        field.handleChange(e.target.value.trim())
+                      }
+                      onBlur={field.handleBlur}
+                    />
+                    <InputGroupAddon align="inline-end">
+                      <InputGroupText>SEK</InputGroupText>
+                    </InputGroupAddon>
+                  </InputGroup>
+                  {isInvalid ? (
+                    <FieldError id={helpId} errors={field.state.meta.errors} />
+                  ) : (
+                    !isStandard && (
+                      <FieldDescription id={helpId} className="text-xs">
+                        Standard price: {DEFAULT_PRICES[tier.id]} SEK
+                      </FieldDescription>
+                    )
+                  )}
+                </Field>
+              )
+            }}
+          </form.Field>
+        ))}
+      </fieldset>
+      {save.isError && (
+        <p role="alert" className="mt-4 text-sm text-destructive">
+          Could not save prices. Please try again.
+        </p>
+      )}
+      <Button type="submit" className="mt-6" disabled={isSubmitting}>
+        {isSubmitting ? "Saving..." : "Save prices"}
+      </Button>
+    </form>
   )
 }
 
 function PricingSection() {
   const query = useQuery(defaultPricesQueryOptions())
+  const { hash } = useLocation()
+  const isLoaded = !!query.data
+  useEffect(() => {
+    // The photo Sheet links here. The browser's own jump to the hash runs
+    // before this card renders, so scroll once the prices are in.
+    if (hash === "#pricing" && isLoaded) {
+      document.getElementById("pricing")?.scrollIntoView()
+    }
+  }, [hash, isLoaded])
   return (
-    <WorkspaceCard>
+    <WorkspaceCard id="pricing" className="scroll-mt-24">
       <h2 className="mb-3 text-xl font-semibold">Pricing</h2>
       {query.data ? (
         <PricingFields
@@ -164,38 +244,12 @@ function PricingSection() {
 
 export function Settings() {
   const { user } = useAuth()
-  const { user: account } = useUser()
   return (
     <>
       <TitleHeader title="Settings" compact variant="workspace" />
       <WorkspacePageBody>
         <ProfileSection key={user?.id} />
         {user?.approvalStatus === "approved" && <PricingSection />}
-        <WorkspaceCard>
-          <h2 className="mb-6 text-xl font-semibold">Account</h2>
-          <div className="grid gap-5 md:grid-cols-2">
-            <div>
-              <Label htmlFor="account-username" className="mb-2">
-                Username
-              </Label>
-              <Input
-                id="account-username"
-                readOnly
-                value={account?.username ?? "Not set"}
-              />
-            </div>
-            <div>
-              <Label htmlFor="account-email" className="mb-2">
-                Email
-              </Label>
-              <Input
-                id="account-email"
-                readOnly
-                value={account?.primaryEmailAddress?.emailAddress ?? ""}
-              />
-            </div>
-          </div>
-        </WorkspaceCard>
       </WorkspacePageBody>
     </>
   )

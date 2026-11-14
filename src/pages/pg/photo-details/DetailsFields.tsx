@@ -6,6 +6,7 @@ import { ExternalLink, Info } from "lucide-react"
 
 import {
   DEFAULT_PRICES,
+  LINKED_PRICE,
   QUALITY_TIERS,
   type QualityTierId,
 } from "@/constants/qualityTiers"
@@ -29,7 +30,7 @@ import {
 } from "@/components/ui/input-group"
 import { ModernDropdown } from "@/components/ModernDropdown"
 
-import { LINKED_PRICE, NO_TAG } from "./detailsForm"
+import { NO_TAG } from "./detailsForm"
 import type { DetailsForm } from "./DetailsPanel"
 
 const labelClass = "text-xs font-semibold text-muted-foreground"
@@ -294,7 +295,7 @@ export function PriceFields({
           Defaults come from{" "}
           {/* New tab, so an unsaved edit in the Sheet is never lost */}
           <a
-            href="/pg/settings"
+            href="/pg/settings#pricing"
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1 rounded-sm font-medium text-foreground underline-offset-4 outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"

@@ -251,7 +251,7 @@ export function Header({
                         <DropdownMenuItem
                           onClick={() => navigate("/pg/settings")}
                         >
-                          Edit profile
+                          Settings
                         </DropdownMenuItem>
                       )}
                       <DropdownMenuItem

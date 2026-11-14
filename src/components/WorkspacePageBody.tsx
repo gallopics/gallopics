@@ -23,19 +23,15 @@ export function WorkspacePageBody({
 /** White 800px card used on the simple workspace pages */
 export function WorkspaceCard({
   className,
-  children,
-}: {
-  className?: string
-  children: React.ReactNode
-}) {
+  ...props
+}: React.ComponentProps<"div">) {
   return (
     <div
       className={cn(
         "mx-auto mb-6 max-w-200 rounded-xl border bg-card p-6",
         className
       )}
-    >
-      {children}
-    </div>
+      {...props}
+    />
   )
 }
