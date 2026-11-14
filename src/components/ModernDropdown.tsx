@@ -30,6 +30,8 @@ export interface DropdownOption {
 }
 
 interface ModernDropdownProps {
+  id?: string
+  onBlur?: () => void
   label?: string
   value: string
   options: DropdownOption[]
@@ -42,6 +44,8 @@ interface ModernDropdownProps {
   variant?: "default" | "pill"
   disabled?: boolean
   className?: string
+  contentClassName?: string
+  wrapLabels?: boolean
 }
 
 const pillTrigger =
@@ -51,11 +55,13 @@ function OptionContent({
   option,
   inList,
   pill,
+  wrapLabels,
 }: {
   option: DropdownOption
   inList?: boolean
   /** Pill trigger: old 16px icon slot */
   pill?: boolean
+  wrapLabels?: boolean
 }) {
   return (
     <span
@@ -78,7 +84,12 @@ function OptionContent({
           inList ? "gap-0.5 leading-normal" : "gap-1 leading-normal"
         )}
       >
-        <span className={cn("truncate", !inList && "font-medium")}>
+        <span
+          className={cn(
+            wrapLabels ? "line-clamp-2 whitespace-normal" : "truncate",
+            !inList && "font-medium"
+          )}
+        >
           {option.label}
         </span>
         {option.subtext && (
@@ -101,6 +112,8 @@ function OptionContent({
 }
 
 export function ModernDropdown({
+  id,
+  onBlur,
   value,
   options,
   onChange,
@@ -111,6 +124,8 @@ export function ModernDropdown({
   variant = "default",
   disabled = false,
   className,
+  contentClassName,
+  wrapLabels = false,
 }: ModernDropdownProps) {
   const isPill = variant === "pill"
   const selected = options.find((o) => o.value === value) ?? null
@@ -119,7 +134,11 @@ export function ModernDropdown({
     <>
       {icon && <span className="flex shrink-0 items-center">{icon}</span>}
       {selected ? (
-        <OptionContent option={selected} pill={isPill} />
+        <OptionContent
+          option={selected}
+          pill={isPill}
+          wrapLabels={wrapLabels}
+        />
       ) : (
         // Pill filters: the placeholder is an "all" label ("Events", "All events"), dark like old
         <span className={isPill ? "text-foreground" : "text-muted-foreground"}>
@@ -144,6 +163,8 @@ export function ModernDropdown({
         disabled={disabled}
       >
         <ComboboxTrigger
+          id={id}
+          onBlur={onBlur}
           className={cn(
             "flex h-11 w-full items-center justify-between gap-2 rounded-md border border-border bg-card px-4 text-sm text-foreground transition-all outline-none hover:border-muted-foreground/50 focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-ring/8 disabled:opacity-50 data-popup-open:border-ring data-popup-open:ring-4 data-popup-open:ring-ring/8",
             isPill && pillTrigger,
@@ -152,7 +173,10 @@ export function ModernDropdown({
         >
           <ComboboxValue>{triggerContent}</ComboboxValue>
         </ComboboxTrigger>
-        <ComboboxContent align="start" className="min-w-60">
+        <ComboboxContent
+          align="start"
+          className={cn("min-w-60", contentClassName)}
+        >
           <ComboboxInput showTrigger={false} placeholder={searchPlaceholder} />
           <ComboboxEmpty>No results</ComboboxEmpty>
           <ComboboxList>
@@ -162,7 +186,7 @@ export function ModernDropdown({
                 value={option}
                 disabled={option.disabled}
               >
-                <OptionContent option={option} inList />
+                <OptionContent option={option} inList wrapLabels={wrapLabels} />
               </ComboboxItem>
             )}
           </ComboboxList>
@@ -179,6 +203,8 @@ export function ModernDropdown({
       disabled={disabled}
     >
       <SelectTrigger
+        id={id}
+        onBlur={onBlur}
         size={isPill ? "sm" : "default"}
         className={cn(
           "w-full",
@@ -190,7 +216,7 @@ export function ModernDropdown({
       >
         <SelectValue>{() => triggerContent}</SelectValue>
       </SelectTrigger>
-      <SelectContent align="start" className="min-w-60">
+      <SelectContent align="start" className={cn("min-w-60", contentClassName)}>
         {options.map((option) => (
           <SelectItem
             key={option.value}
@@ -198,7 +224,7 @@ export function ModernDropdown({
             disabled={option.disabled}
             className={cn(option.description && "items-start py-3")}
           >
-            <OptionContent option={option} inList />
+            <OptionContent option={option} inList wrapLabels={wrapLabels} />
           </SelectItem>
         ))}
       </SelectContent>

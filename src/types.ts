@@ -1,4 +1,4 @@
-import type { PhotoPrices } from "@/constants/qualityTiers"
+import type { OwnPhotoPrices, PhotoPrices } from "@/constants/qualityTiers"
 
 export interface Photo {
   id: string
@@ -8,6 +8,8 @@ export interface Photo {
   event: string
   eventId: string
   date: string
+  /** Zone that date and time are shown in; unset = the viewer's zone */
+  timeZone?: string
   width: number
   height: number
   // New fields for Event Patch
@@ -20,8 +22,7 @@ export interface Photo {
   photographerId?: string
   /** Price per quality tier, in SEK */
   prices?: PhotoPrices
-  isDuplicate?: boolean
-  duplicateGroupId?: string
+  ownPrices?: OwnPhotoPrices
 }
 
 export interface FilterState {

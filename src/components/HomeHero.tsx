@@ -89,7 +89,7 @@ function MainCard({
           desktopPlaceholder="Search events, riders, horses, photographers..."
           eventOptions={search.searchEvents}
           eventSearchIndex={search.eventSearchIndex}
-          eventMatchLabels={search.eventMatchLabels}
+          eventMatches={search.eventMatches}
           isSearching={search.isSearching}
           onSearchChange={search.onSearchChange}
         />

@@ -6,15 +6,16 @@ import { AlertCircle, CalendarPlus, CalendarX2 } from "lucide-react"
 
 import { getEventSortTime, isPreviousEventDate } from "@/lib/eventDates"
 import { assetUrl, cn } from "@/lib/utils"
-import { useWorkspacePhotos } from "@/hooks/useWorkspaceData"
+import { usePhotoEvents } from "@/hooks/useWorkspaceData"
 import { useAuth } from "@/context/AuthContext"
-import type { PgEvent } from "@/context/PhotographerContext"
+import type { PgEvent, Photo } from "@/context/PhotographerContext"
 import { useWorkspace } from "@/context/WorkspaceContext"
 import { api, ApiError, type ApiEvent } from "@/data/apiClient"
 import { mapApiEventToEventData } from "@/data/eventsApi"
 import { eventsListQueryOptions } from "@/data/queries/events"
 import {
   bookingsQueryOptions,
+  myPhotosQueryOptions,
   photographerKeys,
 } from "@/data/queries/photographer"
 import type { EventData } from "@/types"
@@ -88,6 +89,9 @@ function EventRowSkeleton() {
   )
 }
 
+// Stable empty list, so memos don't rerun while photos load
+const NO_PHOTOS: Photo[] = []
+
 const mapApiEventToPgEvent = (event: EventData): PgEvent => ({
   id: event.id,
   title: event.name,
@@ -125,12 +129,11 @@ const mapBackendEventToPgEvent = (
 export function EventsList() {
   const { isAdmin } = useWorkspace()
   const { isLoaded: isAuthProfileLoaded, user, isPhotographer } = useAuth()
-  const workspacePhotos = useWorkspacePhotos()
   const { isLoaded: isClerkLoaded, isSignedIn } = useClerkAuth()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const location = useLocation()
-  const initialTab = (location.state as any)?.tab
+  const initialTab = (location.state as { tab?: EventsView } | null)?.tab
   const [view, setView] = useState<
     "my" | "upcoming" | "previous" | "live" | "past" | "archived"
   >(initialTab ?? (isAdmin ? "live" : "my"))
@@ -145,17 +148,24 @@ export function EventsList() {
 
   const canLoadEvents = isClerkLoaded && !!isSignedIn && isAuthProfileLoaded
   const loadsPhotographerEvents = !isAdmin && canLoadEvents
-  // Admins get every event; photographers' "My events" only the ones with photos
+  const isPhotographerApiEventView =
+    !isAdmin && (view === "upcoming" || view === "previous")
+  // "My events" is built from bookings and the photographer's own photos
   const eventsQuery = useQuery({
-    ...eventsListQueryOptions(
-      !isAdmin && !(view === "upcoming" || view === "previous")
-    ),
-    enabled: canLoadEvents,
+    ...eventsListQueryOptions(false),
+    enabled: canLoadEvents && (isAdmin || isPhotographerApiEventView),
   })
   const bookingsQuery = useQuery({
     ...bookingsQueryOptions(),
     enabled: loadsPhotographerEvents && isPhotographer,
   })
+  const photosQuery = useQuery({
+    ...myPhotosQueryOptions(),
+    enabled: loadsPhotographerEvents && isPhotographer,
+  })
+  const workspacePhotos = photosQuery.data ?? NO_PHOTOS
+  // Events with the photographer's photos that they haven't booked
+  const photoEvents = usePhotoEvents(workspacePhotos)
   const isLoadingUpcomingEvents =
     loadsPhotographerEvents &&
     (eventsQuery.isPending || (isPhotographer && bookingsQuery.isPending))
@@ -186,15 +196,7 @@ export function EventsList() {
       phone: user.phone ?? null,
       is_available_to_hire: true,
     })
-  }, [
-    user?.avatarUrl,
-    user?.city,
-    user?.country,
-    user?.displayName,
-    user?.id,
-    user?.phone,
-    user?.role,
-  ])
+  }, [user])
 
   const bookEvent = useMutation({
     mutationFn: async (eventId: string) => {
@@ -260,16 +262,6 @@ export function EventsList() {
     () => (eventsQuery.data ?? []).map(mapApiEventToPgEvent),
     [eventsQuery.data]
   )
-  const apiPhotoEvents = useMemo(
-    () =>
-      apiEvents.map((event) => ({
-        ...event,
-        isRegistered: bookedEventIds.has(event.id),
-        status: "open" as const,
-        canUploadPhotos: bookedEventIds.has(event.id),
-      })),
-    [apiEvents, bookedEventIds]
-  )
   const apiUpcomingEvents = useMemo(
     () =>
       apiEvents.map((event) =>
@@ -288,7 +280,8 @@ export function EventsList() {
       ...bookedEventIds,
       ...readOnlyCancelledEvents.map((event) => event.id),
     ])
-    const photoEventsWithoutDupes = apiPhotoEvents.filter(
+    // Read-only: photos the photographer has here without a booking
+    const photoEventsWithoutDupes = photoEvents.filter(
       (event) => !listedIds.has(event.id)
     )
     return [
@@ -296,7 +289,7 @@ export function EventsList() {
       ...readOnlyCancelledEvents,
       ...photoEventsWithoutDupes,
     ]
-  }, [apiPhotoEvents, bookedEventIds, bookedEvents, cancelledEvents, isAdmin])
+  }, [bookedEventIds, bookedEvents, cancelledEvents, isAdmin, photoEvents])
 
   const eventSource = isAdmin
     ? apiEvents
@@ -340,15 +333,11 @@ export function EventsList() {
 
     return latestByEvent
   }, [workspacePhotos])
-  const myEventsWithDisplayCovers = useMemo(
-    () =>
-      myEvents.map((event) => ({
-        ...event,
-        coverImage:
-          event.coverImage || latestPhotoUrlByEventId.get(event.id)?.url || "",
-      })),
-    [latestPhotoUrlByEventId, myEvents]
-  )
+  const myEventsWithDisplayCovers = myEvents.map((event) => ({
+    ...event,
+    coverImage:
+      event.coverImage || latestPhotoUrlByEventId.get(event.id)?.url || "",
+  }))
   // Admin "Live": events with photos, i.e. what buyers see on the site
   const liveEvents = filteredEvents.filter((e) => (e.photosCount ?? 0) > 0)
   const pastEvents = filteredEvents
@@ -418,7 +407,7 @@ export function EventsList() {
     }
   }
 
-  const activeList = useMemo(() => {
+  const activeList = (() => {
     if (isAdmin) {
       if (view === "live") return liveEvents
       if (view === "past") return pastEvents
@@ -427,23 +416,11 @@ export function EventsList() {
     if (view === "upcoming") return upcomingEvents
     if (view === "previous") return previousEvents
     return myEvents
-  }, [
-    filteredEvents,
-    isAdmin,
-    liveEvents,
-    myEvents,
-    pastEvents,
-    previousEvents,
-    upcomingEvents,
-    view,
-  ])
-  const isPhotographerUpcomingView = !isAdmin && view === "upcoming"
-  const isPhotographerApiEventView =
-    isPhotographerUpcomingView || (!isAdmin && view === "previous")
+  })()
   const isLoadingEventRows =
     isLoadingAdminEvents ||
     (isPhotographerApiEventView && isLoadingUpcomingEvents)
-  // Waits for both lists (events + bookings): showing one first made cards jump
+  // Waits for both lists (bookings + photos): showing one first made cards jump
   // when the other arrived. isPending, so refetches keep the cards.
   const isPhotographerMyEventsLoading =
     !isAdmin &&
@@ -451,7 +428,7 @@ export function EventsList() {
     (!isClerkLoaded ||
       !isSignedIn ||
       !isAuthProfileLoaded ||
-      isLoadingUpcomingEvents)
+      (isPhotographer && (bookingsQuery.isPending || photosQuery.isPending)))
 
   const tabs: { value: EventsView; label: string }[] = isAdmin
     ? [
@@ -708,18 +685,6 @@ export function EventsList() {
                   event.canUploadPhotos !== false &&
                   bookedEventIds.has(event.id)
                     ? requestCancelBooking
-                    : undefined
-                }
-                eventProfilePath={
-                  event.canUploadPhotos === false
-                    ? undefined
-                    : bookedEventIds.has(event.id)
-                      ? `/event/${event.id}`
-                      : undefined
-                }
-                eventProfileState={
-                  bookedEventIds.has(event.id)
-                    ? { from: "/pg/events", fromTab: view }
                     : undefined
                 }
                 hideLogo={!isAdmin && view === "my"}

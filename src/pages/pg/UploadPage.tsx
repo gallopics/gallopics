@@ -1,16 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { useNavigate, useSearchParams } from "react-router"
+import { Link, useNavigate, useSearchParams } from "react-router"
+import { useQuery } from "@tanstack/react-query"
 import { CheckCircle, Trash2, UploadCloud, X } from "lucide-react"
 
+import { QUALITY_TIERS } from "@/constants/qualityTiers"
 import { notify } from "@/lib/notify"
 import { cn } from "@/lib/utils"
 import { useWorkspaceEvents } from "@/hooks/useWorkspaceData"
+import { useAuth } from "@/context/AuthContext"
 import {
   isUploadInProgress,
   isUploadSessionBusy,
   usePhotographer,
 } from "@/context/PhotographerContext"
 import { useWorkspace } from "@/context/WorkspaceContext"
+import { defaultPricesQueryOptions } from "@/data/queries/photographer"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ConfirmDialog"
 
@@ -29,6 +33,11 @@ export function UploadPage() {
     setCurrentUploadEventId,
   } = usePhotographer()
   const { basePath } = useWorkspace()
+  const { user } = useAuth()
+  const pricing = useQuery({
+    ...defaultPricesQueryOptions(),
+    enabled: user?.approvalStatus === "approved",
+  })
 
   // Local State
   const urlEventId = searchParams.get("eventId")
@@ -88,10 +97,6 @@ export function UploadPage() {
     if (from === "event" && urlEventId) {
       // Explicitly go back to the event we came from
       navigate(`${basePath}/events/${urlEventId}`)
-    } else if (from === "eventProfile" && urlEventId) {
-      navigate(`/event/${urlEventId}`, {
-        state: { from: "/pg/events", fromTab: "my" },
-      })
     } else if (from === "sidebar") {
       // Usually means we came from "anywhere", so events list is a safe home
       navigate(`${basePath}/events`)
@@ -223,6 +228,27 @@ export function UploadPage() {
           <X className="size-5" />
         </Button>
       </header>
+
+      {user?.approvalStatus === "approved" && (
+        <p className="border-b bg-card px-4 py-3 text-sm text-muted-foreground md:px-10">
+          New photos use{" "}
+          {pricing.data
+            ? QUALITY_TIERS.map(
+                (tier) =>
+                  `${tier.label}: ${pricing.data.effective[tier.id] / 100} SEK`
+              ).join(" · ")
+            : pricing.isError
+              ? "your saved default prices"
+              : "your default prices (loading...)"}
+          .{" "}
+          <Link
+            to="/pg/settings"
+            className="font-medium text-primary underline"
+          >
+            Change prices in Settings
+          </Link>
+        </p>
+      )}
 
       <input
         type="file"

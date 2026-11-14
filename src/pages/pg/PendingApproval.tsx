@@ -8,8 +8,6 @@ import { useAuth } from "@/context/AuthContext"
 import { photographerProfileQueryOptions } from "@/data/queries/account"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { DialogTrigger } from "@/components/ui/dialog"
-import { editProfileDialog } from "@/components/EditProfileModal"
 import { Header } from "@/components/Header"
 import { heroCardBackground } from "@/components/HomeHero"
 
@@ -176,15 +174,15 @@ export function PendingApproval() {
                     <div className="mt-1 text-sm leading-[1.6] text-muted-foreground">
                       Add a profile photo so buyers recognise you.
                     </div>
-                    <DialogTrigger
-                      handle={editProfileDialog}
-                      render={
-                        <Button size="sm" variant="outline" className="mt-3" />
-                      }
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="mt-3"
+                      onClick={() => navigate("/pg/settings")}
                     >
                       <Camera />
                       Add photo
-                    </DialogTrigger>
+                    </Button>
                   </div>
                 )}
               </Card>

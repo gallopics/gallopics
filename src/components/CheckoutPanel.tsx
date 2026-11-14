@@ -145,7 +145,7 @@ export function CheckoutPanel({
           </div>
           <div className="px-4 text-center text-xs leading-normal text-muted-foreground opacity-70">
             Your Gallopics receipt is sent after payment. Download links are
-            available immediately. JPEG format.
+            available immediately.
           </div>
         </div>
       </form>

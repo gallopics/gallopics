@@ -14,7 +14,7 @@ interface FilterBarProps {
    * `fill`: search takes the remaining width (old public pages);
    * `fixed`: max 520px (old workspace pages with shared-filters.css)
    */
-  searchWidth?: "fill" | "fixed"
+  searchWidth?: "fill" | "fixed" | "compact"
 }
 
 /**
@@ -52,7 +52,9 @@ export function FilterBar({
               "max-md:mt-1 max-md:w-full max-md:flex-none",
               searchWidth === "fixed"
                 ? "min-w-70 flex-[0_1_520px]"
-                : "min-w-50 flex-[1_1_auto]"
+                : searchWidth === "compact"
+                  ? "min-w-50 flex-[0_1_400px]"
+                  : "min-w-50 flex-[1_1_auto]"
             )}
           >
             {search}

@@ -1,16 +1,5 @@
 import { Fragment, lazy, Suspense, useEffect } from "react"
 import { BrowserRouter, Navigate, Route, Routes } from "react-router"
-
-import { AuthProvider } from "@/context/AuthContext"
-import { CartProvider } from "@/context/CartContext"
-import { PhotographerProvider } from "@/context/PhotographerContext"
-import { useWorkspace, WorkspaceProvider } from "@/context/WorkspaceContext"
-import { AuthModal } from "@/components/AuthModal"
-import { ContactSupportModal } from "@/components/ContactSupportModal"
-import { EditProfileModal } from "@/components/EditProfileModal"
-import { PageState } from "@/components/PageState"
-import { ProtectedRoute } from "@/components/ProtectedRoute"
-import ScrollToTop from "@/components/ScrollToTop"
 import {
   EventMeta,
   NoIndexMeta,
@@ -18,6 +7,16 @@ import {
   PhotoMeta,
   StaticPageMeta,
 } from "@/seo/RouteMeta"
+
+import { AuthProvider } from "@/context/AuthContext"
+import { CartProvider } from "@/context/CartContext"
+import { PhotographerProvider } from "@/context/PhotographerContext"
+import { useWorkspace, WorkspaceProvider } from "@/context/WorkspaceContext"
+import { AuthModal } from "@/components/AuthModal"
+import { ContactSupportModal } from "@/components/ContactSupportModal"
+import { PageState } from "@/components/PageState"
+import { ProtectedRoute } from "@/components/ProtectedRoute"
+import ScrollToTop from "@/components/ScrollToTop"
 // Shell for all workspace pages: kept eager so it appears immediately on auth
 import { PhotographerLayout } from "@/pages/pg/PhotographerLayout"
 
@@ -58,7 +57,9 @@ const EventsList = lazy(() =>
   import("@/pages/pg/EventsList").then((m) => ({ default: m.EventsList }))
 )
 const EventDetail = lazy(() =>
-  import("@/pages/pg/EventDetail").then((m) => ({ default: m.EventDetail }))
+  import("@/pages/pg/event-detail/EventDetail").then((m) => ({
+    default: m.EventDetail,
+  }))
 )
 const AdminEventDetail = lazy(() =>
   import("@/pages/pg/AdminEventDetail").then((m) => ({
@@ -86,6 +87,9 @@ const PhotographerBilling = lazy(() =>
 )
 const Receipts = lazy(() =>
   import("@/pages/pg/Receipts").then((m) => ({ default: m.Receipts }))
+)
+const Settings = lazy(() =>
+  import("@/pages/pg/Settings").then((m) => ({ default: m.Settings }))
 )
 const FAQPage = lazy(() =>
   import("@/pages/FAQPage").then((m) => ({ default: m.FAQPage }))
@@ -205,6 +209,7 @@ function App() {
                         ))}
                       </Fragment>
                     ))}
+                    <Route path="/pg/settings" element={<Settings />} />
                     {/* Admin only */}
                     <Route
                       path="/admin/photographers"
@@ -300,7 +305,6 @@ function App() {
               {/* App-wide dialogs, rendered once: open them with their handles */}
               <AuthModal />
               <ContactSupportModal />
-              <EditProfileModal />
             </WorkspaceProvider>
           </BrowserRouter>
         </PhotographerProvider>

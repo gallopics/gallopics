@@ -24,6 +24,8 @@ import {
   type ApiPhoto,
   type CheckoutItem,
 } from "@/data/apiClient"
+import { getPhotoDateTime, getPhotoTag } from "@/data/eventsApi"
+import { formatEventDate, formatEventTime } from "@/lib/dates"
 import { eventQueryOptions } from "@/data/queries/events"
 import {
   photoQueryOptions,
@@ -66,22 +68,14 @@ function DetailRow({
 const toPagePhoto = (photo: ApiPhoto): Photo => ({
   id: photo.id,
   src: getApiPhotoPreviewUrl(photo),
-  rider: photo.tags.find((tag) => tag.type === "rider")?.value || "Unassigned",
-  horse:
-    photo.tags.find((tag) => tag.type === "horse")?.value ||
-    photo.class_name ||
-    "Uploaded photo",
+  rider: getPhotoTag(photo, "rider") ?? "",
+  horse: getPhotoTag(photo, "horse") ?? "",
   event: photo.event_class_name || photo.class_name || "Event",
   eventId: photo.event_id,
-  date: new Date(photo.created_at).toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }),
+  ...getPhotoDateTime(photo),
   width: 600,
   height: 800,
   className: photo.class_name || "Uploaded",
-  time: new Date(photo.created_at).toLocaleTimeString().slice(0, 5),
   city: "Sweden",
   arena: photo.class_name || "Uploaded",
   countryCode: "se",
@@ -205,7 +199,7 @@ function ImageProfileContent({
     enabled: isUuid(photo.eventId),
   })
   const event = eventQuery.data
-  const takenAt = apiPhoto?.taken_at ? new Date(apiPhoto.taken_at) : null
+  const takenAt = apiPhoto?.taken_at
   const displayedPhotographer = {
     id: apiPhotographer?.slug || apiPhotographer?.id || photo.photographerId,
     name: apiPhotographer?.display_name || photo.photographer || "Gallopics",
@@ -217,13 +211,16 @@ function ImageProfileContent({
   const [loadedOrientation, setLoadedOrientation] = useState<{
     key: string
     portrait: boolean
+    aspectRatio: number
   } | null>(null)
   const detectedPortrait =
     loadedOrientation?.key === orientationKey
       ? loadedOrientation.portrait
       : photo.height > photo.width
-  const setDetectedPortrait = (portrait: boolean) =>
-    setLoadedOrientation({ key: orientationKey, portrait })
+  const imageAspectRatio =
+    loadedOrientation?.key === orientationKey
+      ? loadedOrientation.aspectRatio
+      : photo.width / photo.height
 
   // Check if current selection is in cart
   const isInCart = useMemo(() => {
@@ -287,19 +284,10 @@ function ImageProfileContent({
     return QUALITY_TIERS.map((tier) => ({
       label: tier.label,
       value: tier.id,
-      subtext:
-        tier.id === "web"
-          ? detectedPortrait
-            ? "Portrait: 720×1080"
-            : "Landscape: 1080×720"
-          : tier.id === "high" || tier.id === "commercial"
-            ? detectedPortrait
-              ? "Portrait: 4000×6000"
-              : "Landscape: 6000×4000"
-            : "",
+      subtext: tier.sizeLabel,
       description: tier.description,
     }))
-  }, [detectedPortrait])
+  }, [])
 
   return (
     <div className="flex min-h-screen flex-col overflow-x-hidden max-md:relative max-md:w-full max-md:max-w-[100vw]">
@@ -310,21 +298,30 @@ function ImageProfileContent({
       <main className="pt-6 pb-15 max-md:pt-3 max-md:pb-10">
         <div className="container">
           <div className="flex items-start gap-6 max-lg:flex-col">
-            {/* Photo viewer */}
-            <div className="min-w-0 flex-1">
+            {/* Photo viewer: full width when stacked (the preview doesn't size it) */}
+            <div className="min-w-0 flex-1 max-lg:w-full">
               <Card className="gap-0 rounded-3xl py-0 shadow-[0_1px_2px_rgba(0,0,0,0.02)] max-md:rounded-xl">
                 <button
                   type="button"
                   aria-label="View full screen"
                   onClick={() => setIsFullScreen(true)}
-                  className="flex aspect-3/2 min-h-100 w-full cursor-zoom-in items-center justify-center bg-muted max-md:min-h-0 max-md:p-4"
+                  className="flex aspect-3/2 min-h-100 w-full cursor-zoom-in items-center justify-center bg-muted max-md:aspect-(--photo-aspect) max-md:max-h-[70svh] max-md:min-h-0"
+                  style={
+                    {
+                      "--photo-aspect": imageAspectRatio,
+                    } as React.CSSProperties
+                  }
                 >
                   <WatermarkedPhotoPreview
                     src={photo.src || undefined}
                     alt={photo.rider}
                     onLoad={(e) => {
                       const img = e.currentTarget
-                      setDetectedPortrait(img.naturalHeight > img.naturalWidth)
+                      setLoadedOrientation({
+                        key: orientationKey,
+                        portrait: img.naturalHeight > img.naturalWidth,
+                        aspectRatio: img.naturalWidth / img.naturalHeight,
+                      })
                     }}
                   />
                 </button>
@@ -332,16 +329,20 @@ function ImageProfileContent({
                 <div className="flex w-full items-start justify-between gap-3 border-t border-black/5 px-6 py-4 max-md:px-4">
                   <div className="flex min-w-0 flex-1 flex-wrap items-start gap-2">
                     {/* No rider / horse pages yet: plain names */}
-                    <InfoChip
-                      label="Rider"
-                      name={photo.rider}
-                      variant="rider"
-                    />
-                    <InfoChip
-                      label="Horse"
-                      name={photo.horse}
-                      variant="horse"
-                    />
+                    {photo.rider && (
+                      <InfoChip
+                        label="Rider"
+                        name={photo.rider}
+                        variant="rider"
+                      />
+                    )}
+                    {photo.horse && (
+                      <InfoChip
+                        label="Horse"
+                        name={photo.horse}
+                        variant="horse"
+                      />
+                    )}
                     <InfoChip
                       label="Photographer"
                       name={displayedPhotographer.name}
@@ -446,9 +447,8 @@ function ImageProfileContent({
                       </div>
 
                       <p className="mt-4 text-xs leading-[1.4] text-muted-foreground">
-                        Your receipt is sent by email after payment. Download
-                        links are available immediately and valid for 24 hours.
-                        Images are delivered as JPEG.
+                        You can download right after payment, and your receipt
+                        email includes the download links too.
                       </p>
 
                       <DialogTrigger
@@ -518,16 +518,7 @@ function ImageProfileContent({
                   )}
                   {takenAt && (
                     <DetailRow label="Time">
-                      {takenAt.toLocaleDateString("en-GB", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                      {" • "}
-                      {takenAt.toLocaleTimeString("en-GB", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                      {formatEventDate(takenAt)} • {formatEventTime(takenAt)}
                     </DetailRow>
                   )}
                   {event?.city && (

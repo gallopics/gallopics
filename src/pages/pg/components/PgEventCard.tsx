@@ -11,8 +11,6 @@ interface PgEventCardProps {
   event: PgEvent
   onCancelBooking?: (event: PgEvent, e: React.MouseEvent) => void
   fromTab?: string
-  eventProfilePath?: string
-  eventProfileState?: unknown
   hideLogo?: boolean
 }
 
@@ -21,17 +19,15 @@ export function PgEventCard({
   event,
   onCancelBooking,
   fromTab,
-  eventProfilePath,
-  eventProfileState,
   hideLogo = false,
 }: PgEventCardProps) {
   const { basePath } = useWorkspace()
   const navigate = useNavigate()
   const hasCover = !!event.coverImage
-  const eventTargetPath = eventProfilePath ?? `${basePath}/events/${event.id}`
-  const eventTargetState = eventProfileState ?? { fromTab: fromTab ?? "my" }
-
-  const open = () => navigate(eventTargetPath, { state: eventTargetState })
+  const open = () =>
+    navigate(`${basePath}/events/${event.id}`, {
+      state: { fromTab: fromTab ?? "my" },
+    })
 
   return (
     <div

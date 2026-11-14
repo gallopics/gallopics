@@ -1,4 +1,5 @@
 import { toSekPrices } from "../constants/qualityTiers"
+import { formatEventTime, formatTime, SWEDISH_TIME_ZONE } from "../lib/dates"
 import { formatLabel } from "../lib/utils"
 import type {
   ClassSection,
@@ -241,8 +242,28 @@ export async function fetchEventsFromApi(options?: {
   return items.map(mapApiEventToEventData)
 }
 
-function getPhotoTag(photo: ApiPhoto, type: string) {
+/** A photo's tag value ("rider", "horse", "class"); undefined when untagged */
+export function getPhotoTag(photo: ApiPhoto, type: string) {
   return photo.tags?.find((tag) => tag.type === type)?.value
+}
+
+/**
+ * When the photo was taken (Swedish time), or uploaded (viewer's time) when that is unknown.
+ * `timeZone` goes with `date`, so a card shows the date in the same zone as the time.
+ */
+export function getPhotoDateTime(photo: {
+  taken_at?: string | null
+  created_at?: string | null
+}): { date: string; time: string; timeZone?: string } {
+  if (photo.taken_at)
+    return {
+      date: photo.taken_at,
+      time: formatEventTime(photo.taken_at),
+      timeZone: SWEDISH_TIME_ZONE,
+    }
+  if (photo.created_at)
+    return { date: photo.created_at, time: formatTime(photo.created_at) }
+  return { date: "", time: "" }
 }
 
 function getPhotoImageUrl(photo: ApiPhotoWithUrls) {
@@ -259,22 +280,20 @@ export function mapApiPhotoToPhoto(
   photo: ApiPhotoWithUrls,
   event: EventData
 ): Photo {
-  const createdAt = photo.created_at ? new Date(photo.created_at) : new Date()
   const className =
     photo.event_class_name || photo.class_name || photo.class_id || "Uploaded"
 
   return {
     id: photo.id,
     src: getPhotoImageUrl(photo),
-    rider: getPhotoTag(photo, "rider") || "Unassigned",
-    horse: getPhotoTag(photo, "horse") || className || "Uploaded photo",
+    rider: getPhotoTag(photo, "rider") ?? "",
+    horse: getPhotoTag(photo, "horse") ?? "",
     event: event.name,
     eventId: event.id,
-    date: photo.created_at || event.startDate || new Date().toISOString(),
+    ...getPhotoDateTime(photo),
     width: photo.width || 600,
     height: photo.height || 800,
     className,
-    time: createdAt.toLocaleTimeString().slice(0, 5),
     city: event.city,
     arena: className,
     countryCode:

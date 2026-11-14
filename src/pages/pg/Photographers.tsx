@@ -3,6 +3,7 @@ import { Link } from "react-router"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Users } from "lucide-react"
 
+import { formatDate } from "@/lib/dates"
 import { notify } from "@/lib/notify"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/context/AuthContext"
@@ -262,11 +263,7 @@ export function Photographers() {
                           </div>
                         </TableCell>
                         <TableCell className={cellClass}>
-                          {new Date(p.created_at).toLocaleDateString("en-GB", {
-                            day: "numeric",
-                            month: "short",
-                            year: "numeric",
-                          })}
+                          {formatDate(p.created_at)}
                         </TableCell>
                         <TableCell className={cn(cellClass, "text-right")}>
                           {p.photo_count}

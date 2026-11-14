@@ -7,6 +7,7 @@ import {
   DollarSign,
   LayoutGrid,
   Menu,
+  Settings,
   Users,
   Wallet,
 } from "lucide-react"
@@ -82,7 +83,7 @@ function WorkspaceSidebar() {
   return (
     <Sidebar
       collapsible="icon"
-      className="md:top-[74px] md:h-[calc(100svh-74px)]"
+      className="md:top-(--site-header-height) md:h-[calc(100svh-var(--site-header-height))]"
     >
       <SidebarHeader className="mt-3 mb-5 h-9 flex-row items-center justify-between p-0 pr-2 pl-4 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
         <span className="overflow-hidden text-xs font-bold tracking-[1px] whitespace-nowrap text-muted-foreground/70 uppercase group-data-[collapsible=icon]:hidden">
@@ -136,6 +137,9 @@ function WorkspaceSidebar() {
             />
           )}
           {/* Receipts is hidden in the old app too (still mock) */}
+          {!isAdmin && (
+            <NavItem to="/pg/settings" icon={<Settings />} label="Settings" />
+          )}
         </SidebarMenu>
         <SidebarSeparator className="mx-3 my-3 data-horizontal:w-auto" />
       </SidebarContent>
