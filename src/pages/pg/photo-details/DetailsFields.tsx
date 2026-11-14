@@ -1,5 +1,5 @@
 import { useId, type ReactNode } from "react"
-import { useStore } from "@tanstack/react-form"
+import { useSelector } from "@tanstack/react-form"
 import { useQuery } from "@tanstack/react-query"
 import { cn } from "cn"
 import { Info } from "lucide-react"
@@ -182,8 +182,8 @@ export function PriceFields({
       photos.filter((photo) => photo.ownPrices?.[id] == null).length,
     ])
   ) as Record<QualityTierId, number>
-  const triedToSave = useStore(form.store, (s) => s.submissionAttempts > 0)
-  const allLinked = useStore(form.store, (s) =>
+  const triedToSave = useSelector(form.store, (s) => s.submissionAttempts > 0)
+  const allLinked = useSelector(form.store, (s) =>
     QUALITY_TIERS.every((tier) => s.values.prices[tier.id] === LINKED_PRICE)
   )
   return (

@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useState } from "react"
 import {
   useForm,
-  useStore,
+  useSelector,
   type FormAsyncValidateOrFn,
   type FormValidateOrFn,
   type ReactFormExtendedApi,
@@ -137,8 +137,8 @@ export function DetailsPanel({
       setResult({ saved: true })
     },
   })
-  const isDirty = useStore(form.store, (state) => !state.isDefaultValue)
-  const isSubmitting = useStore(form.store, (state) => state.isSubmitting)
+  const isDirty = useSelector(form.store, (state) => !state.isDefaultValue)
+  const isSubmitting = useSelector(form.store, (state) => state.isSubmitting)
 
   useEffect(() => {
     onStatusChange({ isDirty, isSubmitting })

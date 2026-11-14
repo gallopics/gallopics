@@ -193,19 +193,22 @@ export function EventDetail() {
     setIsDeleteOpen(true)
   }
 
-  const handleConfirmDelete = () => {
+  /** The one delete flow: the page's dialog and the panel's both end here */
+  const deletePhotos = (ids: Set<string>) => {
     const previousSelection = selectedIds
-    setIsDeleteOpen(false)
     setIsPanelOpen(false)
-    setSelectedIds(
-      (prev) => new Set([...prev].filter((id) => !deleteIds.has(id)))
-    )
+    setSelectedIds((prev) => new Set([...prev].filter((id) => !ids.has(id))))
     // Undo puts them back and restores the selection; the API delete waits for the toast
     deletePhotosWithUndo(
-      allPhotos.filter((p) => deleteIds.has(p.id)),
-      `${deleteIds.size} photo${deleteIds.size > 1 ? "s" : ""} deleted`,
+      allPhotos.filter((p) => ids.has(p.id)),
+      `${ids.size} photo${ids.size > 1 ? "s" : ""} deleted`,
       () => setSelectedIds(previousSelection)
     )
+  }
+
+  const handleConfirmDelete = () => {
+    setIsDeleteOpen(false)
+    deletePhotos(deleteIds)
   }
 
   // Guard after all hooks — safe to return early now
@@ -279,6 +282,7 @@ export function EventDetail() {
               shownCount={displayedPhotos.length}
               onEdit={() => {
                 setEditedIds(undefined)
+                setActivePanelTab("tags")
                 setIsPanelOpen(true)
               }}
               onDelete={() => askDelete(selectedIds)}
@@ -319,6 +323,7 @@ export function EventDetail() {
         allPhotos={allPhotos}
         activeTab={activePanelTab}
         onClose={() => setIsPanelOpen(false)}
+        onDelete={() => deletePhotos(panelIds)}
         // Moved photos may have left the folder on screen: unselect them
         onMoved={() =>
           setSelectedIds(

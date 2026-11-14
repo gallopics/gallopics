@@ -1,7 +1,5 @@
 import { useMemo, useState } from "react"
 
-import { notify } from "@/lib/notify"
-import { useDeletePhotosWithUndo } from "@/hooks/useDeletePhotosWithUndo"
 import type { Photo } from "@/context/PhotographerContext"
 import {
   Sheet,
@@ -20,6 +18,8 @@ interface PhotoDetailsSheetProps {
   selectedIds: Set<string>
   allPhotos: Photo[]
   onClose: () => void
+  /** After confirming: the page deletes the photos (and closes the Sheet) */
+  onDelete: () => void
   activeTab?: PanelTab
   onMoved?: () => void
 }
@@ -30,6 +30,7 @@ export function PhotoDetailsSheet({
   selectedIds,
   allPhotos,
   onClose,
+  onDelete,
   activeTab,
   onMoved,
 }: PhotoDetailsSheetProps) {
@@ -45,7 +46,6 @@ export function PhotoDetailsSheet({
   const [confirmation, setConfirmation] = useState<"delete" | "close" | null>(
     null
   )
-  const deletePhotos = useDeletePhotosWithUndo()
   const close = () => {
     if (status.isSubmitting) return
     if (status.isDirty) setConfirmation("close")
@@ -58,10 +58,7 @@ export function PhotoDetailsSheet({
   }
   const confirmDelete = () => {
     setConfirmation(null)
-    onClose()
-    deletePhotos(photos, "Photo deleted", () =>
-      notify("Delete undone", "success")
-    )
+    onDelete()
   }
   return (
     <Sheet
