@@ -24,7 +24,8 @@ import {
   type ApiPhoto,
   type CheckoutItem,
 } from "@/data/apiClient"
-import { getPhotoTag } from "@/data/eventsApi"
+import { getPhotoDateTime, getPhotoTag } from "@/data/eventsApi"
+import { formatEventDate, formatEventTime } from "@/lib/dates"
 import { eventQueryOptions } from "@/data/queries/events"
 import {
   photoQueryOptions,
@@ -71,15 +72,10 @@ const toPagePhoto = (photo: ApiPhoto): Photo => ({
   horse: getPhotoTag(photo, "horse") ?? "",
   event: photo.event_class_name || photo.class_name || "Event",
   eventId: photo.event_id,
-  date: new Date(photo.created_at).toLocaleDateString(undefined, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }),
+  ...getPhotoDateTime(photo),
   width: 600,
   height: 800,
   className: photo.class_name || "Uploaded",
-  time: new Date(photo.created_at).toLocaleTimeString().slice(0, 5),
   city: "Sweden",
   arena: photo.class_name || "Uploaded",
   countryCode: "se",
@@ -203,7 +199,7 @@ function ImageProfileContent({
     enabled: isUuid(photo.eventId),
   })
   const event = eventQuery.data
-  const takenAt = apiPhoto?.taken_at ? new Date(apiPhoto.taken_at) : null
+  const takenAt = apiPhoto?.taken_at
   const displayedPhotographer = {
     id: apiPhotographer?.slug || apiPhotographer?.id || photo.photographerId,
     name: apiPhotographer?.display_name || photo.photographer || "Gallopics",
@@ -522,16 +518,7 @@ function ImageProfileContent({
                   )}
                   {takenAt && (
                     <DetailRow label="Time">
-                      {takenAt.toLocaleDateString("en-GB", {
-                        day: "numeric",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                      {" • "}
-                      {takenAt.toLocaleTimeString("en-GB", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                      {formatEventDate(takenAt)} • {formatEventTime(takenAt)}
                     </DetailRow>
                   )}
                   {event?.city && (

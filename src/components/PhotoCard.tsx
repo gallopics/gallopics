@@ -10,6 +10,7 @@ import {
   type OwnPhotoPrices,
   type PhotoPrices,
 } from "@/constants/qualityTiers"
+import { formatDate } from "@/lib/dates"
 import { cn } from "@/lib/utils"
 import { useCart } from "@/context/CartContext"
 import type { Photo } from "@/types"
@@ -190,9 +191,9 @@ export function PhotoCard({
               <div className="flex items-center gap-1.5 text-xs leading-normal text-white/85">
                 <span>🇸🇪</span> {photo.city}
                 <span className="text-[0.7em] opacity-60">•</span>
-                {new Date(photo.date).toLocaleDateString("en-GB", {
-                  day: "numeric",
-                  month: "short",
+                {formatDate(photo.date, {
+                  year: undefined,
+                  timeZone: photo.timeZone,
                 })}{" "}
                 {photo.time}
               </div>

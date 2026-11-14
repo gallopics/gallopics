@@ -22,6 +22,7 @@ import {
 } from "../apiClient"
 import {
   formatEventPeriod,
+  getPhotoDateTime,
   getPhotoTag,
   mapApiEventToEventData,
   normalizeCountry,
@@ -75,13 +76,11 @@ function mapApiPhotoToPgPhoto(photo: ApiPhoto): Photo {
     riderId: photo.equipe_rider_id || undefined,
     horse: getPhotoTag(photo, "horse"),
     horseId: photo.equipe_horse_id || undefined,
-    timestamp: new Date(photo.created_at).toLocaleTimeString("en-GB", {
-      hour: "2-digit",
-      minute: "2-digit",
-    }),
+    timestamp: getPhotoDateTime(photo).time,
     width: 600,
     height: 800,
     fileName: photo.file_name || undefined,
+    takenAt: photo.taken_at || undefined,
     uploadDate: photo.created_at,
     folderId: photo.folder_id || undefined,
     classId: getApiPhotoClassId(photo),

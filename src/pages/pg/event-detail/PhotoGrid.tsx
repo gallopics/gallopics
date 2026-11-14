@@ -3,6 +3,7 @@ import { ImageOff } from "lucide-react"
 import { ALL_FOLDERS, UNCATEGORISED } from "@/lib/photoFolders"
 import { cn } from "@/lib/utils"
 import type { PgEvent, Photo } from "@/context/PhotographerContext"
+import { getPhotoDateTime } from "@/data/eventsApi"
 import type { Photo as CardPhoto } from "@/types"
 import { Checkbox } from "@/components/ui/checkbox"
 import { EmptyState } from "@/components/EmptyState"
@@ -138,8 +139,10 @@ const toCardPhoto = (photo: Photo, event: PgEvent): CardPhoto => ({
   horse: photo.horse || "",
   event: event.title,
   eventId: photo.eventId,
-  date: photo.uploadDate || "",
-  time: photo.timestamp || "",
+  ...getPhotoDateTime({
+    taken_at: photo.takenAt,
+    created_at: photo.uploadDate,
+  }),
   city: event.city || "",
   countryCode: "",
   width: photo.width,

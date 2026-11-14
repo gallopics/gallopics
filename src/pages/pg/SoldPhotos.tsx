@@ -3,6 +3,7 @@ import { Link } from "react-router"
 import { useQuery } from "@tanstack/react-query"
 import { DollarSign, LayoutGrid, List } from "lucide-react"
 
+import { formatDate, formatTime, swedishDateParts } from "@/lib/dates"
 import { shortPhotoId } from "@/lib/shortPhotoId"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/context/AuthContext"
@@ -154,19 +155,19 @@ export function SoldPhotos() {
   ]
 
   const filteredSales = useMemo(() => {
-    const now = new Date()
+    // Periods follow Swedish days and months, like the payouts
+    const now = swedishDateParts(new Date())!
     const query = searchQuery.trim().toLowerCase().replace(/^#/, "")
     return allSales.filter((sale) => {
-      const soldAt = new Date(sale.sold_at)
+      const soldAt = swedishDateParts(sale.sold_at)
       const matchPeriod =
         selectedPeriod === "all" ||
-        (selectedPeriod === "this_month" &&
-          soldAt.getMonth() === now.getMonth() &&
-          soldAt.getFullYear() === now.getFullYear()) ||
-        (selectedPeriod === "this_year" &&
-          soldAt.getFullYear() === now.getFullYear()) ||
-        (selectedPeriod === "last_year" &&
-          soldAt.getFullYear() === now.getFullYear() - 1)
+        (!!soldAt &&
+          ((selectedPeriod === "this_month" &&
+            soldAt.month === now.month &&
+            soldAt.year === now.year) ||
+            (selectedPeriod === "this_year" && soldAt.year === now.year) ||
+            (selectedPeriod === "last_year" && soldAt.year === now.year - 1)))
       return (
         matchPeriod &&
         (selectedEventId === "all" || sale.event_id === selectedEventId) &&
@@ -203,17 +204,17 @@ export function SoldPhotos() {
 
   // Chart: sales count per quality in each bucket, plus the photographer's share
   const graphData = useMemo(() => {
-    const now = new Date()
+    const now = swedishDateParts(new Date())!
     let labels: string[]
     if (selectedPeriod === "this_month") {
-      const days = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()
+      const days = new Date(now.year, now.month + 1, 0).getDate()
       labels = Array.from({ length: days }, (_, i) => (i + 1).toString())
     } else if (selectedPeriod === "all") {
-      const years = paidSales.map((sale) =>
-        new Date(sale.sold_at).getFullYear()
+      const years = paidSales.map(
+        (sale) => swedishDateParts(sale.sold_at)?.year ?? now.year
       )
-      const first = Math.min(now.getFullYear(), ...years)
-      labels = Array.from({ length: now.getFullYear() - first + 1 }, (_, i) =>
+      const first = Math.min(now.year, ...years)
+      labels = Array.from({ length: now.year - first + 1 }, (_, i) =>
         (first + i).toString()
       )
     } else {
@@ -227,13 +228,14 @@ export function SoldPhotos() {
       earnings: 0,
     }))
     paidSales.forEach((sale) => {
-      const soldAt = new Date(sale.sold_at)
+      const soldAt = swedishDateParts(sale.sold_at)
+      if (!soldAt) return
       const key =
         selectedPeriod === "this_month"
-          ? soldAt.getDate().toString()
+          ? soldAt.day.toString()
           : selectedPeriod === "all"
-            ? soldAt.getFullYear().toString()
-            : MONTHS[soldAt.getMonth()]
+            ? soldAt.year.toString()
+            : MONTHS[soldAt.month]
       const point = dataPoints[labels.indexOf(key)]
       if (!point) return
       if (sale.quality in point) point[sale.quality as QualityKey] += 1
@@ -253,7 +255,6 @@ export function SoldPhotos() {
     searchQuery === ""
 
   const toUiPhoto = (sale: SaleItem, soldCount: number): Photo => {
-    const soldAt = new Date(sale.sold_at)
     return {
       id: sale.photo_id,
       src: photoUrl(sale.photo_id),
@@ -261,11 +262,8 @@ export function SoldPhotos() {
       horse: "",
       event: sale.event_name,
       eventId: sale.event_id,
-      date: soldAt.toISOString(),
-      time: soldAt.toLocaleTimeString("en-GB", {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+      date: sale.sold_at,
+      time: formatTime(sale.sold_at),
       width: 600,
       height: 400,
       className: "photo-grid-item",
@@ -651,7 +649,6 @@ export function SoldPhotos() {
                 </TableHeader>
                 <TableBody>
                   {filteredSales.map((sale) => {
-                    const soldAt = new Date(sale.sold_at)
                     const payout = sale.refunded
                       ? PAYOUT_LABELS.reversed
                       : PAYOUT_LABELS[sale.payout_status ?? ""]
@@ -693,17 +690,10 @@ export function SoldPhotos() {
                         </TableCell>
                         <TableCell className={cellClass}>
                           <div className="truncate font-medium">
-                            {soldAt.toLocaleDateString("en-GB", {
-                              day: "numeric",
-                              month: "short",
-                              year: "numeric",
-                            })}
+                            {formatDate(sale.sold_at)}
                           </div>
                           <div className="truncate text-xs text-muted-foreground">
-                            {soldAt.toLocaleTimeString("en-GB", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
+                            {formatTime(sale.sold_at)}
                           </div>
                         </TableCell>
                         <TableCell

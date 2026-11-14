@@ -8,6 +8,8 @@ export interface Photo {
   event: string
   eventId: string
   date: string
+  /** Zone that date and time are shown in; unset = the viewer's zone */
+  timeZone?: string
   width: number
   height: number
   // New fields for Event Patch

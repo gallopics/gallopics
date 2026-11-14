@@ -9,6 +9,7 @@ import {
 import { useQuery } from "@tanstack/react-query"
 import { CalendarDays, Clock, MapPin } from "lucide-react"
 
+import { formatDate, toDate } from "@/lib/dates"
 import { cn } from "@/lib/utils"
 import { useWorkspaceEvents } from "@/hooks/useWorkspaceData"
 import { useAuth } from "@/context/AuthContext"
@@ -299,19 +300,16 @@ export function EventProfile() {
 
   const { meeting } = eventDetail
 
-  const TODAY = new Date()
-  TODAY.setHours(0, 0, 0, 0)
-  const eventStart = new Date(meeting.period.startDate)
-  const eventEnd = new Date(meeting.period.endDate)
-  eventEnd.setHours(23, 59, 59, 999)
-  const isLive = TODAY >= eventStart && TODAY <= eventEnd
+  // Event dates are calendar days ("2026-10-11"), compared with today's date
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const eventStart = toDate(meeting.period.startDate)
+  const eventEnd = toDate(meeting.period.endDate)
+  const isLive =
+    !!eventStart && !!eventEnd && today >= eventStart && today <= eventEnd
 
   const formatShort = (date: string, withYear = false) =>
-    new Date(date).toLocaleDateString("en-GB", {
-      day: "numeric",
-      month: "short",
-      ...(withYear && { year: "numeric" }),
-    })
+    formatDate(date, { year: withYear ? "numeric" : undefined })
 
   return (
     <div className="flex min-h-screen flex-col">

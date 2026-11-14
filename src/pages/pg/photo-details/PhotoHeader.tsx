@@ -1,5 +1,6 @@
 import { Clock } from "lucide-react"
 
+import { formatDate, formatEventDate } from "@/lib/dates"
 import { shortPhotoId } from "@/lib/shortPhotoId"
 import type { Photo } from "@/context/PhotographerContext"
 
@@ -25,12 +26,10 @@ export function PhotoHeader({ photo }: { photo: Photo }) {
         <div className="flex items-center gap-1.5 text-[0.8125rem] text-muted-foreground">
           <Clock className="size-3.5" />
           <span>
-            {photo.uploadDate &&
-              `${new Date(photo.uploadDate).toLocaleDateString("en-GB", {
-                day: "numeric",
-                month: "short",
-                year: "numeric",
-              })} • `}
+            {/* Same moment as the time: when it was taken, else when it was uploaded */}
+            {photo.takenAt
+              ? `${formatEventDate(photo.takenAt)} • `
+              : photo.uploadDate && `${formatDate(photo.uploadDate)} • `}
             {photo.timestamp}
           </span>
         </div>

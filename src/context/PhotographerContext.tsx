@@ -26,7 +26,7 @@ import {
   getSessionToken,
   type ApiPhoto,
 } from "../data/apiClient"
-import { getPhotoTag } from "../data/eventsApi"
+import { getPhotoDateTime, getPhotoTag } from "../data/eventsApi"
 import { invalidateEventPhotos } from "../data/queries/events"
 import {
   deletePhotosMutationOptions,
@@ -87,11 +87,12 @@ export interface Photo {
   riderId?: string
   horse?: string
   horseId?: string
-  timestamp?: string
+  timestamp?: string // "09:15": taken (Swedish time), or uploaded when unknown
   width: number
   height: number
   /* New fields for Uploads tab */
   fileName?: string
+  takenAt?: string // ISO, when the photo was taken
   uploadDate?: string // ISO date string
   folderId?: string // The photographer's own folder (empty = Uncategorised)
   classId?: string
@@ -472,16 +473,15 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
             riderId: p.equipe_rider_id || undefined,
             horse,
             horseId: p.equipe_horse_id || undefined,
-            timestamp: new Date(
-              p.taken_at || takenAt || p.created_at || Date.now()
-            ).toLocaleTimeString("en-GB", {
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
+            timestamp: getPhotoDateTime({
+              taken_at: p.taken_at || takenAt,
+              created_at: p.created_at || new Date().toISOString(),
+            }).time,
             width: 600,
             height: 800,
             fileName: file.name,
-            uploadDate: new Date().toISOString(),
+            takenAt: p.taken_at || takenAt || undefined,
+            uploadDate: p.created_at || new Date().toISOString(),
             classId:
               getApiPhotoClassId(p) ||
               uploadMetadata.equipeClassSectionId ||
