@@ -2,6 +2,8 @@ import { z } from "zod"
 
 import {
   getPriceError,
+  MAX_PRICE_SEK,
+  MIN_PRICE_SEK,
   QUALITY_TIERS,
   type OwnPhotoPrices,
   type QualityTierId,
@@ -39,11 +41,16 @@ export function detailsValues(photos: Photo[]): DetailsValues {
   }
 }
 
+// One message for every invalid price: the Sheet shows the allowed range
+// only here, not as a hint under each field
+const PRICE_ERROR = `Enter a price in whole SEK, ${MIN_PRICE_SEK} to ${MAX_PRICE_SEK.toLocaleString("sv-SE")} SEK`
+
 const priceSchema = (isSingle: boolean) =>
   z.string().superRefine((value, ctx) => {
     if (value === LINKED_PRICE || (!isSingle && value === "")) return
-    const error = getPriceError(value)
-    if (error) ctx.addIssue({ code: "custom", message: error })
+    if (getPriceError(value)) {
+      ctx.addIssue({ code: "custom", message: PRICE_ERROR })
+    }
   })
 
 export const detailsSchema = (isSingle: boolean) =>

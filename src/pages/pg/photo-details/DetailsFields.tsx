@@ -2,21 +2,20 @@ import { useId, type ReactNode } from "react"
 import { useSelector } from "@tanstack/react-form"
 import { useQuery } from "@tanstack/react-query"
 import { cn } from "cn"
-import { Info } from "lucide-react"
+import { ExternalLink, Info } from "lucide-react"
 
 import {
-  MAX_PRICE_SEK,
-  MIN_PRICE_SEK,
+  DEFAULT_PRICES,
   QUALITY_TIERS,
   type QualityTierId,
 } from "@/constants/qualityTiers"
 import type { Photo } from "@/context/PhotographerContext"
 import { classStartsQueryOptions } from "@/data/queries/events"
 import { defaultPricesQueryOptions } from "@/data/queries/photographer"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Field,
-  FieldDescription,
   FieldError,
   FieldGroup,
   FieldLabel,
@@ -174,18 +173,39 @@ export function PriceFields({
 }) {
   const id = useId()
   const isSingle = photos.length === 1
-  const effectivePrices = useQuery(defaultPricesQueryOptions()).data?.effective
-  /** Selected photos using the default price, per tier */
-  const defaultCounts = Object.fromEntries(
-    QUALITY_TIERS.map(({ id }) => [
-      id,
-      photos.filter((photo) => photo.ownPrices?.[id] == null).length,
-    ])
-  ) as Record<QualityTierId, number>
+  const defaults = useQuery(defaultPricesQueryOptions())
+  const prices = useSelector(form.store, (s) => s.values.prices)
   const triedToSave = useSelector(form.store, (s) => s.submissionAttempts > 0)
-  const allLinked = useSelector(form.store, (s) =>
-    QUALITY_TIERS.every((tier) => s.values.prices[tier.id] === LINKED_PRICE)
-  )
+  const inputId = (tierId: QualityTierId) => `${id}-${tierId}`
+
+  /**
+   * The photographer's default price in SEK. Unknown while loading, so the
+   * site's price never flashes as theirs; the site's if loading fails.
+   */
+  const defaultPrice = (tierId: QualityTierId) =>
+    defaults.isPending
+      ? undefined
+      : defaults.data
+        ? defaults.data.effective[tierId] / 100
+        : DEFAULT_PRICES[tierId]
+  /** What an empty field keeps in a multi-selection: "499" or "Mixed · 499–549" */
+  const keptPrices = (tierId: QualityTierId) => {
+    const values = photos.map(
+      (photo) => photo.ownPrices?.[tierId] ?? defaultPrice(tierId)
+    )
+    if (!values.every((value): value is number => value !== undefined)) return
+    const min = Math.min(...values)
+    const max = Math.max(...values)
+    return min === max ? `${min}` : `Mixed · ${min}–${max}`
+  }
+  // In a multi-selection "" keeps each photo's price, so it is custom only
+  // when some photo has its own price
+  const hasCustomPrice = QUALITY_TIERS.some(({ id: tierId }) => {
+    const value = prices[tierId]
+    if (value === LINKED_PRICE) return false
+    if (isSingle || value !== "") return true
+    return photos.some((photo) => photo.ownPrices?.[tierId] != null)
+  })
   return (
     <>
       <div className="mb-3 flex items-center justify-between">
@@ -200,7 +220,7 @@ export function PriceFields({
           <Info />
         </Button>
       </div>
-      <FieldGroup className="gap-5">
+      <FieldGroup className="gap-4">
         {QUALITY_TIERS.map((tier) => (
           <form.Field key={tier.id} name={`prices.${tier.id}`}>
             {(field) => {
@@ -210,89 +230,98 @@ export function PriceFields({
               const isInvalid =
                 (field.state.meta.isBlurred || triedToSave) &&
                 !field.state.meta.isValid
-              const inputId = `${id}-${tier.id}`
-              const helpId = `${inputId}-help`
+              const fieldId = inputId(tier.id)
+              const errorId = `${fieldId}-error`
+              const badgeId = `${fieldId}-default`
               return (
-                <Field className="gap-1" data-invalid={isInvalid}>
-                  <FieldLabel htmlFor={inputId} className={labelClass}>
+                <Field className="gap-1.5" data-invalid={isInvalid}>
+                  <FieldLabel htmlFor={fieldId} className={labelClass}>
                     {tier.label}
                   </FieldLabel>
                   <InputGroup className="h-10">
+                    {/* A linked tier shows the default as a real value:
+                        tabbing in selects it, so typing replaces it, and a
+                        click places the caret to edit it. Either way the
+                        tier becomes a custom price. */}
                     <InputGroupInput
-                      id={inputId}
+                      id={fieldId}
                       name={field.name}
                       inputMode="numeric"
                       aria-invalid={isInvalid}
-                      aria-describedby={helpId}
-                      value={linked ? "" : value}
+                      aria-describedby={
+                        isInvalid ? errorId : linked ? badgeId : undefined
+                      }
+                      value={linked ? (defaultPrice(tier.id) ?? "") : value}
                       onChange={(e) =>
                         field.handleChange(e.target.value.trim())
                       }
                       onBlur={field.handleBlur}
                       placeholder={
-                        linked
-                          ? String(
-                              (effectivePrices?.[tier.id] ?? tier.price * 100) /
-                                100
-                            )
-                          : isSingle
-                            ? ""
-                            : "Mixed"
+                        !isSingle && value === ""
+                          ? keptPrices(tier.id)
+                          : undefined
                       }
                     />
                     <InputGroupAddon align="inline-end">
+                      {linked && (
+                        <Badge
+                          id={badgeId}
+                          variant="secondary"
+                          className="h-5 px-2 text-[0.6875rem]"
+                        >
+                          Default<span className="sr-only"> price</span>
+                        </Badge>
+                      )}
                       <InputGroupText>SEK</InputGroupText>
                     </InputGroupAddon>
                   </InputGroup>
-                  {isInvalid ? (
-                    <FieldError id={helpId} errors={field.state.meta.errors} />
-                  ) : (
-                    <FieldDescription
-                      id={helpId}
-                      className="text-xs leading-[1.4]"
-                    >
-                      {linked
-                        ? "Uses default price. Updates when your default changes."
-                        : !isSingle && value === ""
-                          ? `Mixed prices: ${defaultCounts[tier.id]} use default price.`
-                          : tier.description}
-                    </FieldDescription>
+                  {isInvalid && (
+                    <FieldError id={errorId} errors={field.state.meta.errors} />
                   )}
-                  <Button
-                    type="button"
-                    variant="link"
-                    size="xs"
-                    className="mt-1 h-auto justify-start self-start px-0"
-                    disabled={linked}
-                    onClick={() => field.handleChange(LINKED_PRICE)}
-                  >
-                    Use default price
-                  </Button>
                 </Field>
               )
             }}
           </form.Field>
         ))}
       </FieldGroup>
-      <p className="mt-5 text-xs leading-normal text-muted-foreground/70">
-        {!isSingle && "Leave a field empty to keep each photo's own price. "}
-        Whole SEK, {MIN_PRICE_SEK} to {MAX_PRICE_SEK.toLocaleString("sv-SE")}{" "}
-        SEK.
-      </p>
-      <Button
-        type="button"
-        variant="link"
-        size="xs"
-        className="mt-2 h-auto px-0"
-        disabled={allLinked}
-        onClick={() =>
-          QUALITY_TIERS.forEach((tier) =>
-            form.setFieldValue(`prices.${tier.id}`, LINKED_PRICE)
-          )
-        }
-      >
-        Use default prices
-      </Button>
+      {!isSingle && (
+        <p className="mt-4 text-xs leading-normal text-muted-foreground">
+          Empty fields keep each photo&apos;s own price.
+        </p>
+      )}
+      <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-3">
+        <p className="text-xs leading-normal text-muted-foreground">
+          Defaults come from{" "}
+          {/* New tab, so an unsaved edit in the Sheet is never lost */}
+          <a
+            href="/pg/settings"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded-sm font-medium text-foreground underline-offset-4 outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            Settings<span aria-hidden>→</span>Pricing
+            <ExternalLink className="size-3" aria-hidden />
+            <span className="sr-only">(opens in a new tab)</span>
+          </a>
+        </p>
+        {hasCustomPrice && (
+          <Button
+            type="button"
+            variant="secondary"
+            size="xs"
+            className="ml-auto"
+            onClick={() => {
+              QUALITY_TIERS.forEach((tier) =>
+                form.setFieldValue(`prices.${tier.id}`, LINKED_PRICE)
+              )
+              // The button unmounts on click; keep focus in the form
+              document.getElementById(inputId(QUALITY_TIERS[0].id))?.focus()
+            }}
+          >
+            Reset all to defaults
+          </Button>
+        )}
+      </div>
     </>
   )
 }
