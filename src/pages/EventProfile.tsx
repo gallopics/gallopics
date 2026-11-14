@@ -25,7 +25,7 @@ import {
 } from "@/data/queries/events"
 import type { ClassSection, EventData, EventDetail } from "@/types"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import { buttonVariants } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Breadcrumbs, BreadcrumbsSkeleton } from "@/components/Breadcrumbs"
 import { DotList } from "@/components/DotList"
@@ -355,12 +355,12 @@ export function EventProfile() {
         rightContent={
           <div className="flex flex-wrap items-center gap-3">
             {canManagePhotos && (
-              <Button
-                variant="outline"
-                render={<Link to={`/pg/events/${meeting.id}`} />}
+              <Link
+                to={`/pg/events/${meeting.id}`}
+                className={buttonVariants({ variant: "outline" })}
               >
                 Manage my photos
-              </Button>
+              </Link>
             )}
             <ActionCluster>
               {meeting.photographer && (

@@ -20,8 +20,6 @@ export function EventDetailsDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
-  const eventPhotographer = event.assignedPhotographers?.[0]
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-120">
@@ -29,21 +27,12 @@ export function EventDetailsDialog({
           <DialogTitle>Event details</DialogTitle>
         </DialogHeader>
         <DialogBody className="flex flex-col gap-5">
-          <div className="flex items-center gap-4">
-            <div className="size-20 shrink-0 overflow-hidden rounded-xl border">
-              <img
-                src={event.logo}
-                alt=""
-                className="size-full object-contain p-2"
-              />
+          <div>
+            <div className="mb-2 text-xl leading-[1.2] font-bold text-foreground">
+              {event.title}
             </div>
-            <div>
-              <div className="mb-2 text-xl leading-[1.2] font-bold text-foreground">
-                {event.title}
-              </div>
-              <div className="text-sm text-muted-foreground">
-                {event.dateRange}
-              </div>
+            <div className="text-sm text-muted-foreground">
+              {event.dateRange}
             </div>
           </div>
 
@@ -78,17 +67,6 @@ export function EventDetailsDialog({
               ))}
             </div>
           </InfoField>
-
-          {eventPhotographer && (
-            <InfoField label="Photographer">
-              <div className="inline-flex items-center gap-2 rounded-full bg-muted py-1 pr-3 pl-1 text-sm font-medium">
-                <span className="flex size-6 items-center justify-center rounded-full bg-border text-[0.6875rem] font-semibold text-muted-foreground">
-                  {eventPhotographer.name.charAt(0)}
-                </span>
-                {eventPhotographer.name}
-              </div>
-            </InfoField>
-          )}
         </DialogBody>
         <DialogFooter>
           <DialogClose render={<Button />}>Close</DialogClose>
