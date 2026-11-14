@@ -64,6 +64,7 @@ const ProtectedRouteContent: React.FC<ProtectedRouteProps> = ({ children }) => {
   const isPgPath = location.pathname.startsWith("/pg")
   const isPendingApprovalPath = location.pathname === "/pg/pending-approval"
   const isOnboardingPath = location.pathname.startsWith("/pg/onboarding/")
+  const isSettingsPath = location.pathname === "/pg/settings"
 
   if (isAdminPath && user?.role !== "admin") {
     // Photographers shouldn't be on /admin paths
@@ -80,6 +81,7 @@ const ProtectedRouteContent: React.FC<ProtectedRouteProps> = ({ children }) => {
     user?.role !== "admin" &&
     effectiveApprovalStatus !== "approved" &&
     !isPendingApprovalPath &&
+    !isSettingsPath &&
     !isOnboardingPath
   ) {
     return <Navigate to="/pg/pending-approval" replace />

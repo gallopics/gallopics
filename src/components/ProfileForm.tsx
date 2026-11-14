@@ -50,7 +50,7 @@ interface SaveOptions {
   hasCompletedOnboarding?: boolean
 }
 
-/** The photographer's own profile: shared by onboarding and Edit profile */
+/** The photographer's own profile: shared by onboarding and Settings */
 export function useProfileForm() {
   const { user, updateProfile, uploadAvatar } = useAuth()
   const savedPhone = splitPhone(user?.phone)
@@ -197,7 +197,7 @@ export function ProfileFields({
             <User className="size-8" />
           </AvatarFallback>
         </Avatar>
-        <div className="flex flex-col items-start gap-1">
+        <div className="flex flex-col items-start gap-2">
           <input
             ref={avatarInputRef}
             type="file"
@@ -209,29 +209,32 @@ export function ProfileFields({
               e.target.value = ""
             }}
           />
-          <Button
-            variant="link"
-            className="h-auto p-0 text-base font-medium"
-            onClick={() => avatarInputRef.current?.click()}
-            disabled={isSaving}
-          >
-            <Camera />
-            {isSaving
-              ? "Saving..."
-              : form.avatarUrl
-                ? "Change photo"
-                : "Upload photo"}
-          </Button>
-          {form.avatarUrl && (
+          <div className="flex flex-wrap gap-2">
             <Button
-              variant="link"
-              className="h-auto p-0 font-normal text-destructive"
-              onClick={form.removeAvatar}
+              variant="outline"
+              size="sm"
+              onClick={() => avatarInputRef.current?.click()}
               disabled={isSaving}
             >
-              Remove
+              <Camera />
+              {isSaving
+                ? "Saving..."
+                : form.avatarUrl
+                  ? "Change photo"
+                  : "Upload photo"}
             </Button>
-          )}
+            {form.avatarUrl && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+                onClick={form.removeAvatar}
+                disabled={isSaving}
+              >
+                Remove
+              </Button>
+            )}
+          </div>
           {errors.avatar && (
             <span className="text-xs text-destructive">{errors.avatar}</span>
           )}
@@ -241,7 +244,7 @@ export function ProfileFields({
       <FieldGroup className="gap-4">
         {/* 2. Display name */}
         <Field data-invalid={!!errors.displayName}>
-          <FieldLabel htmlFor={`${id}-name`}>Display Name</FieldLabel>
+          <FieldLabel htmlFor={`${id}-name`}>Display name</FieldLabel>
           <Input
             id={`${id}-name`}
             aria-invalid={!!errors.displayName}
@@ -299,7 +302,7 @@ export function ProfileFields({
         {/* 5. Mobile number */}
         <Field>
           <FieldLabel htmlFor={`${id}-phone`}>
-            Mobile Number (Optional)
+            Mobile number (optional)
           </FieldLabel>
           <div className="flex gap-2">
             <Input

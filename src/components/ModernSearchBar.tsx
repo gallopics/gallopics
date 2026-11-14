@@ -4,6 +4,11 @@ import { useLocation, useNavigate } from "react-router"
 import { Combobox as ComboboxPrimitive } from "@base-ui/react"
 import { ArrowRight, Calendar, ChevronRight, Search, X } from "lucide-react"
 
+import {
+  eventSearchLink,
+  formatEventMatch,
+  type EventMatch,
+} from "@/lib/eventSearchLink"
 import { cn } from "@/lib/utils"
 import { useMediaQuery } from "@/hooks/useMediaQuery"
 import { useMobileSearchMode } from "@/hooks/useMobileSearchMode"
@@ -26,8 +31,8 @@ interface SearchResult {
   id: string
   title: string
   subtitle: string
-  /** Why an event matched, e.g. "Rider: Anna Svensson" */
-  matchLabel?: string
+  /** Why an event matched (a photo tag), shown as e.g. "Rider: Anna Svensson" */
+  match?: EventMatch
   meta?: string
 }
 
@@ -39,17 +44,18 @@ interface ResultGroup {
 
 const MAX_RESULTS = 5
 const EMPTY_INDEX: Record<string, string> = {}
+const NO_EVENT_MATCHES: Record<string, EventMatch> = {}
 const NO_EVENTS: EventData[] = []
 
 interface EventSearchOptions {
   eventOptions: EventData[]
   eventSearchIndex: Record<string, string>
-  eventMatchLabels: Record<string, string>
+  eventMatches: Record<string, EventMatch>
 }
 
 function searchAll(
   query: string,
-  { eventOptions, eventSearchIndex, eventMatchLabels }: EventSearchOptions
+  { eventOptions, eventSearchIndex, eventMatches }: EventSearchOptions
 ): ResultGroup[] {
   if (query.length < 2) return []
   const lower = query.toLowerCase()
@@ -73,7 +79,7 @@ function searchAll(
       id: event.id,
       title: event.name,
       subtitle: `${event.city} • ${event.period} • ${event.discipline}`,
-      matchLabel: eventMatchLabels[event.id],
+      match: eventMatches[event.id],
       meta: event.country,
     }))
 
@@ -93,7 +99,7 @@ const ICON_BOX_DARK = "bg-[#90caf9]/10 text-[#90caf9]!"
 export interface EventSearchProps {
   searchEvents?: EventData[]
   eventSearchIndex?: Record<string, string>
-  eventMatchLabels?: Record<string, string>
+  eventMatches?: Record<string, EventMatch>
   /** The photo tag search is still running */
   isSearching?: boolean
   onSearchChange?: (value: string) => void
@@ -113,8 +119,8 @@ interface ModernSearchBarProps {
   eventOptions?: EventData[]
   /** Extra searchable text per event id (photo tags, class names...) */
   eventSearchIndex?: Record<string, string>
-  /** Line shown under an event result, per event id */
-  eventMatchLabels?: Record<string, string>
+  /** Why each event matched (shown under its result), per event id */
+  eventMatches?: Record<string, EventMatch>
   /** The photo tag search is still running */
   isSearching?: boolean
   onSearchChange?: (value: string) => void
@@ -139,7 +145,7 @@ export function ModernSearchBar({
   heroMode = false,
   eventOptions = NO_EVENTS,
   eventSearchIndex = EMPTY_INDEX,
-  eventMatchLabels = EMPTY_INDEX,
+  eventMatches = NO_EVENT_MATCHES,
   isSearching = false,
   onSearchChange,
 }: ModernSearchBarProps) {
@@ -163,9 +169,8 @@ export function ModernSearchBar({
   )
 
   const groups = useMemo(
-    () =>
-      searchAll(query, { eventOptions, eventSearchIndex, eventMatchLabels }),
-    [query, eventOptions, eventSearchIndex, eventMatchLabels]
+    () => searchAll(query, { eventOptions, eventSearchIndex, eventMatches }),
+    [query, eventOptions, eventSearchIndex, eventMatches]
   )
   const placeholder = isMobile
     ? mobilePlaceholder || "Search events..."
@@ -258,7 +263,7 @@ export function ModernSearchBar({
     close()
     setQuery("")
     onSearchChange?.("")
-    navigate(`/event/${item.id}`)
+    navigate(eventSearchLink(item.id, item.match))
   }
 
   const input = (
@@ -366,7 +371,7 @@ export function ModernSearchBar({
                   value={item}
                   className={cn(
                     "group/result gap-3 px-4",
-                    item.matchLabel ? "h-19.5" : "h-14",
+                    item.match ? "h-19.5" : "h-14",
                     isDark
                       ? "data-highlighted:bg-white/6"
                       : "data-highlighted:bg-primary/8"
@@ -390,20 +395,20 @@ export function ModernSearchBar({
                     >
                       {item.title}
                     </span>
-                    {item.matchLabel && (
+                    {item.match && (
                       <span
                         className={cn(
                           "mt-1 truncate text-xs leading-tight font-medium",
                           isDark ? "text-[#90caf9]!" : "text-primary!"
                         )}
                       >
-                        {item.matchLabel}
+                        {formatEventMatch(item.match)}
                       </span>
                     )}
                     <span
                       className={cn(
                         "truncate text-xs leading-tight text-muted-foreground!",
-                        item.matchLabel ? "mt-1" : "mt-0.5"
+                        item.match ? "mt-1" : "mt-0.5"
                       )}
                     >
                       {item.subtitle}

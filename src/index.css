@@ -135,6 +135,14 @@
     --sidebar-accent-foreground: oklch(0.178 0 0);
     --sidebar-border: oklch(0.922 0 0);
     --sidebar-ring: oklch(0.476 0.262 266);
+    /* Sticky site header (Header.tsx: min-h-16, md:h-18, plus its borders): what sticks below it */
+    --site-header-height: 66px;
+}
+
+@media (min-width: 48rem) {
+  :root {
+    --site-header-height: 74px;
+  }
 }
 
 @layer base {

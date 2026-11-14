@@ -1,4 +1,4 @@
-import type { ApiPhotoPrices } from "@/constants/qualityTiers"
+import type { ApiPhotoPrices, OwnPhotoPrices } from "@/constants/qualityTiers"
 
 const SERVER_API_BASE_URL = "http://82.96.43.103:8081"
 
@@ -67,6 +67,11 @@ export interface ApiUser {
   role: "user" | "photographer" | "admin"
   created_at: string
   updated_at: string
+}
+
+export interface PhotographerPricing {
+  defaults: OwnPhotoPrices
+  effective: ApiPhotoPrices
 }
 
 export interface ApiPhotographer {
@@ -362,6 +367,17 @@ export const api = {
   getMe: () => request<ApiUser>("/api/v1/me", { auth: true }),
   getMyPhotographer: () =>
     request<ApiPhotographer>("/api/v1/photographer/me", { auth: true }),
+
+  getMyDefaultPrices: () =>
+    request<PhotographerPricing>("/api/v1/photographer/me/prices", {
+      auth: true,
+    }),
+  updateMyDefaultPrices: (prices: Partial<OwnPhotoPrices>) =>
+    request<PhotographerPricing>("/api/v1/photographer/me/prices", {
+      method: "PATCH",
+      body: JSON.stringify(prices),
+      auth: true,
+    }),
   upsertMyPhotographer: (body: UpsertPhotographerProfile) =>
     request<ApiPhotographer>("/api/v1/photographer/me", {
       method: "PUT",
@@ -469,23 +485,22 @@ export const api = {
       { auth: true }
     ),
 
-  updatePhoto: (
-    photoId: string,
-    data: {
-      visibility?: string
-      tags?: Array<{ type: string; value: string }>
+  /**
+   * The same details for several of the photographer's photos, saved whole or
+   * not at all. Fields left out stay; rider/horse "" removes the tag.
+   */
+  updatePhotos: (
+    photoIds: string[],
+    changes: {
+      rider?: string
+      horse?: string
+      /** öre; tiers left out keep theirs */
+      prices?: Partial<OwnPhotoPrices>
     }
   ) =>
-    request<ApiPhoto>(
-      `/api/v1/photographer/photos/${encodeURIComponent(photoId)}`,
-      { method: "PATCH", body: JSON.stringify(data), auth: true }
-    ),
-
-  /** The same prices (öre) for several of the photographer's photos; tiers left out keep theirs */
-  updatePhotoPrices: (photoIds: string[], prices: Partial<ApiPhotoPrices>) =>
-    request<ApiPhoto[]>("/api/v1/photographer/photos/prices", {
+    request<ApiPhoto[]>("/api/v1/photographer/photos", {
       method: "PATCH",
-      body: JSON.stringify({ photo_ids: photoIds, prices }),
+      body: JSON.stringify({ photo_ids: photoIds, ...changes }),
       auth: true,
     }),
 
@@ -622,12 +637,16 @@ export const api = {
       `/api/v1/checkout/sessions/${encodeURIComponent(sessionId)}`
     ),
 
-  createPhotoDownload: async (photoId: string, orderId: string) => {
+  createPhotoDownload: async (
+    photoId: string,
+    orderId: string,
+    quality: string
+  ) => {
     const download = await request<PhotoDownloadResponse>(
       `/api/v1/photos/${encodeURIComponent(photoId)}/download`,
       {
         method: "POST",
-        body: JSON.stringify({ order_id: orderId }),
+        body: JSON.stringify({ order_id: orderId, quality }),
         retryNetworkErrors: 1,
       }
     )
@@ -648,6 +667,7 @@ export interface ApiPhoto {
   photographer_display_name?: string | null
   photographer_avatar_url?: string | null
   prices: ApiPhotoPrices
+  own_prices?: OwnPhotoPrices
   currency: string
   status: "processing" | "ready" | "failed"
   visibility: "draft" | "published"

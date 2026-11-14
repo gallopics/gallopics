@@ -9,7 +9,7 @@ import {
   eventAllPhotosQueryOptions,
   eventQueryOptions,
 } from "@/data/queries/events"
-import { toPgEvent } from "@/data/queries/photographer"
+import { pgEventQueryOptions } from "@/data/queries/photographer"
 import type { Photo } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -54,23 +54,25 @@ export function AdminEventDetail() {
   const [showInfoModal, setShowInfoModal] = useState(false)
 
   const eventQuery = useQuery({
+    ...pgEventQueryOptions(eventId),
+    enabled: !!eventId,
+  })
+  const event = eventQuery.data
+  // The same cached event, raw: the photos are mapped with its public fields
+  const { data: apiEvent } = useQuery({
     ...eventQueryOptions(eventId),
     enabled: !!eventId,
   })
   const photosQuery = useQuery({
     ...eventAllPhotosQueryOptions(eventId),
-    enabled: !!eventQuery.data,
+    enabled: !!event,
   })
 
-  const event = useMemo(
-    () => (eventQuery.data ? toPgEvent(eventId, eventQuery.data) : null),
-    [eventId, eventQuery.data]
-  )
   const photos = useMemo(() => {
-    if (!eventQuery.data || !photosQuery.data) return []
-    const eventData = mapApiEventToEventData(eventQuery.data)
+    if (!apiEvent || !photosQuery.data) return []
+    const eventData = mapApiEventToEventData(apiEvent)
     return photosQuery.data.map((photo) => mapApiPhotoToPhoto(photo, eventData))
-  }, [eventQuery.data, photosQuery.data])
+  }, [apiEvent, photosQuery.data])
 
   const photographerOptions = useMemo(
     () => [

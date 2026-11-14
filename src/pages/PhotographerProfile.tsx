@@ -24,6 +24,7 @@ import {
   resolveApiAssetUrl,
   type ApiPhoto,
 } from "@/data/apiClient"
+import { getPhotoDateTime, getPhotoTag } from "@/data/eventsApi"
 import { eventQueryOptions } from "@/data/queries/events"
 import {
   highlightsQueryOptions,
@@ -36,13 +37,11 @@ import {
 } from "@/data/queries/photos"
 import type { Photo } from "@/types"
 import { Button } from "@/components/ui/button"
-import { DialogTrigger } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Breadcrumbs, BreadcrumbsSkeleton } from "@/components/Breadcrumbs"
 import type { BreadcrumbItem } from "@/components/Breadcrumbs"
 import { DotList } from "@/components/DotList"
-import { editProfileDialog } from "@/components/EditProfileModal"
 import { EmptyState } from "@/components/EmptyState"
 import { Footer } from "@/components/Footer"
 import { Header } from "@/components/Header"
@@ -196,23 +195,14 @@ export function PhotographerProfile() {
         return {
           id: photo.id,
           src: getApiPhotoPreviewUrl(photo),
-          rider:
-            photo.tags.find((tag) => tag.type === "rider")?.value || "Unknown",
-          horse:
-            photo.tags.find((tag) => tag.type === "horse")?.value || "Unknown",
+          rider: getPhotoTag(photo, "rider") ?? "",
+          horse: getPhotoTag(photo, "horse") ?? "",
           event: ev?.title || "Event",
           eventId: photo.event_id,
-          date:
-            ev?.date ||
-            new Date(photo.created_at).toLocaleDateString(undefined, {
-              day: "numeric",
-              month: "short",
-              year: "numeric",
-            }),
+          ...getPhotoDateTime(photo),
           width: 600,
           height: 800,
           className: photo.class_name || "Class A",
-          time: new Date(photo.created_at).toLocaleTimeString().slice(0, 5),
           city: ev?.city || "Sweden",
           arena: ev?.venueName || "Main Arena",
           countryCode: "SE",
@@ -253,23 +243,18 @@ export function PhotographerProfile() {
         return {
           id: p.id,
           src: p.url,
-          rider: p.rider || "Unassigned",
-          horse: p.horse || p.fileName || "Unassigned",
+          rider: p.rider || "",
+          horse: p.horse || "",
           event: ev?.title || "Event",
           eventId: p.eventId,
-          date:
-            ev?.date ||
-            (p.uploadDate
-              ? new Date(p.uploadDate).toLocaleDateString("en-GB", {
-                  day: "numeric",
-                  month: "short",
-                  year: "numeric",
-                })
-              : "Today"),
+          // Taken (Swedish time), else uploaded; nothing made up when both are unknown
+          ...getPhotoDateTime({
+            taken_at: p.takenAt,
+            created_at: p.uploadDate,
+          }),
           width: p.width,
           height: p.height,
           className: p.className || "Unassigned class",
-          time: p.timestamp || "12:00",
           city: ev?.city || "Sweden",
           arena: ev?.venueName || "Main Arena",
           countryCode: "SE",
@@ -378,12 +363,15 @@ export function PhotographerProfile() {
           horse: p.horse || "Unknown",
           event: ev?.title || "Event",
           eventId: p.eventId,
-          date: ev?.date || "Today",
+          // Taken (Swedish time), else uploaded; nothing made up when both are unknown
+          ...getPhotoDateTime({
+            taken_at: p.takenAt,
+            created_at: p.uploadDate,
+          }),
           width: p.width,
           height: p.height,
           // Mock helpers
           className: "Class A",
-          time: p.timestamp || "12:00",
           city: ev?.city || "Stockholm",
           arena: ev?.venueName || "Main Arena",
           countryCode: "SE",
@@ -481,13 +469,10 @@ export function PhotographerProfile() {
         // develop: "Hire me", Instagram / TikTok (no links in the API yet) and share hidden
         rightContent={
           isOwner && (
-            <DialogTrigger
-              handle={editProfileDialog}
-              render={<Button variant="outline" />}
-            >
+            <Button variant="outline" onClick={() => navigate("/pg/settings")}>
               <Pencil />
               Edit profile
-            </DialogTrigger>
+            </Button>
           )
         }
       />
@@ -501,12 +486,13 @@ export function PhotographerProfile() {
                 <Camera className="size-4 shrink-0" />
                 Add a profile photo so buyers recognise you.
               </span>
-              <DialogTrigger
-                handle={editProfileDialog}
-                render={<Button size="sm" variant="outline" />}
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => navigate("/pg/settings")}
               >
                 Add photo
-              </DialogTrigger>
+              </Button>
             </div>
           </div>
         </div>

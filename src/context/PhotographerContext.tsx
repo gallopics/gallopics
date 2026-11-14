@@ -13,19 +13,25 @@ import {
   type UploadSession,
 } from "@/lib/uploadSessions"
 
-import type { PhotoPrices } from "../constants/qualityTiers"
+import {
+  LINKED_PRICES,
+  toSekOwnPrices,
+  toSekPrices,
+  type OwnPhotoPrices,
+  type PhotoPrices,
+} from "../constants/qualityTiers"
 import {
   getApiBaseUrl,
   getApiPhotoPreviewUrl,
   getSessionToken,
   type ApiPhoto,
 } from "../data/apiClient"
+import { getPhotoDateTime, getPhotoTag } from "../data/eventsApi"
 import { invalidateEventPhotos } from "../data/queries/events"
 import {
   deletePhotosMutationOptions,
   getApiPhotoClassId,
   getApiPhotoClassName,
-  getApiPhotoTag,
   updateCachedPhotos,
 } from "../data/queries/photographer"
 import { useAuth } from "./AuthContext"
@@ -74,36 +80,25 @@ export interface Photo {
   id: string
   url: string
   eventId: string
-  status:
-    | "uploading"
-    | "processing"
-    | "needsReview"
-    | "uploadedUnpublished"
-    | "published"
-    | "archived"
+  status: "uploading" | "processing" | "needsReview" | "uploadedUnpublished"
   soldCount: number
   /* Metadata */
   rider?: string
   riderId?: string
   horse?: string
   horseId?: string
-  timestamp?: string
+  timestamp?: string // "09:15": taken (Swedish time), or uploaded when unknown
   width: number
   height: number
-  title?: string
-  description?: string
-  isGeneric?: boolean
   /* New fields for Uploads tab */
   fileName?: string
-  photoCode?: string // e.g. "PHT-9X2A1"
+  takenAt?: string // ISO, when the photo was taken
   uploadDate?: string // ISO date string
   folderId?: string // The photographer's own folder (empty = Uncategorised)
   classId?: string
   className?: string
-  isDuplicate?: boolean
-  duplicateResolved?: boolean // True after "Keep" action resolves duplicates
-  duplicateGroupId?: string // Identifies which duplicate group this instance belongs to
   prices?: PhotoPrices // in SEK
+  ownPrices?: OwnPhotoPrices // null tiers follow defaults
 }
 
 // Server data (booked events, photos, highlights) and its writes live in
@@ -125,17 +120,6 @@ interface PhotographerContextType {
     fileId: string,
     options?: { deleteUploaded?: boolean }
   ) => Promise<boolean>
-}
-
-const generatePhotoCode = () => {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-  return (
-    "PHT-" +
-    Array.from(
-      { length: 5 },
-      () => chars[Math.floor(Math.random() * chars.length)]
-    ).join("")
-  )
 }
 
 const isUuid = (value: string) =>
@@ -474,8 +458,8 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
         const photos: ApiPhoto[] = await response.json()
 
         const newPhotoList: Photo[] = photos.map((p, photoIndex) => {
-          const rider = getApiPhotoTag(p, "rider")
-          const horse = getApiPhotoTag(p, "horse")
+          const rider = getPhotoTag(p, "rider")
+          const horse = getPhotoTag(p, "horse")
 
           return {
             id: p.id || queuedFile.id || `api-${Date.now()}-${photoIndex}`,
@@ -483,21 +467,21 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
             eventId: p.event_id,
             status: p.status === "ready" ? "uploadedUnpublished" : "processing",
             soldCount: 0,
+            prices: toSekPrices(p.prices),
+            ownPrices: toSekOwnPrices(p.own_prices ?? LINKED_PRICES),
             rider,
             riderId: p.equipe_rider_id || undefined,
             horse,
             horseId: p.equipe_horse_id || undefined,
-            timestamp: new Date(
-              p.taken_at || takenAt || p.created_at || Date.now()
-            ).toLocaleTimeString("en-GB", {
-              hour: "2-digit",
-              minute: "2-digit",
-            }),
+            timestamp: getPhotoDateTime({
+              taken_at: p.taken_at || takenAt,
+              created_at: p.created_at || new Date().toISOString(),
+            }).time,
             width: 600,
             height: 800,
             fileName: file.name,
-            photoCode: generatePhotoCode(),
-            uploadDate: new Date().toISOString(),
+            takenAt: p.taken_at || takenAt || undefined,
+            uploadDate: p.created_at || new Date().toISOString(),
             classId:
               getApiPhotoClassId(p) ||
               uploadMetadata.equipeClassSectionId ||

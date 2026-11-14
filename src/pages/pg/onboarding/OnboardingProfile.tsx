@@ -14,7 +14,7 @@ export function OnboardingProfile() {
     }
   }
 
-  // Saves nothing from the form; it can all be added later in Edit profile
+  // Saves nothing from the form; it can all be added later in Settings
   const handleSkip = async () => {
     if (await form.skip()) navigate("/pg/pending-approval")
   }

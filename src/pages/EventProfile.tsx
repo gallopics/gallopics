@@ -1,16 +1,15 @@
 import { useCallback, useMemo, useState } from "react"
-import { useLocation, useNavigate, useParams } from "react-router"
-import { useMutation, useQuery } from "@tanstack/react-query"
 import {
-  CalendarDays,
-  Clock,
-  MapPin,
-  Pencil,
-  Trash2,
-  UploadCloud,
-} from "lucide-react"
+  Link,
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router"
+import { useQuery } from "@tanstack/react-query"
+import { CalendarDays, Clock, MapPin } from "lucide-react"
 
-import { notify } from "@/lib/notify"
+import { formatDate, toDate } from "@/lib/dates"
 import { cn } from "@/lib/utils"
 import { useWorkspaceEvents } from "@/hooks/useWorkspaceData"
 import { useAuth } from "@/context/AuthContext"
@@ -25,20 +24,11 @@ import {
   eventQueryOptions,
   eventScheduleQueryOptions,
 } from "@/data/queries/events"
-import {
-  deletePhotosMutationOptions,
-  myPhotosQueryOptions,
-} from "@/data/queries/photographer"
-import type {
-  ClassSection,
-  EventData,
-  EventDetail,
-  Photo as EventPhoto,
-} from "@/types"
+import type { ClassSection, EventData, EventDetail } from "@/types"
 import { Badge } from "@/components/ui/badge"
+import { buttonVariants } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Breadcrumbs, BreadcrumbsSkeleton } from "@/components/Breadcrumbs"
-import { ConfirmDialog } from "@/components/ConfirmDialog"
 import { DotList } from "@/components/DotList"
 import { FilterBar, ResetFiltersButton } from "@/components/FilterBar"
 import { Footer } from "@/components/Footer"
@@ -48,15 +38,9 @@ import { InfoChip } from "@/components/InfoChip"
 import { ModernDropdown } from "@/components/ModernDropdown"
 import { PageState } from "@/components/PageState"
 import { PageTabs } from "@/components/PageTabs"
-import {
-  GlassButton,
-  PhotoCard,
-  PhotoCardSkeleton,
-} from "@/components/PhotoCard"
-import { PhotoPreviewDialog } from "@/components/PhotoPreviewDialog"
+import { PhotoCard, PhotoCardSkeleton } from "@/components/PhotoCard"
 import { ScopedSearchBar } from "@/components/ScopedSearchBar"
 import { TitleHeader } from "@/components/TitleHeader"
-import { PgSelectionPanel } from "@/pages/pg/PgSelectionPanel"
 
 // develop: plain grid instead of masonry (Safari fix)
 const photoGridClass =
@@ -66,8 +50,7 @@ export function EventProfile() {
   const { eventId } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
-  const { user, isPhotographer } = useAuth()
-  const deletePhoto = useMutation(deletePhotosMutationOptions())
+  const { isPhotographer } = useAuth()
   const workspaceEvents = useWorkspaceEvents()
   const fromPath =
     typeof location.state === "object" &&
@@ -93,10 +76,7 @@ export function EventProfile() {
   const workspaceEvent = eventId
     ? workspaceEvents.find((event) => event.id === eventId)
     : undefined
-  const isPhotographerMyEventView =
-    (fromPath === "/pg/events" && fromTab === "my") ||
-    ((user?.role === "pg" || user?.role === "admin") &&
-      Boolean(workspaceEvent?.isRegistered))
+  const canManagePhotos = isPhotographer && workspaceEvent?.isRegistered
   const navigateBackToEvents = () => {
     navigate(fromPath, fromTab ? { state: { tab: fromTab } } : undefined)
   }
@@ -130,14 +110,22 @@ export function EventProfile() {
     eventQuery.error instanceof ApiError &&
     (eventQuery.error.status === 404 || eventQuery.error.status === 422)
 
-  const [searchQuery, setSearchQuery] = useState("")
+  const [searchParams, setSearchParams] = useSearchParams()
+  const searchQuery = searchParams.get("q") ?? ""
+  const setSearchQuery = (value: string) => {
+    setSearchParams(
+      (params) => {
+        if (value.trim()) params.set("q", value)
+        else params.delete("q")
+        return params
+      },
+      { replace: true }
+    )
+  }
   const [eventClass, setEventClass] = useState("All")
   const [activeEventTab, setActiveEventTab] = useState<"uploads" | "classes">(
     initialEventTab
   )
-  const [photoToDelete, setPhotoToDelete] = useState<EventPhoto | null>(null)
-  const [photoToEditId, setPhotoToEditId] = useState<string | null>(null)
-  const [previewPhoto, setPreviewPhoto] = useState<EventPhoto | null>(null)
   const eventReturnState = useMemo(
     () => ({
       from: fromPath,
@@ -147,8 +135,6 @@ export function EventProfile() {
     [activeEventTab, fromPath, fromTab]
   )
 
-  // Public photos, unless the photographer manages their own event here
-  const showsPublicPhotos = !!eventDetail && !isPhotographerMyEventView
   const toPublicPhotos = useCallback(
     (apiPhotos: ApiPhoto[]) => {
       if (!eventDetail) return []
@@ -174,33 +160,17 @@ export function EventProfile() {
   )
   const publicPhotosQuery = useQuery({
     ...eventAllPhotosQueryOptions(eventDetail?.meetingId ?? ""),
-    enabled: showsPublicPhotos,
+    enabled: !!eventDetail,
     select: toPublicPhotos,
   })
   const photos = useMemo(
-    () => (showsPublicPhotos ? (publicPhotosQuery.data ?? []) : []),
-    [publicPhotosQuery.data, showsPublicPhotos]
+    () => publicPhotosQuery.data ?? [],
+    [publicPhotosQuery.data]
   )
-  const loading = showsPublicPhotos && publicPhotosQuery.isPending
-
-  // The photographer's own photos, only for their own event
-  const myPhotosQuery = useQuery({
-    ...myPhotosQueryOptions(),
-    enabled: isPhotographer && isPhotographerMyEventView,
-  })
-  const myEventPhotos = useMemo(
-    () =>
-      eventId
-        ? (myPhotosQuery.data ?? []).filter(
-            (photo) => photo.eventId === eventId
-          )
-        : [],
-    [eventId, myPhotosQuery.data]
-  )
+  const loading = !!eventDetail && publicPhotosQuery.isPending
 
   const isResetDisabled = eventClass === "All" && searchQuery === ""
 
-  // 1. Get List of all available Competitions for the event
   const allEventClasses = useMemo(() => {
     if (!eventDetail) return []
     const classes: ClassSection[] = []
@@ -227,51 +197,30 @@ export function EventProfile() {
   }, [eventDetail])
 
   const classOptions = useMemo(() => {
-    const unique = Array.from(
-      new Set(allEventClasses.map((c) => c.name))
-    ).sort()
+    const counts = new Map<string, number>()
+    photos.forEach((photo) => {
+      if (photo.className && photo.className !== "Uploaded") {
+        counts.set(photo.className, (counts.get(photo.className) ?? 0) + 1)
+      }
+    })
     return [
       { label: "All Classes", value: "All" },
-      ...unique.map((c) => ({ label: c, value: c })),
+      ...[...counts]
+        .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
+        .map(([name, count]) => ({ label: `${name} (${count})`, value: name })),
     ]
-  }, [allEventClasses])
-
-  const uploadedPhotos = useMemo<EventPhoto[]>(() => {
-    if (!isPhotographerMyEventView || !eventId || !eventDetail) return []
-
-    return myEventPhotos.map((photo) => ({
-      id: photo.id,
-      src: photo.url,
-      rider: photo.rider || "Unassigned",
-      horse:
-        photo.horse || photo.className || photo.fileName || "Uploaded photo",
-      event: eventDetail.meeting.name,
-      eventId,
-      date: photo.uploadDate || eventDetail.meeting.period.startDate,
-      width: photo.width,
-      height: photo.height,
-      className: photo.className || "Uploaded",
-      time: photo.timestamp || "",
-      city: eventDetail.meeting.city,
-      arena: photo.className || "Uploaded",
-      countryCode: eventDetail.meeting.country.code.toLowerCase(),
-      photographer: eventDetail.meeting.photographer?.name || "Gallopics",
-      photographerId: eventDetail.meeting.photographer?.id,
-    }))
-  }, [eventDetail, eventId, isPhotographerMyEventView, myEventPhotos])
-
-  const uploadPhotos = isPhotographerMyEventView ? uploadedPhotos : photos
+  }, [photos])
 
   const combinedOptions = useMemo(() => {
     const uniqueRiders = Array.from(
-      new Set(uploadPhotos.map((p) => p.rider).filter(Boolean))
+      new Set(photos.map((p) => p.rider).filter(Boolean))
     ).sort()
     const uniqueHorses = Array.from(
-      new Set(uploadPhotos.map((p) => p.horse).filter(Boolean))
+      new Set(photos.map((p) => p.horse).filter(Boolean))
     ).sort()
 
     const riderOptions = uniqueRiders.map((r) => {
-      const photo = uploadPhotos.find((p) => p.rider === r)
+      const photo = photos.find((p) => p.rider === r)
       return {
         label: r,
         value: r,
@@ -281,7 +230,7 @@ export function EventProfile() {
     })
 
     const horseOptions = uniqueHorses.map((h) => {
-      const photo = uploadPhotos.find((p) => p.horse === h)
+      const photo = photos.find((p) => p.horse === h)
       return {
         label: h,
         value: h,
@@ -291,23 +240,23 @@ export function EventProfile() {
     })
 
     return [...riderOptions, ...horseOptions]
-  }, [uploadPhotos])
+  }, [photos])
 
   // 3. Absolute Totals for Header (Stable)
   const totalRiders = useMemo(
-    () => new Set(uploadPhotos.map((p) => p.rider).filter(Boolean)).size,
-    [uploadPhotos]
+    () => new Set(photos.map((p) => p.rider).filter(Boolean)).size,
+    [photos]
   )
   const totalHorses = useMemo(
-    () => new Set(uploadPhotos.map((p) => p.horse).filter(Boolean)).size,
-    [uploadPhotos]
+    () => new Set(photos.map((p) => p.horse).filter(Boolean)).size,
+    [photos]
   )
-  const displayedPhotoCount = uploadPhotos.length
+  const displayedPhotoCount = photos.length
 
   // 4. Final Photo Filtering
   const activePhotos = useMemo(() => {
-    if (!uploadPhotos.length) return []
-    return uploadPhotos.filter((p) => {
+    if (!photos.length) return []
+    return photos.filter((p) => {
       const matchClass =
         eventClass === "All" ||
         p.arena === eventClass ||
@@ -323,25 +272,7 @@ export function EventProfile() {
 
       return matchClass && matchSearch
     })
-  }, [uploadPhotos, searchQuery, eventClass])
-
-  const handleConfirmDeletePhoto = async () => {
-    if (!photoToDelete) return
-
-    try {
-      await deletePhoto.mutateAsync({ photoIds: [photoToDelete.id] })
-    } catch (error) {
-      // 409: the API refuses to delete a sold photo and says why
-      notify(
-        error instanceof ApiError && error.status === 409
-          ? error.message
-          : "Could not delete photo. Please try again.",
-        "error"
-      )
-    } finally {
-      setPhotoToDelete(null)
-    }
-  }
+  }, [photos, searchQuery, eventClass])
 
   if (isLoadingEvent) return <EventProfileSkeleton />
 
@@ -369,19 +300,16 @@ export function EventProfile() {
 
   const { meeting } = eventDetail
 
-  const TODAY = new Date()
-  TODAY.setHours(0, 0, 0, 0)
-  const eventStart = new Date(meeting.period.startDate)
-  const eventEnd = new Date(meeting.period.endDate)
-  eventEnd.setHours(23, 59, 59, 999)
-  const isLive = TODAY >= eventStart && TODAY <= eventEnd
+  // Event dates are calendar days ("2026-10-11"), compared with today's date
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const eventStart = toDate(meeting.period.startDate)
+  const eventEnd = toDate(meeting.period.endDate)
+  const isLive =
+    !!eventStart && !!eventEnd && today >= eventStart && today <= eventEnd
 
   const formatShort = (date: string, withYear = false) =>
-    new Date(date).toLocaleDateString("en-GB", {
-      day: "numeric",
-      month: "short",
-      ...(withYear && { year: "numeric" }),
-    })
+    formatDate(date, { year: withYear ? "numeric" : undefined })
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -423,21 +351,31 @@ export function EventProfile() {
           </DotList>
         }
         rightContent={
-          <ActionCluster>
-            {meeting.photographer && (
-              <>
-                <InfoChip
-                  label="Photographer"
-                  name={meeting.photographer.name}
-                  variant="photographer"
-                  avatarUrl={meeting.photographer.avatar || undefined}
-                  href={`/photographer/${meeting.photographer.id}?from=event&eventId=${eventId}`}
-                />
-                <ActionSeparator />
-              </>
+          <div className="flex flex-wrap items-center gap-3">
+            {canManagePhotos && (
+              <Link
+                to={`/pg/events/${meeting.id}`}
+                className={buttonVariants({ variant: "outline" })}
+              >
+                Manage my photos
+              </Link>
             )}
-            {/* develop: share button hidden */}
-          </ActionCluster>
+            <ActionCluster>
+              {meeting.photographer && (
+                <>
+                  <InfoChip
+                    label="Photographer"
+                    name={meeting.photographer.name}
+                    variant="photographer"
+                    avatarUrl={meeting.photographer.avatar || undefined}
+                    href={`/photographer/${meeting.photographer.id}?from=event&eventId=${eventId}`}
+                  />
+                  <ActionSeparator />
+                </>
+              )}
+              {/* develop: share button hidden */}
+            </ActionCluster>
+          </div>
         }
       />
 
@@ -457,6 +395,7 @@ export function EventProfile() {
           {activeEventTab === "uploads" ? (
             <div>
               <FilterBar
+                searchWidth="compact"
                 filters={
                   <>
                     <ModernDropdown
@@ -466,6 +405,9 @@ export function EventProfile() {
                       label="Class"
                       placeholder="Class"
                       variant="pill"
+                      className="h-auto! min-h-10 w-85 max-w-[calc(100vw-100px)] py-2 [&_[data-slot=select-value]]:min-w-0"
+                      contentClassName="w-120 max-w-[calc(100vw-32px)]"
+                      wrapLabels
                     />
                     <ResetFiltersButton
                       disabled={isResetDisabled}
@@ -495,47 +437,13 @@ export function EventProfile() {
                       <PhotoCardSkeleton key={`event-skeleton-${index}`} />
                     ))
                   : activePhotos.map((photo) => (
-                      <div key={photo.id} className="group/item relative">
-                        <PhotoCard
-                          photo={photo}
-                          // Manage view: edit/delete replace the share and cart buttons
-                          showCartActions={!isPhotographerMyEventView}
-                          showShareActions={false}
-                          // Manage view opens a preview; everyone else gets a real link
-                          href={
-                            isPhotographerMyEventView
-                              ? undefined
-                              : `/photo/${photo.id}?from=epro&eventId=${meeting.id}`
-                          }
-                          linkState={{ photo, eventReturnState }}
-                          onClick={setPreviewPhoto}
-                        />
-                        {isPhotographerMyEventView && (
-                          <div className="absolute top-3 right-3 z-40 flex flex-col gap-2">
-                            <GlassButton
-                              title="Edit rider and horse"
-                              aria-label="Edit rider and horse"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setPhotoToEditId(photo.id)
-                              }}
-                            >
-                              <Pencil />
-                            </GlassButton>
-                            <GlassButton
-                              title="Delete photo"
-                              aria-label="Delete photo"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setPhotoToDelete(photo)
-                              }}
-                              className="hover:bg-destructive/12 hover:text-destructive"
-                            >
-                              <Trash2 />
-                            </GlassButton>
-                          </div>
-                        )}
-                      </div>
+                      <PhotoCard
+                        key={photo.id}
+                        photo={photo}
+                        showShareActions={false}
+                        href={`/photo/${photo.id}?from=epro&eventId=${meeting.id}`}
+                        linkState={{ photo, eventReturnState }}
+                      />
                     ))}
               </div>
             </div>
@@ -572,46 +480,11 @@ export function EventProfile() {
                           key={competition.classSectionId}
                           type="button"
                           onClick={() => {
-                            if (isPhotographerMyEventView) {
-                              const params = new URLSearchParams({
-                                classSectionId: competition.classSectionId,
-                                className: competition.name,
-                              })
-                              if (competition.equipeClassSectionId) {
-                                params.set(
-                                  "equipeClassSectionId",
-                                  competition.equipeClassSectionId
-                                )
-                              }
-                              if (competition.arenaName) {
-                                params.set("arenaName", competition.arenaName)
-                              }
-
-                              navigate(
-                                `/pg/events/${meeting.id}?${params.toString()}`,
-                                {
-                                  state: {
-                                    selectedClassId: competition.classSectionId,
-                                    selectedEquipeClassSectionId:
-                                      competition.equipeClassSectionId,
-                                    selectedClassName: competition.name,
-                                    selectedArenaName: competition.arenaName,
-                                    fromTab,
-                                    fromUpload: true,
-                                  },
-                                }
-                              )
-                              return
-                            }
-
                             setEventClass(competition.name)
                             setActiveEventTab("uploads")
                           }}
                           className={cn(
-                            "grid min-h-11.5 w-full cursor-pointer items-center gap-3 rounded-lg border bg-card px-3 py-2.5 text-left text-foreground transition-[border-color,background-color,box-shadow] duration-150 hover:border-primary/30 hover:bg-primary/8 max-[900px]:grid-cols-[66px_minmax(0,1fr)]",
-                            isPhotographerMyEventView
-                              ? "grid-cols-[72px_minmax(0,1fr)_minmax(96px,auto)_minmax(74px,auto)]"
-                              : "grid-cols-[72px_minmax(0,1fr)_minmax(120px,auto)]",
+                            "grid min-h-11.5 w-full cursor-pointer grid-cols-[72px_minmax(0,1fr)_minmax(120px,auto)] items-center gap-3 rounded-lg border bg-card px-3 py-2.5 text-left text-foreground transition-[border-color,background-color,box-shadow] duration-150 hover:border-primary/30 hover:bg-primary/8 max-[900px]:grid-cols-[66px_minmax(0,1fr)]",
                             eventClass === competition.name &&
                               "border-primary/30 bg-primary/8 shadow-[inset_0_0_0_1px_var(--primary)]"
                           )}
@@ -627,12 +500,6 @@ export function EventProfile() {
                             <MapPin className="size-3.5 shrink-0" />
                             {competition.arenaName}
                           </span>
-                          {isPhotographerMyEventView && (
-                            <span className="inline-flex items-center gap-1.5 justify-self-end text-xs font-semibold whitespace-nowrap text-primary">
-                              <UploadCloud className="size-3.5" />
-                              Upload
-                            </span>
-                          )}
                         </button>
                       ))}
                     </div>
@@ -643,34 +510,6 @@ export function EventProfile() {
           )}
         </div>
       </section>
-
-      <PhotoPreviewDialog
-        src={previewPhoto?.src}
-        onClose={() => setPreviewPhoto(null)}
-      />
-
-      {isPhotographerMyEventView && eventId && (
-        <PgSelectionPanel
-          isOpen={Boolean(photoToEditId)}
-          selectedIds={
-            photoToEditId ? new Set([photoToEditId]) : new Set<string>()
-          }
-          allPhotos={myEventPhotos}
-          activeTab="tags"
-          currentTab="uploads"
-          onClose={() => setPhotoToEditId(null)}
-        />
-      )}
-
-      <ConfirmDialog
-        open={!!photoToDelete}
-        onCancel={() => setPhotoToDelete(null)}
-        onConfirm={handleConfirmDeletePhoto}
-        busy={deletePhoto.isPending}
-        title="Delete photo?"
-        description="This will remove the photo from this event."
-        confirmLabel={deletePhoto.isPending ? "Deleting..." : "Delete"}
-      />
 
       <Footer minimal />
     </div>
