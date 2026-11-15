@@ -161,7 +161,8 @@ export function formatEventPeriod(startDate: string, endDate?: string | null) {
     month: "short",
   })
 
-  if (!end) {
+  // A one-day event: "11 Oct 2026", not "11 Oct – 11 Oct 2026"
+  if (!end || endDate === startDate) {
     return start.toLocaleDateString("en-GB", {
       day: "2-digit",
       month: "short",
