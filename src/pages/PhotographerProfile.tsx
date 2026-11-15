@@ -565,7 +565,7 @@ export function PhotographerProfile() {
                   disabled={ownHighlightsQuery.isPending}
                   onClick={() => setIsHighlightsModalOpen(true)}
                 >
-                  Add photos
+                  Choose photos
                 </Button>
               </div>
             ) : displayHighlights.length === 0 ? (
