@@ -39,7 +39,11 @@ export function emptyGridText(
   }
 }
 
-/** The studio's photo cards; a click selects, Shift/Ctrl/Cmd-click adds */
+/**
+ * The studio's photo cards. With nothing selected a click selects one photo
+ * (Shift/Ctrl/Cmd-click adds); once something is selected, any click on a
+ * card adds or removes it, so taps can multi-select on touch screens.
+ */
 export function PhotoGrid({
   event,
   photos,
@@ -61,6 +65,7 @@ export function PhotoGrid({
   onDelete: (photo: Photo) => void
   onPreview: (src: string) => void
 }) {
+  const selectionMode = selectedIds.size > 0
   return (
     <>
       <div aria-busy={isLoading || undefined} className={photoGridClass}>
@@ -80,7 +85,10 @@ export function PhotoGrid({
               id={`photo-${photo.id}`}
               className={cn(selectableCard, isSelected && selectedCard)}
               onClick={(e) =>
-                onToggleSelect(photo, e.shiftKey || e.metaKey || e.ctrlKey)
+                onToggleSelect(
+                  photo,
+                  selectionMode || e.shiftKey || e.metaKey || e.ctrlKey
+                )
               }
             >
               <PhotoCard
@@ -96,12 +104,13 @@ export function PhotoGrid({
                 onEdit={() => onEdit(photo, "tags")}
                 onEditPrice={() => onEdit(photo, "price")}
                 onPreview={() => onPreview(photo.url)}
+                selectionMode={selectionMode}
               />
-              {/* Shown on hover (always when selected, and always on touch screens) */}
+              {/* Shown on hover (always while selecting, and always on touch screens) */}
               <div
                 className={cn(
                   "absolute top-2.5 left-2.5 z-10 transition-opacity duration-200 group-hover:opacity-100 pointer-coarse:opacity-100",
-                  isSelected ? "opacity-100" : "opacity-0"
+                  isSelected || selectionMode ? "opacity-100" : "opacity-0"
                 )}
                 onClick={(e) => e.stopPropagation()}
               >
@@ -109,7 +118,8 @@ export function PhotoGrid({
                   checked={isSelected}
                   onCheckedChange={() => onToggleSelect(photo, true)}
                   aria-label="Select photo"
-                  className="size-4.5 rounded-sm border-white/60 bg-white/90 shadow-sm"
+                  // 18px box, 44px tap target (the ::after)
+                  className="size-4.5 rounded-sm border-white/60 bg-white/90 shadow-sm after:-inset-x-3.25 after:-inset-y-3.25"
                 />
               </div>
             </div>

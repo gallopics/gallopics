@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { AlertCircle, CalendarPlus, CalendarX2 } from "lucide-react"
 
 import { getEventSortTime, isPreviousEventDate } from "@/lib/eventDates"
+import { plural } from "@/lib/plural"
 import { assetUrl, cn } from "@/lib/utils"
 import { usePhotoEvents } from "@/hooks/useWorkspaceData"
 import { useAuth } from "@/context/AuthContext"
@@ -572,7 +573,7 @@ export function EventsList() {
               placeholder="Search events..."
             />
           }
-          meta={<>Showing {activeList.length} events</>}
+          meta={<>Showing {plural(activeList.length, "event")}</>}
         />
       </div>
 

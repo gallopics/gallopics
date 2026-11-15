@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams } from "react-router"
 import { useQuery } from "@tanstack/react-query"
 import { AlertCircle, ArrowLeft, ImageOff, Info } from "lucide-react"
 
+import { plural } from "@/lib/plural"
 import { ApiError } from "@/data/apiClient"
 import { mapApiEventToEventData, mapApiPhotoToPhoto } from "@/data/eventsApi"
 import {
@@ -190,7 +191,7 @@ export function AdminEventDetail() {
               placeholder="Search riders, horses, classes, photo ID..."
             />
           }
-          meta={<>Showing {visiblePhotos.length} photos</>}
+          meta={<>Showing {plural(visiblePhotos.length, "photo")}</>}
         />
 
         {photosQuery.isPending ? (

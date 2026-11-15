@@ -167,7 +167,8 @@ export function EventDetail() {
     setSelectedIds(new Set())
   }
 
-  // A plain click selects only this photo (or clears it); Shift/Ctrl/Cmd adds or removes it
+  // A plain click selects only this photo (or clears it); Shift/Ctrl/Cmd adds or
+  // removes it, and so does any click while something is selected (PhotoGrid)
   const handleToggleSelect = (photo: Photo, multiSelect: boolean) => {
     setSelectedIds((prev) => {
       if (!multiSelect)

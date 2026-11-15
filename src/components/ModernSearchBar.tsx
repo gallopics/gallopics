@@ -178,8 +178,13 @@ export function ModernSearchBar({
 
   const isDark = theme === "dark" || collapsible
   const useOverlay = collapsible && isExpanded && isMobile
+  const hasCollapsedQuery = collapsible && !isExpanded && query.length > 0
+  // Narrow phones have no room for the chip next to the logo, cart and
+  // avatar (the header wrapped onto two rows): the round button gets a dot
+  const isNarrowPhone = useMediaQuery("(max-width: 399px)")
   // Collapsed header search with an active query: show it as a chip (query + clear)
-  const showChip = collapsible && !isExpanded && query.length > 0
+  const showChip = hasCollapsedQuery && !isNarrowPhone
+  const showDot = hasCollapsedQuery && isNarrowPhone
   const isSmallPhone = useMediaQuery("(max-width: 479px)")
   // The chip gets a px width (CSS can't animate width: auto), so it opens/closes like the round button
   const chipWidth = useMemo(() => {
@@ -264,6 +269,9 @@ export function ModernSearchBar({
     setQuery("")
     onSearchChange?.("")
     navigate(eventSearchLink(item.id, item.match))
+    // A search on the event already open only changes the query string,
+    // which ScrollToTop ignores, so the new results would start scrolled down
+    window.scrollTo(0, 0)
   }
 
   const input = (
@@ -484,14 +492,26 @@ export function ModernSearchBar({
               <button
                 ref={triggerRef}
                 type="button"
-                aria-label={showChip ? "Edit search" : "Open search"}
+                aria-label={
+                  showChip
+                    ? "Edit search"
+                    : showDot
+                      ? `Edit search: ${query}`
+                      : "Open search"
+                }
                 aria-expanded={false}
                 onClick={() => setIsExpanded(true)}
                 className={cn(
-                  "flex h-full min-w-0 flex-1 items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-inset",
+                  "relative flex h-full min-w-0 flex-1 items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-inset",
                   !showChip && "justify-center"
                 )}
               >
+                {showDot && (
+                  <span
+                    aria-hidden
+                    className="absolute top-2 right-2 size-2.5 rounded-full bg-primary ring-2 ring-[#1a1a1a]"
+                  />
+                )}
                 <Search
                   size={20}
                   className={cn(
@@ -567,9 +587,12 @@ export function ModernSearchBar({
                 {input}
                 {clearButton}
               </div>
-              <div className="pointer-events-none mt-2 line-clamp-2 text-center text-xs font-medium tracking-[0.02em] text-white/90 [text-shadow:0_1px_2px_rgba(0,0,0,0.6)]">
-                Events • Riders • Horses • Photographers
-              </div>
+              {/* What can be searched; once results show, they say it */}
+              {query.length < 2 && (
+                <div className="pointer-events-none mt-2 line-clamp-2 text-center text-xs font-medium tracking-[0.02em] text-white/90 [text-shadow:0_1px_2px_rgba(0,0,0,0.6)]">
+                  Events • Riders • Horses • Photographers
+                </div>
+              )}
             </div>
           </div>,
           document.body

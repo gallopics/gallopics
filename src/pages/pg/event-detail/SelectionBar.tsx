@@ -1,5 +1,6 @@
 import { Pencil, Trash2 } from "lucide-react"
 
+import { plural } from "@/lib/plural"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
@@ -112,7 +113,7 @@ export function SelectionBar({
         ) : (
           <>
             <div className="mr-4 flex h-6 items-center text-sm font-medium text-muted-foreground">
-              Showing {shownCount} photos
+              Showing {plural(shownCount, "photo")}
             </div>
 
             <div className="flex shrink-0 items-center gap-2 border-l pl-4">

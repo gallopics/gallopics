@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "react-router"
 
+import { plural } from "@/lib/plural"
 import { cn } from "@/lib/utils"
 import type { EventData } from "@/types"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -181,11 +182,12 @@ export function FolderEventCard({
             </div>
 
             <div className="flex items-center gap-2">
-              {!isDisabled && event.photoCount && (
+              {/* A ternary: `0 && …` would render a bare "0" */}
+              {!isDisabled && event.photoCount ? (
                 <span className="text-xs leading-normal text-muted-foreground">
-                  {event.photoCount} photos
+                  {plural(event.photoCount, "photo")}
                 </span>
-              )}
+              ) : null}
               {event.photographer && (
                 <Avatar
                   title={`Photo: ${event.photographer.name}`}

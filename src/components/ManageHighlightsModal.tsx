@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react"
 
+import { formatEventDate } from "@/lib/dates"
 import { cn } from "@/lib/utils"
 import { usePhotoEvents, useWorkspacePhotos } from "@/hooks/useWorkspaceData"
 import { Button } from "@/components/ui/button"
@@ -73,7 +74,7 @@ function ManageHighlightsForm({
   )
 
   const eventOptions = myEvents.map((e) => ({
-    label: `${e.title} (${e.date})`,
+    label: `${e.title} (${formatEventDate(e.date)})`,
     value: e.id,
   }))
 
