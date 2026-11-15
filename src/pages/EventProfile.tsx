@@ -10,6 +10,7 @@ import { useQuery } from "@tanstack/react-query"
 import { CalendarDays, Clock, MapPin } from "lucide-react"
 
 import { formatDate, toDate } from "@/lib/dates"
+import { plural } from "@/lib/plural"
 import { cn } from "@/lib/utils"
 import { useWorkspaceEvents } from "@/hooks/useWorkspaceData"
 import { useAuth } from "@/context/AuthContext"
@@ -345,9 +346,9 @@ export function EventProfile() {
         }
         stats={
           <DotList className="text-[0.8125rem]">
-            <>{totalRiders} riders</>
-            <>{totalHorses} horses</>
-            <>{displayedPhotoCount} photos</>
+            <>{plural(totalRiders, "rider")}</>
+            <>{plural(totalHorses, "horse")}</>
+            <>{plural(displayedPhotoCount, "photo")}</>
           </DotList>
         }
         rightContent={

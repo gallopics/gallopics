@@ -15,6 +15,7 @@ import {
   Search,
 } from "lucide-react"
 
+import { plural } from "@/lib/plural"
 import { cn } from "@/lib/utils"
 import { usePhotoEvents, useWorkspaceEvents } from "@/hooks/useWorkspaceData"
 import { useAuth } from "@/context/AuthContext"
@@ -461,8 +462,8 @@ export function PhotographerProfile() {
           // Counts come from the owner's own photos only
           isOwner && (
             <DotList className="text-[0.8125rem]">
-              <>{totalEvents} events</>
-              <>{totalPhotosCount} photos</>
+              <>{plural(totalEvents, "event")}</>
+              <>{plural(totalPhotosCount, "photo")}</>
             </DotList>
           )
         }
@@ -565,7 +566,7 @@ export function PhotographerProfile() {
                   disabled={ownHighlightsQuery.isPending}
                   onClick={() => setIsHighlightsModalOpen(true)}
                 >
-                  Add photos
+                  Choose photos
                 </Button>
               </div>
             ) : displayHighlights.length === 0 ? (
@@ -624,8 +625,10 @@ export function PhotographerProfile() {
                         subtitle={event.date}
                         meta={
                           <>
-                            <span>{event.photos.length} photos</span>
-                            <span>{classCount} classes</span>
+                            <span>{plural(event.photos.length, "photo")}</span>
+                            <span>
+                              {plural(classCount, "class", "classes")}
+                            </span>
                           </>
                         }
                         onClick={() => setGalleryEventId(event.id)}
@@ -646,7 +649,11 @@ export function PhotographerProfile() {
                         title={classGroup.name}
                         icon={<Images />}
                         subtitle={selectedGalleryEvent?.title}
-                        meta={<span>{classGroup.photos.length} photos</span>}
+                        meta={
+                          <span>
+                            {plural(classGroup.photos.length, "photo")}
+                          </span>
+                        }
                         onClick={() => setGalleryClassKey(classGroup.key)}
                       />
                     ))}
