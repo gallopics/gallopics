@@ -48,6 +48,8 @@ interface PhotoCardProps {
   onEdit?: (photo: Photo) => void
   onPreview?: (photo: Photo) => void
   onEditPrice?: (photo?: Photo) => void
+  /** Photos are being selected: a tap on the image goes to the parent (select), not to onPreview */
+  selectionMode?: boolean
   selectable?: boolean
   showEdit?: boolean
   showCartActions?: boolean
@@ -87,6 +89,7 @@ export function PhotoCard({
   onEdit,
   onPreview,
   onEditPrice,
+  selectionMode = false,
   showEdit = true,
   showCartActions = true,
   showShareActions = true,
@@ -158,7 +161,7 @@ export function PhotoCard({
         className="relative block w-full bg-muted"
         style={{ aspectRatio: `${photo.width}/${photo.height}` }}
         onClick={(e) => {
-          if (onPreview) {
+          if (onPreview && !selectionMode) {
             e.stopPropagation()
             onPreview(photo)
           }
