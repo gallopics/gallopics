@@ -29,13 +29,14 @@ export function EventHeader({
       variant="workspace"
       className="border-b-0"
       title={
+        // Back and info look 26px; their ::after makes a 44px tap target
         <div className="flex items-center gap-2">
           <Link
             to={`${basePath}/events`}
             state={{ tab: fromTab }}
             className={cn(
               buttonVariants({ variant: "ghost", size: "icon-sm" }),
-              "size-6.5"
+              "relative size-6.5 after:absolute after:-inset-2.25"
             )}
             title="Back to events"
             aria-label="Back to events"
@@ -46,7 +47,7 @@ export function EventHeader({
           <Button
             variant="ghost"
             size="icon-sm"
-            className="size-6.5"
+            className="relative size-6.5 after:absolute after:-inset-2.25"
             onClick={onInfo}
             aria-label="Event details"
           >

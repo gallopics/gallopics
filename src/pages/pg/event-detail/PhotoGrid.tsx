@@ -118,7 +118,8 @@ export function PhotoGrid({
                   checked={isSelected}
                   onCheckedChange={() => onToggleSelect(photo, true)}
                   aria-label="Select photo"
-                  className="size-4.5 rounded-sm border-white/60 bg-white/90 shadow-sm"
+                  // 18px box, 44px tap target (the ::after)
+                  className="size-4.5 rounded-sm border-white/60 bg-white/90 shadow-sm after:-inset-x-3.25 after:-inset-y-3.25"
                 />
               </div>
             </div>

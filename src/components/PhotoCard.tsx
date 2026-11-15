@@ -342,7 +342,8 @@ function PhotoCardFooter({
               e.stopPropagation()
               onEditPrice?.(photo)
             }}
-            className="rounded-sm bg-muted px-1.5 py-0.5 text-[0.6875rem] leading-none font-semibold whitespace-nowrap text-muted-foreground transition-colors outline-none hover:bg-border hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none"
+            // ::after = a 44px-tall tap target; the chip looks the same
+            className="relative rounded-sm bg-muted px-1.5 py-0.5 text-[0.6875rem] leading-none font-semibold whitespace-nowrap text-muted-foreground transition-colors outline-none after:absolute after:-inset-x-1 after:-inset-y-3.5 hover:bg-border hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none"
           >
             from {Math.min(...Object.values(prices))} SEK
           </button>
