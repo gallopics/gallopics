@@ -15,6 +15,7 @@ import {
   QUALITY_TIERS,
   toSekPrices,
 } from "@/constants/qualityTiers"
+import { formatEventDate, formatEventTime } from "@/lib/dates"
 import { cn } from "@/lib/utils"
 import { useCart } from "@/context/CartContext"
 import {
@@ -25,7 +26,6 @@ import {
   type CheckoutItem,
 } from "@/data/apiClient"
 import { getPhotoDateTime, getPhotoTag } from "@/data/eventsApi"
-import { formatEventDate, formatEventTime } from "@/lib/dates"
 import { eventQueryOptions } from "@/data/queries/events"
 import {
   photoQueryOptions,
@@ -301,30 +301,38 @@ function ImageProfileContent({
             {/* Photo viewer: full width when stacked (the preview doesn't size it) */}
             <div className="min-w-0 flex-1 max-lg:w-full">
               <Card className="gap-0 rounded-3xl py-0 shadow-[0_1px_2px_rgba(0,0,0,0.02)] max-md:rounded-xl">
-                <button
-                  type="button"
-                  aria-label="View full screen"
-                  onClick={() => setIsFullScreen(true)}
-                  className="flex aspect-3/2 min-h-100 w-full cursor-zoom-in items-center justify-center bg-muted max-md:aspect-(--photo-aspect) max-md:max-h-[70svh] max-md:min-h-0"
+                {/* On phones the frame takes the photo's shape, at most 70svh
+                    tall. The cap is on the width, not max-height: Safari sized
+                    the photo from the uncapped height, so it spilled over the
+                    chips below. */}
+                <div
+                  className="bg-muted"
                   style={
                     {
                       "--photo-aspect": imageAspectRatio,
                     } as React.CSSProperties
                   }
                 >
-                  <WatermarkedPhotoPreview
-                    src={photo.src || undefined}
-                    alt={photo.rider}
-                    onLoad={(e) => {
-                      const img = e.currentTarget
-                      setLoadedOrientation({
-                        key: orientationKey,
-                        portrait: img.naturalHeight > img.naturalWidth,
-                        aspectRatio: img.naturalWidth / img.naturalHeight,
-                      })
-                    }}
-                  />
-                </button>
+                  <button
+                    type="button"
+                    aria-label="View full screen"
+                    onClick={() => setIsFullScreen(true)}
+                    className="flex aspect-3/2 min-h-100 w-full cursor-zoom-in items-center justify-center max-md:mx-auto max-md:aspect-(--photo-aspect) max-md:min-h-0 max-md:w-[min(100%,calc(70svh*var(--photo-aspect)))]"
+                  >
+                    <WatermarkedPhotoPreview
+                      src={photo.src || undefined}
+                      alt={photo.rider}
+                      onLoad={(e) => {
+                        const img = e.currentTarget
+                        setLoadedOrientation({
+                          key: orientationKey,
+                          portrait: img.naturalHeight > img.naturalWidth,
+                          aspectRatio: img.naturalWidth / img.naturalHeight,
+                        })
+                      }}
+                    />
+                  </button>
+                </div>
 
                 <div className="flex w-full items-start justify-between gap-3 border-t border-black/5 px-6 py-4 max-md:px-4">
                   <div className="flex min-w-0 flex-1 flex-wrap items-start gap-2">
