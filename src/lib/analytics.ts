@@ -12,9 +12,9 @@ const gtmId = import.meta.env.VITE_GTM_ID?.trim()
  * and locally). GA4 and any other tags are configured inside GTM, not here;
  * route changes are picked up by GA4's history-based page views.
  *
- * Consent Mode defaults to "denied": until a consent banner grants it, Google
- * tags set no cookies. If a consent banner (CMP) template is added in GTM and
- * sets its own defaults (and wait_for_update), this default can be removed.
+ * TEMPORARY: no Consent Mode defaults, so Google tags run with cookies until
+ * the cookie banner ships. In the EU, analytics cookies normally need consent
+ * first; the banner adds a "denied" default before GTM loads.
  */
 export function initAnalytics() {
   if (!gtmId) return
@@ -25,13 +25,6 @@ export function initAnalytics() {
     // eslint-disable-next-line prefer-rest-params
     window.dataLayer.push(arguments)
   }
-  // Must run before GTM loads
-  window.gtag("consent", "default", {
-    ad_storage: "denied",
-    ad_user_data: "denied",
-    ad_personalization: "denied",
-    analytics_storage: "denied",
-  })
 
   // Standard GTM snippet
   window.dataLayer.push({ "gtm.start": Date.now(), event: "gtm.js" })
