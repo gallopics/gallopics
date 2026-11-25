@@ -2,7 +2,15 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { useLocation, useNavigate } from "react-router"
 import { useAuth as useClerkAuth } from "@clerk/clerk-react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { AlertCircle, CalendarPlus, CalendarX2 } from "lucide-react"
+import {
+  AlertCircle,
+  CalendarPlus,
+  CalendarX2,
+  Check,
+  Mail,
+  ShieldCheck,
+  User,
+} from "lucide-react"
 
 import { getEventSortTime, isPreviousEventDate } from "@/lib/eventDates"
 import { plural } from "@/lib/plural"
@@ -22,6 +30,15 @@ import {
 import type { EventData } from "@/types"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogBody,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { toast } from "@/components/ui/toast"
@@ -146,6 +163,11 @@ export function EventsList() {
 
   const [cancelBookingTarget, setCancelBookingTarget] =
     useState<PgEvent | null>(null)
+
+  // Reminder shown after a booking. The event is kept after closing so the
+  // name doesn't vanish during the close animation.
+  const [reminderOpen, setReminderOpen] = useState(false)
+  const [reminderEvent, setReminderEvent] = useState<PgEvent | null>(null)
 
   const canLoadEvents = isClerkLoaded && !!isSignedIn && isAuthProfileLoaded
   const loadsPhotographerEvents = !isAdmin && canLoadEvents
@@ -358,7 +380,8 @@ export function EventsList() {
     e?.stopPropagation()
     try {
       await bookEvent.mutateAsync(event.id)
-      toast.add({ title: "Event booked.", type: "success" })
+      setReminderEvent(event)
+      setReminderOpen(true)
     } catch (error) {
       setActionError(
         error instanceof Error ? error.message : "Failed to book event"
@@ -716,6 +739,97 @@ export function EventsList() {
         confirmLabel="Cancel booking"
         cancelLabel="Keep booking"
       />
+
+      <BookingReminderDialog
+        open={reminderOpen}
+        onClose={() => setReminderOpen(false)}
+        eventName={reminderEvent?.title}
+      />
     </div>
+  )
+}
+
+// Ida's reminder text (exact wording), one icon per point
+const BOOKING_REMINDER_POINTS = [
+  {
+    icon: Mail,
+    text: "Please contact the event organizer directly to confirm that you are permitted to attend and photograph the competition before travelling to the venue.",
+  },
+  {
+    icon: User,
+    text: "Any accreditation requests or other communication with the organizer must be made under your own name, not on behalf of Gallopics. Accreditation is personal and cannot be transferred to or used by other photographers.",
+  },
+  {
+    icon: ShieldCheck,
+    text: "Gallopics cannot guarantee that photography is permitted at every event, so please make sure you have received the organizer's approval in advance.",
+  },
+]
+
+// Shown after a booking: success first ("You're booked!" + event name, which
+// replaces the old "Event booked." toast), then the reminder in a tinted box.
+// One button, no close on outside click. On phones DialogContent is a bottom
+// sheet: the body scrolls and the footer with "Got it" stays visible.
+function BookingReminderDialog({
+  open,
+  onClose,
+  eventName,
+}: {
+  open: boolean
+  onClose: () => void
+  eventName?: string
+}) {
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose()
+      }}
+      // Must be acknowledged: a stray tap outside shouldn't hide it. Esc still closes.
+      disablePointerDismissal
+    >
+      <DialogContent showCloseButton={false} className="sm:max-w-110">
+        <DialogBody className="flex flex-col gap-5">
+          <div className="flex items-center gap-3.5">
+            {/* Green darkened 30% so the check reads well on the pale circle */}
+            <div className="flex size-11 shrink-0 items-center justify-center rounded-full bg-success/12 text-[color-mix(in_oklab,var(--success),var(--foreground)_30%)]">
+              <Check className="size-6" strokeWidth={2.25} aria-hidden="true" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[1.0625rem] leading-snug font-bold text-foreground">
+                You're booked!
+              </p>
+              {eventName && (
+                <p className="mt-0.5 text-[0.8125rem] leading-snug wrap-break-word text-muted-foreground">
+                  {eventName}
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3.5 rounded-2xl bg-primary/5 p-4 pb-4.5">
+            <DialogTitle className="text-[0.9375rem] font-bold">
+              A quick reminder before you head to the show!
+            </DialogTitle>
+            <DialogDescription
+              render={<div />}
+              className="flex flex-col gap-3.5 leading-normal text-foreground/75"
+            >
+              {BOOKING_REMINDER_POINTS.map(({ icon: Icon, text }) => (
+                <p key={text} className="flex items-start gap-3">
+                  <Icon
+                    className="mt-0.5 size-4.5 shrink-0 text-primary"
+                    aria-hidden="true"
+                  />
+                  <span>{text}</span>
+                </p>
+              ))}
+            </DialogDescription>
+          </div>
+        </DialogBody>
+        <DialogFooter>
+          <DialogClose render={<Button />}>Got it</DialogClose>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
