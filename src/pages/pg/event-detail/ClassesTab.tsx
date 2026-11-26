@@ -10,9 +10,11 @@ import type { ClassSection } from "@/types"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 
-import type { ClassContext } from "./photoFilters"
-
-export type ScheduleClass = ClassSection & { arenaName: string }
+export type ScheduleClass = ClassSection & {
+  arenaName: string
+  /** All the class's Equipe sections (the shared mapping keeps only the first) */
+  sectionIds: string[]
+}
 
 export interface ClassDay {
   date: string
@@ -20,8 +22,13 @@ export interface ClassDay {
 }
 
 /** The schedule as one list of classes per day, by start time ("TBD" last) */
-export const toClassDays = (schedule: ApiEventSchedule): ClassDay[] =>
-  mapApiScheduleToDailySchedule(schedule)
+export function toClassDays(schedule: ApiEventSchedule): ClassDay[] {
+  const sectionIds = new Map(
+    schedule.days
+      .flatMap((day) => day.classes)
+      .map((c) => [c.id, (c.class_sections ?? []).map((s) => s.id)])
+  )
+  return mapApiScheduleToDailySchedule(schedule)
     .map((day) => ({
       date: day.date,
       classes: day.arenas
@@ -29,17 +36,27 @@ export const toClassDays = (schedule: ApiEventSchedule): ClassDay[] =>
           arena.competitions.map((competition) => ({
             ...competition,
             arenaName: arena.name,
+            sectionIds: sectionIds.get(competition.classSectionId) ?? [],
           }))
         )
         .sort((a, b) => a.startTime.localeCompare(b.startTime)),
     }))
     .filter((day) => day.classes.length > 0)
+}
 
-/** A schedule class in the shape the upload page reads from the URL */
-export const toClassContext = (eventClass: ScheduleClass): ClassContext => ({
-  id: eventClass.classSectionId,
-  equipeClassSectionId: eventClass.equipeClassSectionId ?? "",
-  name: eventClass.name,
+/**
+ * The upload page's URL params for a class. One section: that section, so the
+ * backend matches the photo within it. Several (or none): the meeting class
+ * id (sent as event_class_id), so the backend tries all of its sections.
+ * Never classSectionId: the upload page sends a non-UUID one as a section id.
+ */
+export const toUploadParams = (
+  eventClass: ScheduleClass
+): Record<string, string> => ({
+  ...(eventClass.sectionIds.length === 1
+    ? { equipeClassSectionId: eventClass.sectionIds[0] }
+    : { eventClassId: eventClass.classSectionId }),
+  className: eventClass.name,
   arenaName: eventClass.arenaName,
 })
 

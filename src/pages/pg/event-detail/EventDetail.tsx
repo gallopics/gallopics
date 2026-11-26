@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { useLocation, useNavigate, useParams } from "react-router"
+import { useNavigate, useParams } from "react-router"
 import { useQuery } from "@tanstack/react-query"
 import { AlertCircle } from "lucide-react"
 
@@ -27,8 +27,8 @@ import { PhotoDetailsSheet } from "@/pages/pg/photo-details/PhotoDetailsSheet"
 
 import {
   ClassesTab,
-  toClassContext,
   toClassDays,
+  toUploadParams,
   type ClassDay,
 } from "./ClassesTab"
 import { EventDetailSkeleton } from "./EventDetailSkeleton"
@@ -38,11 +38,8 @@ import {
   ALL_CHIP,
   buildChips,
   buildSearchOptions,
-  matchesClass,
   matchesPhotoSearch,
-  readClassContext,
   UPLOAD_STATUSES,
-  type ClassContext,
 } from "./photoFilters"
 import { emptyGridText, PhotoGrid } from "./PhotoGrid"
 import { SelectionBar } from "./SelectionBar"
@@ -54,7 +51,6 @@ const NO_CLASS_DAYS: ClassDay[] = []
 export function EventDetail() {
   const { eventId } = useParams<{ eventId: string }>()
   const navigate = useNavigate()
-  const location = useLocation()
   const { basePath } = useWorkspace()
   const deletePhotosWithUndo = useDeletePhotosWithUndo()
   const { isPhotographer } = useAuth()
@@ -115,14 +111,6 @@ export function EventDetail() {
   const publishedCount = eventPhotos.filter(
     (photo) => photo.status === "uploadedUnpublished"
   ).length
-  const classContext = useMemo(
-    () => readClassContext(location.search),
-    [location.search]
-  )
-  const allPhotos = useMemo(
-    () => eventPhotos.filter((photo) => matchesClass(photo, classContext)),
-    [eventPhotos, classContext]
-  )
 
   const [activeFolder, setActiveFolder] = useState<string>(ALL_FOLDERS)
   const [activeChip, setActiveChip] = useState(ALL_CHIP)
@@ -141,13 +129,13 @@ export function EventDetail() {
   const [previewSrc, setPreviewSrc] = useState<string>()
   const [showInfoModal, setShowInfoModal] = useState(false)
   const [activeTab, setActiveTab] = useState<EventTab>("uploads")
-  // "Choose the class…": the Upload button was pressed without a class
+  // "Choose the class…": the top Upload button was pressed
   const [showClassHint, setShowClassHint] = useState(false)
   const tab: EventTab = showClassesTab ? activeTab : "uploads"
 
   const uploadPhotos = useMemo(
-    () => allPhotos.filter((p) => UPLOAD_STATUSES.includes(p.status)),
-    [allPhotos]
+    () => eventPhotos.filter((p) => UPLOAD_STATUSES.includes(p.status)),
+    [eventPhotos]
   )
   // A folder deleted elsewhere (e.g. another tab) falls back to All
   const currentFolder =
@@ -167,8 +155,8 @@ export function EventDetail() {
   }, [currentFolder, searchTerm, uploadPhotos])
   const chips = useMemo(() => buildChips(folderPhotos), [folderPhotos])
   const searchOptions = useMemo(
-    () => buildSearchOptions(allPhotos),
-    [allPhotos]
+    () => buildSearchOptions(eventPhotos),
+    [eventPhotos]
   )
   const displayedPhotos = useMemo(() => {
     const chip = chips.find((c) => c.id === activeChip)
@@ -229,7 +217,7 @@ export function EventDetail() {
     setSelectedIds((prev) => new Set([...prev].filter((id) => !ids.has(id))))
     // Undo puts them back and restores the selection; the API delete waits for the toast
     deletePhotosWithUndo(
-      allPhotos.filter((p) => ids.has(p.id)),
+      eventPhotos.filter((p) => ids.has(p.id)),
       `${ids.size} photo${ids.size > 1 ? "s" : ""} deleted`,
       () => setSelectedIds(previousSelection)
     )
@@ -254,26 +242,19 @@ export function EventDetail() {
 
   const showFilters = chips.length > 1 || !!searchTerm
 
-  /** The upload page, with the class in the URL so the upload is tagged with it */
-  const openUpload = (uploadClass?: ClassContext) => {
-    const params = new URLSearchParams(
-      Object.entries({
-        eventId: event.id,
-        from: "event",
-        classSectionId: uploadClass?.id,
-        equipeClassSectionId: uploadClass?.equipeClassSectionId,
-        className: uploadClass?.name,
-        arenaName: uploadClass?.arenaName,
-      }).filter((entry): entry is [string, string] => !!entry[1])
-    )
+  /** The upload page; a class's params tag the upload with that class */
+  const openUpload = (classParams?: Record<string, string>) => {
+    const params = new URLSearchParams({
+      eventId: event.id,
+      from: "event",
+      ...classParams,
+    })
     navigate(`${basePath}/upload?${params.toString()}`)
   }
 
   const handleUpload = () => {
-    // The class opened from the upload page ("Done") or a class link
-    if (classContext.id || classContext.name) openUpload(classContext)
     // Photos are matched to riders and horses only within a class: pick one
-    else if (showClassesTab) {
+    if (showClassesTab) {
       setActiveTab("classes")
       setShowClassHint(true)
     }
@@ -314,7 +295,7 @@ export function EventDetail() {
           days={classDays}
           isLoading={scheduleQuery.isPending}
           showHint={showClassHint}
-          onUpload={(eventClass) => openUpload(toClassContext(eventClass))}
+          onUpload={(eventClass) => openUpload(toUploadParams(eventClass))}
         />
       ) : (
         <div className="container pt-6">
@@ -385,7 +366,7 @@ export function EventDetail() {
       <PhotoDetailsSheet
         isOpen={isPanelOpen}
         selectedIds={panelIds}
-        allPhotos={allPhotos}
+        allPhotos={eventPhotos}
         activeTab={activePanelTab}
         onClose={() => setIsPanelOpen(false)}
         onDelete={() => deletePhotos(panelIds)}

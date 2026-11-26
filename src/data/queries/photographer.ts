@@ -54,11 +54,16 @@ export const saveDefaultPricesMutationOptions = () =>
     },
   })
 
+/**
+ * The class section whose start list the details editor offers. Not
+ * event_class_id: that's an Equipe meeting class id (a class with several
+ * sections, before matching picks one), and Equipe answers a class-section
+ * request for that number with another event's section.
+ */
 export const getApiPhotoClassId = (photo: ApiPhoto) =>
   photo.equipe_class_section_id ||
   photo.class_id ||
   photo.class_section_id ||
-  photo.event_class_id ||
   ""
 
 export const getApiPhotoClassName = (photo: ApiPhoto) =>

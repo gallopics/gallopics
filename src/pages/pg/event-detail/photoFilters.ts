@@ -11,25 +11,6 @@ export const UPLOAD_STATUSES: Photo["status"][] = [
   "uploadedUnpublished",
 ]
 
-/** The class opened from the event page; the upload is tagged with it too */
-export function readClassContext(search: string) {
-  const params = new URLSearchParams(search)
-  return {
-    id: params.get("classSectionId") || params.get("classId") || "",
-    equipeClassSectionId: params.get("equipeClassSectionId") || "",
-    name: params.get("className") || "",
-    arenaName: params.get("arenaName") || "",
-  }
-}
-
-export type ClassContext = ReturnType<typeof readClassContext>
-
-/** No class opened matches every photo */
-export const matchesClass = (photo: Photo, { id, name }: ClassContext) =>
-  (!id && !name) ||
-  (!!id && photo.classId === id) ||
-  (!!name && photo.className === name)
-
 /** Search in the photo grid: file name, photo ID or code (as on Sales) and the tags */
 export const matchesPhotoSearch = (photo: Photo, term: string) =>
   [
