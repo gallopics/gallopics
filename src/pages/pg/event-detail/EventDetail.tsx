@@ -10,6 +10,7 @@ import { useAuth } from "@/context/AuthContext"
 import type { Photo } from "@/context/PhotographerContext"
 import { useWorkspace } from "@/context/WorkspaceContext"
 import type { ApiPhotoFolder } from "@/data/apiClient"
+import { eventScheduleQueryOptions } from "@/data/queries/events"
 import {
   bookingsQueryOptions,
   foldersQueryOptions,
@@ -24,8 +25,14 @@ import { EventDetailsDialog } from "@/pages/pg/components/EventDetailsDialog"
 import { PhotoFolderBar } from "@/pages/pg/components/PhotoFolderBar"
 import { PhotoDetailsSheet } from "@/pages/pg/photo-details/PhotoDetailsSheet"
 
+import {
+  ClassesTab,
+  toClassContext,
+  toClassDays,
+  type ClassDay,
+} from "./ClassesTab"
 import { EventDetailSkeleton } from "./EventDetailSkeleton"
-import { EventHeader, UploadsTabRow } from "./EventHeader"
+import { EventHeader, UploadsTabRow, type EventTab } from "./EventHeader"
 import { FilterSidebar } from "./FilterSidebar"
 import {
   ALL_CHIP,
@@ -35,11 +42,13 @@ import {
   matchesPhotoSearch,
   readClassContext,
   UPLOAD_STATUSES,
+  type ClassContext,
 } from "./photoFilters"
 import { emptyGridText, PhotoGrid } from "./PhotoGrid"
 import { SelectionBar } from "./SelectionBar"
 
 const NO_FOLDERS: ApiPhotoFolder[] = []
+const NO_CLASS_DAYS: ClassDay[] = []
 
 /** The studio's view of one event: its uploads, by folder, with tag filters */
 export function EventDetail() {
@@ -87,6 +96,21 @@ export function EventDetail() {
     [eventId, workspacePhotos]
   )
   const canUploadPhotos = event?.canUploadPhotos !== false
+  // The schedule, to pick the class an upload goes to (the same query as the
+  // public event page). Only where uploading is allowed.
+  const scheduleQuery = useQuery({
+    ...eventScheduleQueryOptions(eventId ?? ""),
+    enabled: !!eventId && !!event && canUploadPhotos,
+    select: toClassDays,
+  })
+  const classDays = scheduleQuery.data ?? NO_CLASS_DAYS
+  const classCount = classDays.reduce((sum, d) => sum + d.classes.length, 0)
+  // Shown while loading; hidden when the event has no schedule (or it failed)
+  const showClassesTab =
+    !!event &&
+    canUploadPhotos &&
+    !scheduleQuery.isError &&
+    (scheduleQuery.isPending || classCount > 0)
   // The photographer's own public (ready) photos
   const publishedCount = eventPhotos.filter(
     (photo) => photo.status === "uploadedUnpublished"
@@ -116,6 +140,10 @@ export function EventDetail() {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
   const [previewSrc, setPreviewSrc] = useState<string>()
   const [showInfoModal, setShowInfoModal] = useState(false)
+  const [activeTab, setActiveTab] = useState<EventTab>("uploads")
+  // "Choose the class…": the Upload button was pressed without a class
+  const [showClassHint, setShowClassHint] = useState(false)
+  const tab: EventTab = showClassesTab ? activeTab : "uploads"
 
   const uploadPhotos = useMemo(
     () => allPhotos.filter((p) => UPLOAD_STATUSES.includes(p.status)),
@@ -226,19 +254,36 @@ export function EventDetail() {
 
   const showFilters = chips.length > 1 || !!searchTerm
 
-  const handleUpload = () => {
-    // The class opened on the event page, so the upload is tagged with it
+  /** The upload page, with the class in the URL so the upload is tagged with it */
+  const openUpload = (uploadClass?: ClassContext) => {
     const params = new URLSearchParams(
       Object.entries({
         eventId: event.id,
         from: "event",
-        classSectionId: classContext.id,
-        equipeClassSectionId: classContext.equipeClassSectionId,
-        className: classContext.name,
-        arenaName: classContext.arenaName,
-      }).filter(([, value]) => value)
+        classSectionId: uploadClass?.id,
+        equipeClassSectionId: uploadClass?.equipeClassSectionId,
+        className: uploadClass?.name,
+        arenaName: uploadClass?.arenaName,
+      }).filter((entry): entry is [string, string] => !!entry[1])
     )
     navigate(`${basePath}/upload?${params.toString()}`)
+  }
+
+  const handleUpload = () => {
+    // The class opened from the upload page ("Done") or a class link
+    if (classContext.id || classContext.name) openUpload(classContext)
+    // Photos are matched to riders and horses only within a class: pick one
+    else if (showClassesTab) {
+      setActiveTab("classes")
+      setShowClassHint(true)
+    }
+    // No schedule: upload without a class
+    else openUpload()
+  }
+
+  const handleTabChange = (next: EventTab) => {
+    setActiveTab(next)
+    setShowClassHint(false)
   }
 
   return (
@@ -250,72 +295,91 @@ export function EventDetail() {
       />
       <UploadsTabRow
         count={uploadPhotos.length}
-        canUpload={canUploadPhotos}
+        classCount={
+          showClassesTab
+            ? scheduleQuery.isPending
+              ? null
+              : classCount
+            : undefined
+        }
+        tab={tab}
+        onTabChange={handleTabChange}
+        // On the Classes tab each class has its own Upload button
+        canUpload={canUploadPhotos && tab !== "classes"}
         onUpload={handleUpload}
       />
 
-      <div className="container pt-6">
-        {(uploadPhotos.length > 0 || folders.length > 0) && (
-          <PhotoFolderBar
-            eventId={event.id}
-            folders={folders}
-            photos={uploadPhotos}
-            eventPhotos={eventPhotos}
-            value={currentFolder}
-            onChange={handleFolderChange}
-          />
-        )}
-        <div className="flex items-start gap-8 max-md:flex-col max-md:items-stretch max-md:gap-0">
-          {showFilters && (
-            <FilterSidebar
-              chips={chips}
-              activeChip={activeChip}
-              onChange={handleChipChange}
+      {tab === "classes" ? (
+        <ClassesTab
+          days={classDays}
+          isLoading={scheduleQuery.isPending}
+          showHint={showClassHint}
+          onUpload={(eventClass) => openUpload(toClassContext(eventClass))}
+        />
+      ) : (
+        <div className="container pt-6">
+          {(uploadPhotos.length > 0 || folders.length > 0) && (
+            <PhotoFolderBar
+              eventId={event.id}
+              folders={folders}
+              photos={uploadPhotos}
+              eventPhotos={eventPhotos}
+              value={currentFolder}
+              onChange={handleFolderChange}
             />
           )}
-          <div className="min-w-0 flex-1">
-            <SelectionBar
-              showSearch={showFilters}
-              searchOptions={searchOptions}
-              searchTerm={searchTerm}
-              onSearchChange={handleSearchChange}
-              selectedCount={selectedIds.size}
-              shownCount={displayedPhotos.length}
-              onEdit={() => {
-                setEditedIds(undefined)
-                setActivePanelTab("tags")
-                setIsPanelOpen(true)
-              }}
-              onDelete={() => askDelete(selectedIds)}
-              onClear={() => {
-                setSelectedIds(new Set())
-                setIsPanelOpen(false)
-              }}
-              onSelectAll={() =>
-                setSelectedIds(
-                  (prev) =>
-                    new Set([...prev, ...displayedPhotos.map((p) => p.id)])
-                )
-              }
-            />
-            <PhotoGrid
-              event={event}
-              photos={displayedPhotos}
-              isLoading={isLoadingPhotos}
-              emptyText={emptyGridText(
-                searchTerm,
-                currentFolder,
-                canUploadPhotos
-              )}
-              selectedIds={selectedIds}
-              onToggleSelect={handleToggleSelect}
-              onEdit={openEditor}
-              onDelete={(photo) => askDelete(new Set([photo.id]))}
-              onPreview={setPreviewSrc}
-            />
+          <div className="flex items-start gap-8 max-md:flex-col max-md:items-stretch max-md:gap-0">
+            {showFilters && (
+              <FilterSidebar
+                chips={chips}
+                activeChip={activeChip}
+                onChange={handleChipChange}
+              />
+            )}
+            <div className="min-w-0 flex-1">
+              <SelectionBar
+                showSearch={showFilters}
+                searchOptions={searchOptions}
+                searchTerm={searchTerm}
+                onSearchChange={handleSearchChange}
+                selectedCount={selectedIds.size}
+                shownCount={displayedPhotos.length}
+                onEdit={() => {
+                  setEditedIds(undefined)
+                  setActivePanelTab("tags")
+                  setIsPanelOpen(true)
+                }}
+                onDelete={() => askDelete(selectedIds)}
+                onClear={() => {
+                  setSelectedIds(new Set())
+                  setIsPanelOpen(false)
+                }}
+                onSelectAll={() =>
+                  setSelectedIds(
+                    (prev) =>
+                      new Set([...prev, ...displayedPhotos.map((p) => p.id)])
+                  )
+                }
+              />
+              <PhotoGrid
+                event={event}
+                photos={displayedPhotos}
+                isLoading={isLoadingPhotos}
+                emptyText={emptyGridText(
+                  searchTerm,
+                  currentFolder,
+                  canUploadPhotos
+                )}
+                selectedIds={selectedIds}
+                onToggleSelect={handleToggleSelect}
+                onEdit={openEditor}
+                onDelete={(photo) => askDelete(new Set([photo.id]))}
+                onPreview={setPreviewSrc}
+              />
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Always mounted for the slide animation */}
       <PhotoDetailsSheet
