@@ -83,13 +83,30 @@ export function EventHeader({
   )
 }
 
-/** The Uploads tab with its count, and the Upload button */
+export type EventTab = "uploads" | "classes"
+
+function TabCount({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex h-4.5 min-w-5 items-center justify-center rounded-full border border-transparent bg-background px-1.5 text-xs font-bold text-muted-foreground in-data-active:border-primary/20 in-data-active:bg-primary/10 in-data-active:text-primary">
+      {children}
+    </span>
+  )
+}
+
+/** The Uploads and Classes tabs with their counts, and the Upload button */
 export function UploadsTabRow({
   count,
+  classCount,
+  tab,
+  onTabChange,
   canUpload,
   onUpload,
 }: {
   count: number
+  /** Classes in the schedule; unset hides the Classes tab, null shows it loading */
+  classCount?: number | null
+  tab: EventTab
+  onTabChange: (tab: EventTab) => void
   canUpload: boolean
   onUpload: () => void
 }) {
@@ -98,22 +115,36 @@ export function UploadsTabRow({
       <div className="container flex items-center">
         <WorkspaceTabs
           // old .tab-btn: 14px 24px padding, 14px/21px, 2px underline overlapping the row border
-          triggerClassName="-mb-px group-data-[variant=line]/tabs-list:h-auto group-data-[variant=line]/tabs-list:px-6 group-data-[variant=line]/tabs-list:pt-3.5 group-data-[variant=line]/tabs-list:pb-4 group-data-[variant=line]/tabs-list:leading-normal"
+          // Two tabs and the Upload button fit 393px with 16px side padding
+          triggerClassName="-mb-px group-data-[variant=line]/tabs-list:h-auto group-data-[variant=line]/tabs-list:px-6 max-sm:group-data-[variant=line]/tabs-list:px-2 group-data-[variant=line]/tabs-list:pt-3.5 group-data-[variant=line]/tabs-list:pb-4 group-data-[variant=line]/tabs-list:leading-normal"
           tabs={[
             {
               value: "uploads",
               label: (
                 <>
                   Uploads
-                  <span className="inline-flex h-4.5 min-w-5 items-center justify-center rounded-full border border-transparent bg-background px-1.5 text-xs font-bold text-muted-foreground in-data-active:border-primary/20 in-data-active:bg-primary/10 in-data-active:text-primary">
-                    {count}
-                  </span>
+                  <TabCount>{count}</TabCount>
                 </>
               ),
             },
+            ...(classCount !== undefined
+              ? [
+                  {
+                    value: "classes" as const,
+                    label: (
+                      <>
+                        Classes
+                        {classCount !== null && (
+                          <TabCount>{classCount}</TabCount>
+                        )}
+                      </>
+                    ),
+                  },
+                ]
+              : []),
           ]}
-          value="uploads"
-          onChange={() => undefined}
+          value={tab}
+          onChange={onTabChange}
         />
 
         {/* Brand pill at the old 36px height; hidden when the booking was cancelled */}
