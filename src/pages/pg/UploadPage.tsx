@@ -202,16 +202,8 @@ export function UploadPage() {
   const handleViewPhotos = async () => {
     if (!selectedEventId || isBusy) return
     if (!(await clearUploadSession(selectedEventId))) return
-    const params = new URLSearchParams()
-    if (urlClassSectionId) params.set("classSectionId", urlClassSectionId)
-    if (urlEquipeClassSectionId) {
-      params.set("equipeClassSectionId", urlEquipeClassSectionId)
-    }
-    if (urlClassName) params.set("className", urlClassName)
-    if (urlArenaName) params.set("arenaName", urlArenaName)
-
-    const query = params.toString()
-    navigate(`${basePath}/events/${selectedEventId}${query ? `?${query}` : ""}`)
+    // All of the event's uploads; the next upload picks its class again
+    navigate(`${basePath}/events/${selectedEventId}`)
   }
 
   return (
