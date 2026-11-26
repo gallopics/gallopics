@@ -486,7 +486,6 @@ export const PhotographerProvider: React.FC<{ children: ReactNode }> = ({
               getApiPhotoClassId(p) ||
               uploadMetadata.equipeClassSectionId ||
               uploadMetadata.classSectionId ||
-              uploadMetadata.eventClassId ||
               "",
             className:
               getApiPhotoClassName(p) ||
